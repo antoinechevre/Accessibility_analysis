@@ -1,0 +1,19 @@
+# Environnements virtuels
+.venv/
+env/
+
+# Données (GTFS, carroyage INSEE, BPE...) et résultats générés — volumineux,
+# certains fichiers dépassent la limite de 100 Mo de GitHub. Non versionnés,
+# cf. README.md.
+data/
+output/
+
+# Python
+__pycache__/
+*.pyc
+
+# Jupyter
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store
