@@ -1,0 +1,10 @@
+.venv/
+env/
+.git/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+data/*
+!data/memory_csv_agglo/
+output/
+.DS_Store
