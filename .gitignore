@@ -5,8 +5,14 @@ env/
 # Données (GTFS, carroyage INSEE, BPE...) et résultats générés — volumineux,
 # certains fichiers dépassent la limite de 100 Mo de GitHub. Non versionnés,
 # cf. README.md.
-data/
+data/*
 output/
+
+# Exception : cache des communes déjà géocodées par réseau (~1 Mo), utilisé
+# comme decoupage_reference_path par construire_donnees_bpe() pour éviter de
+# re-géocoder les arrêts déjà connus — utile d'avoir ce cache dès le premier
+# déploiement (Streamlit Cloud, nouveau clone...).
+!data/memory_csv_agglo/
 
 # Python
 __pycache__/
