@@ -1,3 +1,13 @@
+---
+title: Accessibility Analysis
+emoji: 🚌
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Accessibility Analysis
 
 Analyse de l'accessibilité piétonne / transports collectifs (< 30 min) aux équipements d'une agglomération française, à partir d'un GTFS quelconque.
@@ -34,7 +44,12 @@ output/                                    # cartes et images exportées (non ve
 requirements.txt
 ```
 
-> ⚠️ `app.py` est en cours de construction : `views/accessibilite_index.py` reprend le pipeline complet du notebook, mais `views/ponderation_equipements.py` est encore vide. Le notebook reste la référence fonctionnelle en attendant.
+> ⚠️ `app.py` est fonctionnel : `views/accessibilite_index.py` (pipeline complet + r5py) et `views/ponderation_equipements.py` (cartes de pondération BPE, sans r5py) sont toutes deux implémentées. Le notebook reste la référence de calcul en cas de doute.
+
+## Déploiement
+
+- **Streamlit Community Cloud** : `packages.txt` installe Java (`default-jdk-headless`) et `osmium-tool` via apt. Le tier gratuit (~1 Go RAM) est cependant limite pour ce pipeline (JVM r5py + carroyage INSEE 1,1 Go).
+- **Hugging Face Spaces (SDK Docker)** : `Dockerfile` fourni, plus adapté (tier gratuit ~16 Go RAM / 2 vCPU).
 
 ## Installation
 
