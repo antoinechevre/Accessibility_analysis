@@ -34,7 +34,7 @@ output/                                    # cartes et images exportées (non ve
 requirements.txt
 ```
 
-> ⚠️ `app.py` est en cours de construction : certaines pages importées (`views/arrets.py`, `views/troncons.py`) n'existent pas encore. Le notebook est à ce stade le point d'entrée fonctionnel du projet.
+> ⚠️ `app.py` est en cours de construction : `views/accessibilite_index.py` reprend le pipeline complet du notebook, mais `views/ponderation_equipements.py` est encore vide. Le notebook reste la référence fonctionnelle en attendant.
 
 ## Installation
 
