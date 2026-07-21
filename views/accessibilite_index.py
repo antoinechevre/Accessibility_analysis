@@ -8,7 +8,14 @@ avec les cartes HTML interactives par domaine BPE.
 
 import os
 
-os.environ.setdefault("JAVA_HOME", "/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home")
+# Chemin JAVA_HOME du poste de développement (macOS/Temurin 21). Ne s'applique
+# que s'il existe réellement : sur un déploiement Linux (ex. Streamlit
+# Community Cloud, cf. packages.txt), ce chemin n'existe pas et on laisse
+# jpype détecter automatiquement le JDK installé par apt (JAVA_HOME n'a pas
+# besoin d'être positionné pour ça).
+_JAVA_HOME_MACOS = "/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home"
+if "JAVA_HOME" not in os.environ and os.path.isdir(_JAVA_HOME_MACOS):
+    os.environ["JAVA_HOME"] = _JAVA_HOME_MACOS
 
 # Même ordre d'import qu'en cellule 1 du notebook : importer rasterio AVANT
 # r5py initialise le contexte PROJ/GDAL avec le proj.db du venv, avant que le
