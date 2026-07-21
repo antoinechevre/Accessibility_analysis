@@ -344,9 +344,11 @@ def build_grid_agglo(path):
     # ménages pour respecter le secret statistique) : sert à récupérer les données
     # démographiques là où elles existent.
     #
-    # columns=["idcar_200m", "ind"] : le gpkg source contient ~40 colonnes
-    # (revenus, logement, tranches d'âge...) mais tout le pipeline n'utilise
-    # que "ind" (nombre d'individus -> population). Ne charger que ces deux
+    # columns=["idcar_200m", "ind", "ind_snv"] : le gpkg source contient ~40
+    # colonnes (revenus, logement, tranches d'âge...) mais le pipeline n'utilise
+    # que "ind" (nombre d'individus -> population) et "ind_snv" (indice de
+    # niveau de vie, utilisé pour les analyses d'inégalité d'accessibilité par
+    # décile, cf. notebook "analyse accessibilite / pop"). Ne charger que ces
     # colonnes (+ la géométrie, toujours incluse) réduit fortement la mémoire
     # nécessaire à la lecture d'un fichier de 1,1 Go, important sur les hôtes
     # à RAM limitée (cf. Streamlit Community Cloud).
@@ -354,7 +356,7 @@ def build_grid_agglo(path):
     grid_publiee = gpd.read_file(
         f"{DATA_DIR}/extracted/carreaux_200m_met.gpkg",
         bbox=(minx, miny, maxx, maxy),
-        columns=["idcar_200m", "ind"],
+        columns=["idcar_200m", "ind", "ind_snv"],
     )
 
     # La grille Filosofi 200m est définie nativement en EPSG:3035 (ETRS89-LAEA) :
