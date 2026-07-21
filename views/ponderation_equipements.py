@@ -44,7 +44,7 @@ def ponderation_equipements_page():
                 zip_path, nom_reseau_str, on_step=lambda message: statut.info(message)
             )
         except Exception as e:
-            st.error(f"Erreur pendant le calcul : {e}")
+            st.error(f"Erreur pendant le calcul : {type(e).__name__}: {e}")
             return
         statut.empty()
 

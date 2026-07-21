@@ -25,7 +25,10 @@ import rasterio  # noqa: F401
 import r5py
 import r5py.util.jvm
 
-r5py.util.jvm.MAX_JVM_MEMORY = 2 * 1024**3  # 2 Go, cf. notebook cellule 1
+r5py.util.jvm.MAX_JVM_MEMORY = 512 * 1024**2  # 512 Mo : réduit pour les hôtes à RAM limitée
+# (ex. Streamlit Community Cloud, ~1 Go total) — la JVM démarre dès l'import de ce module
+# (donc dès le lancement de l'app, pas seulement quand cette page est active). Remonter
+# à 2-3 Go en local si vous avez assez de RAM (cf. notebook cellule 1).
 
 import datetime
 
@@ -189,7 +192,9 @@ def accessibilite_index_page():
                 zip_path, nom_reseau_str, date_str
             )
         except Exception as e:
-            st.error(f"Erreur pendant le calcul : {e}")
+            # str(e) peut être vide (ex. MemoryError() par défaut) : le type
+            # de l'exception donne l'info utile dans ce cas.
+            st.error(f"Erreur pendant le calcul : {type(e).__name__}: {e}")
             return
 
         st.session_state.reseau_calcule = nom_reseau_str
