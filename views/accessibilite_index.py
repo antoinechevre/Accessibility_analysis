@@ -63,6 +63,10 @@ def _construire_pipeline(zip_path, nom_reseau_str, date_JOB):
     nécessaires : découpage communal, carroyage population, BPE pondérée
     (via src.pipeline_donnees, partagé avec views/ponderation_equipements.py),
     puis extrait OSM, réseau de transport et matrice des temps de trajet.
+
+    Toutes les valeurs ici sont locales : elles ne servent qu'à construire le
+    tuple final renvoyé, seul élément que l'appelant (accessibilite_index_page)
+    stocke en session_state.
     """
     statut = st.empty()
     population_grid_agglo, land_use_data, BPE_agglo = construire_donnees_bpe(
@@ -141,7 +145,7 @@ def _carte_accessibilite_domaine(population_grid_agglo, land_use_data, BPE_agglo
     return carte
 
 
-def arrets_page():
+def accessibilite_index_page():
     st.header("♿ Accessibilité aux équipements (30 min)")
 
     if st.session_state.get("feed") is None:
@@ -154,12 +158,21 @@ def arrets_page():
 
     st.write(f"Réseau : **{nom_reseau_str}** — jour de référence : {date_str}")
 
-    st.warning(
-        "⚠️ Premier lancement pour ce réseau : extraction OSM puis calcul de la "
-        "matrice des temps de trajet (r5py), potentiellement long (plusieurs "
-        "minutes) et gourmand en mémoire. Les résultats sont mis en cache sur "
-        "disque pour les lancements suivants."
-    )
+    # La matrice des temps de trajet (ttm) est mise en cache sur disque par
+    # réseau (cf. _construire_pipeline) : si le fichier existe déjà, ce n'est
+    # pas le premier lancement pour ce réseau, pas besoin d'avertir sur le
+    # temps de calcul.
+    premier_lancement = not os.path.exists(chemins_reseau(nom_reseau_str)["ttm"])
+
+    if premier_lancement:
+        st.warning(
+            "⚠️ Premier lancement pour ce réseau : extraction OSM puis calcul de la "
+            "matrice des temps de trajet (r5py), potentiellement long (plusieurs "
+            "minutes) et gourmand en mémoire. Les résultats sont mis en cache sur "
+            "disque pour les lancements suivants."
+        )
+    else:
+        st.info("✓ Résultats déjà en cache pour ce réseau : le calcul sera quasi instantané.")
 
     lancer = st.button("🚀 Lancer / recharger l'analyse d'accessibilité", use_container_width=True)
 

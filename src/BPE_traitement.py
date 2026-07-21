@@ -1,11 +1,32 @@
 import pandas as pd
 import os
 import geopandas as gpd
+import requests
 
 
 BASE_DIR = os.getcwd()  # Remonte d'un niveau depuis scripts/
 
 BPE_PATH=os.path.join(BASE_DIR,'data',"BPE25.parquet") # base de données BPE https://catalogue-donnees.insee.fr/fr/catalogue/recherche/DS_BPE 2024
+
+BPE_URL = "https://www.insee.fr/fr/statistiques/fichier/8217525/BPE25.parquet"
+
+def import_BPE(BPE_URL): 
+    # Télécharge le fichier détail BPE25 (géolocalisé, LAMBERT_X/LAMBERT_Y) le plus
+    # récent depuis insee.fr si absent en local. Mis à jour mensuellement par
+    # l'INSEE (cf. https://www.insee.fr/fr/statistiques/8217525) ; on ne
+    # re-télécharge pas à chaque run pour éviter de retélécharger 160+ Mo à chaque
+    # fois (supprimer le fichier local pour forcer une mise à jour).
+   
+    if not os.path.exists(BPE_PATH):
+        print(f"Téléchargement du BPE25 depuis {BPE_URL}...")
+        with requests.get(BPE_URL, stream=True, timeout=60) as r:
+            r.raise_for_status()
+            with open(BPE_PATH, "wb") as f:
+                for chunk in r.iter_content(chunk_size=1024 * 1024):
+                    f.write(chunk)
+        print(f"✓ BPE25 téléchargé : {BPE_PATH}")
+    else:
+        print(f"BPE25 déjà présent en local, pas de téléchargement : {BPE_PATH}")
 
 
 def filtre_BPE (DECOUPAGE_COM_PATH_CSV,population_grid_agglo):

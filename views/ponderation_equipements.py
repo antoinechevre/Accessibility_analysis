@@ -20,7 +20,7 @@ BASE_DIR = os.getcwd()
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
 
 
-def troncons_page():
+def ponderation_equipements_page():
     st.header("⚖️ Pondération des équipements par domaine")
 
     if st.session_state.get("feed") is None:

@@ -14,8 +14,8 @@ import streamlit as st
 from src.utils import charger_gtfs, obtenir_service_ids_pour_date
 from src.info_reseau import dates_service, recuperer_logo_reseau, nom_reseau
 from views.home import home_page
-from views.accessibilite_index import arrets_page
-from views.ponderation_equipements import troncons_page
+from views.accessibilite_index import accessibilite_index_page
+from views.ponderation_equipements import ponderation_equipements_page
 
 
 class TropAgencesError(Exception):
@@ -123,12 +123,12 @@ def charger_donnees_gtfs():
     # pour tracer les lignes)
     with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp_file:
         tmp_file.write(uploaded_file.read())
-        zip_path = tmp_file.name
+        GTFS_PATH = tmp_file.name
 
     try:
         # Charger le GTFS
         with st.spinner("Chargement du fichier GTFS..."):
-            feed = charger_gtfs(zip_path)
+            feed = charger_gtfs(GTFS_PATH)
 
         # L'app ne sait traiter que des GTFS urbains (un GTFS national/régional
         # regroupant de nombreuses agences ferait exploser les temps de calcul
@@ -157,29 +157,22 @@ def charger_donnees_gtfs():
         st.session_state.feed = feed
         st.session_state.active_service_ids = active_service_ids
         st.session_state.date_str = date_str
-        st.session_state.zip_path = zip_path
+        st.session_state.zip_path = GTFS_PATH
         st.session_state.nom_reseau_str = reseau_str
-        st.session_state.chemin_logo = chemin_logo
         st.session_state.last_uploaded_name = uploaded_file.name
-        st.session_state.indicateurs_arrets = None  # Réinitialiser les indicateurs
-        st.session_state.indicateurs_bus = None
-        st.session_state.indicateurs_tram = None
-        st.session_state.indicateurs_metro = None
-        st.session_state.indicateurs_trolley = None
-        st.session_state.indicateurs_ferry = None
-        st.session_state.total_vk_plage = None
-        st.session_state.modes_disponibles = None
-
+        st.session_state.decoupage_reference_path_reseau = None
+        st.session_state.decoupage_agglo = None 
+        
         return True
 
     except TropAgencesError as e:
         st.error(f"⚠ Ce GTFS regroupe {e.args[0]} agences : ce que l'app ne peut pas gérer. Charger un GTFS urbain uniquement.")
-        os.unlink(zip_path)
+        os.unlink(GTFS_PATH)
         st.stop()
 
     except Exception as e:
         st.error(f"Erreur lors du chargement : {e}")
-        os.unlink(zip_path)
+        os.unlink(GTFS_PATH)
         return False
 
 
@@ -190,6 +183,6 @@ charger_donnees_gtfs()
 if st.session_state.selected_page == "Accueil":
     home_page()
 elif st.session_state.selected_page == "Accessibilité":
-    arrets_page()
+    accessibilite_index_page()
 elif st.session_state.selected_page == "Pondération équipements":
-    troncons_page()
+    ponderation_equipements_page()
