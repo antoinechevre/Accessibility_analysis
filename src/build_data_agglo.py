@@ -3,6 +3,7 @@ import pathlib
 import shutil
 import subprocess
 import time
+import zipfile
 
 import geopandas as gpd
 import gtfs_kit as gk
@@ -17,6 +18,41 @@ import os
 
 BASE_DIR = os.getcwd()  # Remonte d'un niveau depuis scripts/
 DATA_DIR = os.path.join(BASE_DIR,"data")
+
+FILOSOFI_ZIP_URL = "https://www.insee.fr/fr/statistiques/fichier/7655475/Filosofi2019_carreaux_200m_gpkg.zip"
+
+
+def assurer_carreaux_200m_local():
+    """Télécharge et extrait le carroyage population INSEE Filosofi 200m
+    (France métropolitaine) depuis insee.fr si absent en local.
+
+    Le zip source (~200 Mo) contient 3 gpkg (métropole/Martinique/Réunion) ;
+    seul carreaux_200m_met.gpkg (~1,1 Go décompressé) est conservé, les deux
+    autres n'étant pas utilisés par ce projet. Le zip est supprimé après
+    extraction pour ne pas doubler l'espace disque utilisé.
+    """
+    output_dir = pathlib.Path(DATA_DIR) / "extracted"
+    output_path = output_dir / "carreaux_200m_met.gpkg"
+    if output_path.exists() and output_path.stat().st_size > 0:
+        return
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    zip_path = output_dir / "Filosofi2019_carreaux_200m_gpkg.zip"
+
+    print("Téléchargement du carroyage population INSEE Filosofi 200m (~200 Mo)...")
+    with requests.get(FILOSOFI_ZIP_URL, stream=True, timeout=120) as r:
+        r.raise_for_status()
+        with open(zip_path, "wb") as f:
+            for chunk in r.iter_content(chunk_size=1024 * 1024):
+                f.write(chunk)
+
+    with zipfile.ZipFile(zip_path) as z:
+        membre = next(n for n in z.namelist() if n.endswith("carreaux_200m_met.gpkg"))
+        with z.open(membre) as source, open(output_path, "wb") as dest:
+            shutil.copyfileobj(source, dest)
+
+    zip_path.unlink()
+    print(f"✓ Carroyage population téléchargé et extrait : {output_path}")
 
 
 def session_avec_retries(methods=("GET",), total=5, backoff_factor=1):
@@ -295,6 +331,8 @@ def build_grid_agglo(path):
     statistical secrecy, generally < 11 households) with population=0, rather than
     only the sparse subset of cells that Filosofi publishes.
     """
+    assurer_carreaux_200m_local()
+
     agglo = gpd.read_file(path)
     agglo = agglo.set_crs("EPSG:4326") if agglo.crs is None else agglo
     agglo.geometry = agglo.geometry.buffer(0)

@@ -26,7 +26,7 @@ class TropAgencesError(Exception):
 st.set_page_config(page_title="Analyse accessibilite aux différents équipements d'agglomération piéton / transport collectif (GTFS)", page_icon="🚌", layout="wide")
 
 # Titre principal
-st.title("🚌 Analyse GTFS - Indicateurs de Transport")
+st.title("🚌 Analyse accessibilite aux différents équipements d'agglomération piéton / transport collectif (GTFS)")
 
 # Navigation horizontale en haut
 st.markdown(
@@ -161,8 +161,8 @@ def charger_donnees_gtfs():
         st.session_state.nom_reseau_str = reseau_str
         st.session_state.last_uploaded_name = uploaded_file.name
         st.session_state.decoupage_reference_path_reseau = None
-        st.session_state.decoupage_agglo = None 
-        
+        st.session_state.decoupage_agglo = None
+                
         return True
 
     except TropAgencesError as e:
