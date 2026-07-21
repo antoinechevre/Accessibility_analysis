@@ -7,29 +7,6 @@ avec les cartes HTML interactives par domaine BPE.
 """
 
 import os
-
-# Chemin JAVA_HOME du poste de développement (macOS/Temurin 21). Ne s'applique
-# que s'il existe réellement : sur un déploiement Linux (ex. Streamlit
-# Community Cloud, cf. packages.txt), ce chemin n'existe pas et on laisse
-# jpype détecter automatiquement le JDK installé par apt (JAVA_HOME n'a pas
-# besoin d'être positionné pour ça).
-_JAVA_HOME_MACOS = "/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home"
-if "JAVA_HOME" not in os.environ and os.path.isdir(_JAVA_HOME_MACOS):
-    os.environ["JAVA_HOME"] = _JAVA_HOME_MACOS
-
-# Même ordre d'import qu'en cellule 1 du notebook : importer rasterio AVANT
-# r5py initialise le contexte PROJ/GDAL avec le proj.db du venv, avant que le
-# démarrage de la JVM par r5py ne pollue PROJ_LIB avec un chemin invalide.
-import rasterio  # noqa: F401
-
-import r5py
-import r5py.util.jvm
-
-r5py.util.jvm.MAX_JVM_MEMORY = 512 * 1024**2  # 512 Mo : réduit pour les hôtes à RAM limitée
-# (ex. Streamlit Community Cloud, ~1 Go total) — la JVM démarre dès l'import de ce module
-# (donc dès le lancement de l'app, pas seulement quand cette page est active). Remonter
-# à 2-3 Go en local si vous avez assez de RAM (cf. notebook cellule 1).
-
 import datetime
 
 import folium
@@ -53,11 +30,50 @@ FONDS_CARTE = {
     "CartoDB Dark Matter": "CartoDB dark_matter",
 }
 
+# r5py est importé paresseusement (cf. _assurer_r5py_pret ci-dessous), pas au
+# chargement du module : app.py importe ce module de façon inconditionnelle
+# au démarrage (pour toutes les pages), et importer r5py démarre sa JVM
+# immédiatement. Un import au niveau module ferait donc démarrer la JVM (et
+# réserver sa mémoire) même pour un visiteur qui ne va jamais sur cette page.
+r5py = None
+
+
+def _assurer_r5py_pret():
+    """Importe r5py et configure sa JVM au premier usage réel (calcul du
+    réseau de transport / matrice des temps de trajet), pas avant."""
+    global r5py
+    if r5py is not None:
+        return
+
+    # Chemin JAVA_HOME du poste de développement (macOS/Temurin 21). Ne
+    # s'applique que s'il existe réellement : sur un déploiement Linux (ex.
+    # Streamlit Community Cloud, cf. packages.txt), ce chemin n'existe pas et
+    # on laisse jpype détecter automatiquement le JDK installé par apt
+    # (JAVA_HOME n'a pas besoin d'être positionné pour ça).
+    _java_home_macos = "/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home"
+    if "JAVA_HOME" not in os.environ and os.path.isdir(_java_home_macos):
+        os.environ["JAVA_HOME"] = _java_home_macos
+
+    # Même ordre d'import qu'en cellule 1 du notebook : importer rasterio
+    # AVANT r5py initialise le contexte PROJ/GDAL avec le proj.db du venv,
+    # avant que le démarrage de la JVM par r5py ne pollue PROJ_LIB avec un
+    # chemin invalide.
+    import rasterio  # noqa: F401
+    import r5py as r5py_module
+    import r5py.util.jvm
+
+    r5py_module.util.jvm.MAX_JVM_MEMORY = 512 * 1024**2  # 512 Mo : réduit pour
+    # les hôtes à RAM limitée (ex. Streamlit Community Cloud, ~1 Go total).
+    # Remonter à 2-3 Go en local si vous avez assez de RAM (cf. notebook cellule 1).
+
+    r5py = r5py_module
+
 
 @st.cache_resource(show_spinner=False)
 def _construire_reseau_transport(osm_pbf_path, gtfs_r5py_path):
     """Construit le TransportNetwork r5py (objet Java non sérialisable : mis
     en cache via st.cache_resource plutôt que st.session_state)."""
+    _assurer_r5py_pret()
     return r5py.TransportNetwork(osm_pbf=osm_pbf_path, gtfs=[gtfs_r5py_path])
 
 
@@ -92,6 +108,7 @@ def _construire_pipeline(zip_path, nom_reseau_str, date_JOB):
                 "Calcul de la matrice des temps de trajet (r5py)... "
                 "premier lancement pour ce réseau, peut prendre plusieurs minutes"
             )
+            _assurer_r5py_pret()
             points = population_grid_agglo[["id", "geometry"]].copy()
             points["geometry"] = points.geometry.centroid
 
