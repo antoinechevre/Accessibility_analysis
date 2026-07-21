@@ -128,6 +128,7 @@ def construire_donnees_bpe(zip_path, nom_reseau_str, on_step=None):
             pd.read_csv(chemins["decoupage_csv"], dtype={"code_insee": str}),
             os.path.join(MEMORY_CSV_AGGLO_DIR, f"decoupage_agglo_{nom_reseau_str}.csv"),
         )
+        _step("✓ Découpage communal prêt")
 
     if not os.path.exists(chemins["decoupage_geojson"]):
         decoupage_agglo_geojson(csv_path=chemins["decoupage_csv"], output_path=chemins["decoupage_geojson"])
@@ -138,12 +139,14 @@ def construire_donnees_bpe(zip_path, nom_reseau_str, on_step=None):
         # (chemin fixe côté src/) : on renomme ensuite vers le chemin par réseau.
         build_grid_agglo(chemins["decoupage_geojson"])
         os.replace(os.path.join(DATA_DIR, "population_grid_agglo.gpkg"), chemins["gpkg"])
+        _step("✓ Carroyage population prêt")
 
     population_grid_agglo = gpd.read_file(chemins["gpkg"])
     land_use_data = population_grid_agglo[["id", "population"]].copy()
 
     _step("Vérification de la base BPE (téléchargement si absente)...")
     assurer_bpe_local()
+    _step("✓ Base BPE disponible")
 
     _step("Filtrage et pondération de la base BPE...")
     BPE_agglo = filtre_BPE(chemins["decoupage_csv"], population_grid_agglo)
@@ -159,5 +162,6 @@ def construire_donnees_bpe(zip_path, nom_reseau_str, on_step=None):
     )
 
     population_grid_agglo = filtre_BPE_actifs(population_grid_agglo, land_use_data)
+    _step(f"✓ BPE pondérée — {len(population_grid_agglo)} carreaux actifs")
 
     return population_grid_agglo, land_use_data, BPE_agglo

@@ -66,27 +66,29 @@ def _construire_pipeline(zip_path, nom_reseau_str, date_JOB):
 
     Toutes les valeurs ici sont locales : elles ne servent qu'à construire le
     tuple final renvoyé, seul élément que l'appelant (accessibilite_index_page)
-    stocke en session_state.
+    stocke en session_state. Les étapes sont affichées dans un st.status()
+    qui reste visible (dépliable) une fois le calcul terminé, plutôt qu'un
+    message transitoire qui disparaît.
     """
-    statut = st.empty()
-    population_grid_agglo, land_use_data, BPE_agglo = construire_donnees_bpe(
-        zip_path, nom_reseau_str, on_step=lambda message: statut.info(message)
-    )
-    statut.empty()
+    with st.status("Préparation des données d'accessibilité...", expanded=True) as status:
+        population_grid_agglo, land_use_data, BPE_agglo = construire_donnees_bpe(
+            zip_path, nom_reseau_str, on_step=lambda message: st.write(message)
+        )
 
-    chemins = chemins_reseau(nom_reseau_str)
-    osm_pbf_path = chemins["osm_pbf"]
-    ttm_path = chemins["ttm"]
+        chemins = chemins_reseau(nom_reseau_str)
+        osm_pbf_path = chemins["osm_pbf"]
+        ttm_path = chemins["ttm"]
 
-    if not os.path.exists(osm_pbf_path):
-        with st.spinner("Extraction des données OSM (Overpass)... peut prendre plusieurs minutes"):
+        if not os.path.exists(osm_pbf_path):
+            st.write("Extraction des données OSM (Overpass)... peut prendre plusieurs minutes")
             osm_pbf_creator(chemins["decoupage_geojson"], output_pbf_path=osm_pbf_path)
+            st.write("✓ Extrait OSM prêt")
 
-    if not os.path.exists(ttm_path):
-        with st.spinner(
-            "Calcul de la matrice des temps de trajet (r5py)... "
-            "premier lancement pour ce réseau, peut prendre plusieurs minutes"
-        ):
+        if not os.path.exists(ttm_path):
+            st.write(
+                "Calcul de la matrice des temps de trajet (r5py)... "
+                "premier lancement pour ce réseau, peut prendre plusieurs minutes"
+            )
             points = population_grid_agglo[["id", "geometry"]].copy()
             points["geometry"] = points.geometry.centroid
 
@@ -105,8 +107,10 @@ def _construire_pipeline(zip_path, nom_reseau_str, date_JOB):
                 max_time=datetime.timedelta(minutes=120),
             )
             ttm.to_parquet(ttm_path, index=False)
+            st.write("✓ Matrice des temps de trajet prête")
 
-    ttm = pd.read_parquet(ttm_path)
+        ttm = pd.read_parquet(ttm_path)
+        status.update(label="Données d'accessibilité prêtes", state="complete", expanded=False)
 
     return population_grid_agglo, land_use_data, BPE_agglo, ttm
 
