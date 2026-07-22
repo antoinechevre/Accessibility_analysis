@@ -12,11 +12,12 @@ import datetime
 import folium
 import pandas as pd
 import streamlit as st
+from folium.plugins import DualMap
 
 from src.BPE_traitement import land_use_data_domaine
 from src.build_data_agglo import osm_pbf_creator
 from src.pipeline_donnees import DOMAINES_BPE, chemins_reseau, construire_donnees_bpe
-from src.utilitaires_matrix import cumulative_cutoff
+from src.utilitaires_matrix import cost_to_closest, cumulative_cutoff
 from src.utils import preparer_gtfs_pour_r5py
 
 BASE_DIR = os.getcwd()
@@ -62,9 +63,12 @@ def _assurer_r5py_pret():
     import r5py as r5py_module
     import r5py.util.jvm
 
-    r5py_module.util.jvm.MAX_JVM_MEMORY = 512 * 1024**2  # 512 Mo : réduit pour
-    # les hôtes à RAM limitée (ex. Streamlit Community Cloud, ~1 Go total).
-    # Remonter à 2-3 Go en local si vous avez assez de RAM (cf. notebook cellule 1).
+    # 512 Mo par défaut (sûr sur un hôte à RAM limitée, ex. Streamlit
+    # Community Cloud ~1 Go total). Sur un tier payant avec plus de RAM (ex.
+    # Hugging Face Spaces CPU upgrade), remonter via la variable d'env
+    # R5PY_MAX_JVM_MEMORY_MB (cf. Dockerfile et README, section Déploiement)
+    # plutôt qu'en modifiant ce fichier.
+    r5py_module.util.jvm.MAX_JVM_MEMORY = int(os.environ.get("R5PY_MAX_JVM_MEMORY_MB", 512)) * 1024**2
 
     r5py = r5py_module
 
@@ -169,6 +173,101 @@ def _carte_accessibilite_domaine(population_grid_agglo, land_use_data, BPE_agglo
     return carte
 
 
+def _carte_temps_acces_pole_domaine(population_grid_agglo, land_use_data, BPE_agglo, ttm, domaine, fond_carte):
+    """Carte HTML interactive du temps d'accès au pôle d'équipements le plus
+    proche pour un domaine BPE donné (cost_to_closest, restreint aux carreaux
+    "pôles" pole_equipements_{domaine}). Équivalent de la section 9.1 du
+    notebook."""
+    nom_domaine = DOMAINES_BPE.get(domaine, domaine)
+
+    poles_domaine = land_use_data[["id", f"pole_equipements_{domaine}"]].rename(
+        columns={f"pole_equipements_{domaine}": domaine}
+    )
+
+    min_time = cost_to_closest(
+        land_use_data_domaine,
+        BPE_agglo,
+        land_use_data,
+        DOMAINES_BPE,
+        ttm,
+        opportunity=domaine,
+        travel_cost="travel_time",
+        land_use_data=poles_domaine,
+    )
+
+    carte_temps = population_grid_agglo[["id", "geometry"]].merge(min_time, on="id")
+    # Comme TMISA dans le livre (cf. notebook 9.1) : plafonné à 60 min pour la
+    # lisibilité de la carte, au-delà seule l'idée de "trop loin" compte.
+    carte_temps["travel_time_plafonne"] = carte_temps["travel_time"].clip(upper=60)
+
+    carte = carte_temps.explore(
+        column="travel_time_plafonne",
+        cmap="cividis_r",
+        tiles=FONDS_CARTE[fond_carte],
+        legend=True,
+        legend_kwds={"caption": "Temps (min)"},
+        style_kwds={"weight": 0, "opacity": 0},
+    )
+
+    titre_html = (
+        f'<h3 align="center" style="font-size:16px">'
+        f"<b>Temps d'accès au pôle d'équipements le plus proche – {nom_domaine}</b></h3>"
+    )
+    carte.get_root().html.add_child(folium.Element(titre_html))
+
+    return carte
+
+
+def _carte_poles_accessibles_domaine(population_grid_agglo, land_use_data, ttm, domaine, fond_carte):
+    """Carte HTML interactive (DualMap 30 min / 45 min) du nombre de pôles
+    d'équipements accessibles pour un domaine BPE donné, restreint aux
+    carreaux "pôles" pole_equipements_{domaine}. Équivalent de la section
+    9.2 du notebook."""
+    nom_domaine = DOMAINES_BPE.get(domaine, domaine)
+
+    poles_domaine = land_use_data[["id", f"pole_equipements_{domaine}"]].rename(
+        columns={f"pole_equipements_{domaine}": domaine}
+    )
+
+    cum_30 = cumulative_cutoff(ttm, land_use_data=poles_domaine, opportunity=domaine, travel_cost="travel_time", cutoff=30)
+    cum_45 = cumulative_cutoff(ttm, land_use_data=poles_domaine, opportunity=domaine, travel_cost="travel_time", cutoff=45)
+
+    limite_commune = max(cum_30[domaine].max(), cum_45[domaine].max())
+
+    carte_30 = population_grid_agglo[["id", "geometry"]].merge(cum_30, on="id")
+    carte_45 = population_grid_agglo[["id", "geometry"]].merge(cum_45, on="id")
+
+    dual_map = DualMap(tiles=FONDS_CARTE[fond_carte], layout="horizontal")
+    carte_30.explore(
+        column=domaine,
+        cmap="inferno",
+        vmin=0,
+        vmax=limite_commune,
+        legend=True,
+        legend_kwds={"caption": f"{nom_domaine} (pôles) – 30 min"},
+        style_kwds={"weight": 0, "opacity": 0},
+        m=dual_map.m1,
+    )
+    carte_45.explore(
+        column=domaine,
+        cmap="inferno",
+        vmin=0,
+        vmax=limite_commune,
+        legend=True,
+        legend_kwds={"caption": f"{nom_domaine} (pôles) – 45 min"},
+        style_kwds={"weight": 0, "opacity": 0},
+        m=dual_map.m2,
+    )
+
+    titre_html = (
+        f'<h3 align="center" style="font-size:16px">'
+        f"<b>Pôles d'équipements accessibles – {nom_domaine} (30 min / 45 min)</b></h3>"
+    )
+    dual_map.get_root().html.add_child(folium.Element(titre_html))
+
+    return dual_map
+
+
 def accessibilite_index_page():
     st.header("♿ Accessibilité aux équipements (30 min)")
 
@@ -232,6 +331,7 @@ def accessibilite_index_page():
     onglets = st.tabs([f"{d} - {nom}" for d, nom in DOMAINES_BPE.items()])
     for onglet, domaine in zip(onglets, DOMAINES_BPE):
         with onglet:
+            st.markdown("#### Accessibilité pondérée cumulée (30 min)")
             with st.spinner(f"Calcul de la carte {domaine}..."):
                 carte = _carte_accessibilite_domaine(
                     population_grid_agglo, land_use_data, BPE_agglo, ttm, domaine, fond_carte
@@ -248,4 +348,40 @@ def accessibilite_index_page():
                     file_name=os.path.basename(html_path),
                     mime="text/html",
                     key=f"download_{domaine}",
+                )
+
+            st.markdown("#### Temps d'accès au pôle d'équipements le plus proche")
+            with st.spinner(f"Calcul du temps d'accès {domaine}..."):
+                carte_temps = _carte_temps_acces_pole_domaine(
+                    population_grid_agglo, land_use_data, BPE_agglo, ttm, domaine, fond_carte
+                )
+            st.components.v1.html(carte_temps.get_root().render(), height=520, scrolling=False)
+
+            html_path_temps = os.path.join(OUTPUT_DIR, f"accessibilite_temps_{domaine}_{nom_reseau_str}.html")
+            carte_temps.save(html_path_temps)
+            with open(html_path_temps, "rb") as f:
+                st.download_button(
+                    f"💾 Télécharger la carte temps d'accès {domaine} (HTML)",
+                    data=f,
+                    file_name=os.path.basename(html_path_temps),
+                    mime="text/html",
+                    key=f"download_temps_{domaine}",
+                )
+
+            st.markdown("#### Pôles d'équipements accessibles (30 min vs 45 min)")
+            with st.spinner(f"Calcul des pôles accessibles {domaine}..."):
+                carte_poles = _carte_poles_accessibles_domaine(
+                    population_grid_agglo, land_use_data, ttm, domaine, fond_carte
+                )
+            st.components.v1.html(carte_poles.get_root().render(), height=520, scrolling=False)
+
+            html_path_poles = os.path.join(OUTPUT_DIR, f"accessibilite_poles_{domaine}_{nom_reseau_str}.html")
+            carte_poles.save(html_path_poles)
+            with open(html_path_poles, "rb") as f:
+                st.download_button(
+                    f"💾 Télécharger la carte pôles accessibles {domaine} (HTML)",
+                    data=f,
+                    file_name=os.path.basename(html_path_poles),
+                    mime="text/html",
+                    key=f"download_poles_{domaine}",
                 )

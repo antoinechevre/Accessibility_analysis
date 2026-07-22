@@ -9,6 +9,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 ENV JAVA_HOME=/usr/lib/jvm/default-java
 
+# Mémoire max de la JVM r5py (Mo), cf. views/accessibilite_index.py::_assurer_r5py_pret.
+# 512 par défaut (sûr sur tier gratuit). Sur un tier payant avec plus de RAM,
+# surcharger via les "Variables and secrets" du Space (pas besoin de rebuild).
+ENV R5PY_MAX_JVM_MEMORY_MB=512
+
 # Convention Hugging Face Spaces : exécuter en utilisateur non-root (UID 1000).
 RUN useradd -m -u 1000 user
 USER user
