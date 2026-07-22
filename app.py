@@ -73,6 +73,19 @@ if "selected_page" not in st.session_state:
 st.sidebar.header("📁 Paramètres d'analyse")
 uploaded_file = st.sidebar.file_uploader("Uploader le fichier GTFS (zip)", type="zip")
 
+# Alternative à l'upload : choisir un GTFS déjà présent dans data/GTFS (poste
+# de dev local uniquement — ce dossier n'est pas versionné par git donc vide
+# sur un déploiement fraîchement cloné, cf. .gitignore et README).
+AUCUN_GTFS_LOCAL = "— aucun —"
+GTFS_DATA_DIR = os.path.join(os.getcwd(), "data", "GTFS")
+gtfs_locaux = sorted(
+    f for f in os.listdir(GTFS_DATA_DIR) if f.lower().endswith(".zip")
+) if os.path.isdir(GTFS_DATA_DIR) else []
+gtfs_local_choisi = st.sidebar.selectbox(
+    "...ou choisir un GTFS déjà présent",
+    options=[AUCUN_GTFS_LOCAL] + gtfs_locaux,
+)
+
 # Variables globales pour stocker les résultats
 if "feed" not in st.session_state:
     st.session_state.feed = None
@@ -113,21 +126,32 @@ if "last_uploaded_name" not in st.session_state:
 # partir du GTFS (un mardi ou un jeudi tiré au hasard dans la plage de
 # service fiable, voir src/info_reseau.dates_service).
 def charger_donnees_gtfs():
-    if uploaded_file is None:
+    if uploaded_file is not None:
+        nom_gtfs = uploaded_file.name
+        lire_gtfs = uploaded_file.read
+    elif gtfs_local_choisi != AUCUN_GTFS_LOCAL:
+        nom_gtfs = gtfs_local_choisi
+        chemin_gtfs_local = os.path.join(GTFS_DATA_DIR, gtfs_local_choisi)
+        lire_gtfs = lambda: open(chemin_gtfs_local, "rb").read()
+    else:
         return False
 
     # Ne recharger le GTFS (et le logo, qui nécessite une requête réseau)
-    # que si un nouveau fichier a été uploadé, pas à chaque interaction
-    nouveau_fichier = uploaded_file.name != st.session_state.last_uploaded_name
+    # que si un nouveau fichier a été sélectionné, pas à chaque interaction
+    nouveau_fichier = nom_gtfs != st.session_state.last_uploaded_name
 
     if not nouveau_fichier and st.session_state.feed is not None:
         return True
 
-    # Sauvegarder temporairement le fichier (conservé pour toute la
-    # session : create_carte_arrets recharge le feed depuis ce chemin
-    # pour tracer les lignes)
+    # Copie dans un fichier temporaire (conservé pour toute la session :
+    # create_carte_arrets recharge le feed depuis ce chemin pour tracer les
+    # lignes) plutôt que d'opérer directement sur data/GTFS/<fichier> : entre
+    # autres, charger_gtfs() peut réécrire le zip en place si calendar_dates.txt
+    # est vide (cf. src/utils._retirer_table_vide_du_zip) — sur le fichier
+    # original de data/GTFS, ça modifierait silencieusement la source versionnée
+    # sur le dataset HF.
     with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp_file:
-        tmp_file.write(uploaded_file.read())
+        tmp_file.write(lire_gtfs())
         GTFS_PATH = tmp_file.name
 
     try:
@@ -164,7 +188,7 @@ def charger_donnees_gtfs():
         st.session_state.date_str = date_str
         st.session_state.zip_path = GTFS_PATH
         st.session_state.nom_reseau_str = reseau_str
-        st.session_state.last_uploaded_name = uploaded_file.name
+        st.session_state.last_uploaded_name = nom_gtfs
         st.session_state.decoupage_reference_path_reseau = None
         st.session_state.decoupage_agglo = None
                 

@@ -158,11 +158,20 @@ def _construire_pipeline(zip_path, nom_reseau_str, date_JOB):
     return population_grid_agglo, land_use_data, BPE_agglo, ttm
 
 
-def _carte_temps_acces_pole_domaine(population_grid_agglo, land_use_data, BPE_agglo, ttm, domaine, fond_carte):
+def _carte_temps_acces_pole_domaine(
+    population_grid_agglo, land_use_data, BPE_agglo, ttm, domaine, fond_carte, carreaux_filtre_ids=None
+):
     """Carte HTML interactive du temps d'accès au pôle d'équipements le plus
     proche pour un domaine BPE donné (cost_to_closest, restreint aux carreaux
     "pôles" pole_equipements_{domaine}). Équivalent de la section 9.1 du
-    notebook."""
+    notebook.
+
+    carreaux_filtre_ids: si fourni, restreint les carreaux AFFICHÉS à cet
+    ensemble d'id (ex: filtre par décile de niveau de vie) — n'affecte pas
+    la détection des pôles ni le calcul des temps de trajet (basés sur tous
+    les carreaux), seulement ce qui est montré sur la carte. Retourne None
+    si le filtre ne laisse aucun carreau.
+    """
     nom_domaine = DOMAINES_BPE.get(domaine, domaine)
 
     poles_domaine = land_use_data[["id", f"pole_equipements_{domaine}"]].rename(
@@ -181,6 +190,11 @@ def _carte_temps_acces_pole_domaine(population_grid_agglo, land_use_data, BPE_ag
     )
 
     carte_temps = population_grid_agglo[["id", "geometry"]].merge(min_time, on="id")
+    if carreaux_filtre_ids is not None:
+        carte_temps = carte_temps[carte_temps["id"].isin(carreaux_filtre_ids)]
+    if carte_temps.empty:
+        return None
+
     # Comme TMISA dans le livre (cf. notebook 9.1) : plafonné à 60 min pour la
     # lisibilité de la carte, au-delà seule l'idée de "trop loin" compte.
     carte_temps["travel_time_plafonne"] = carte_temps["travel_time"].clip(upper=60)
@@ -214,11 +228,18 @@ def _carte_temps_acces_pole_domaine(population_grid_agglo, land_use_data, BPE_ag
     return carte
 
 
-def _carte_poles_accessibles_domaine(population_grid_agglo, land_use_data, ttm, domaine, fond_carte):
+def _carte_poles_accessibles_domaine(population_grid_agglo, land_use_data, ttm, domaine, fond_carte, carreaux_filtre_ids=None):
     """Carte HTML interactive (DualMap 30 min / 45 min) du nombre de pôles
     d'équipements accessibles pour un domaine BPE donné, restreint aux
     carreaux "pôles" pole_equipements_{domaine}. Équivalent de la section
-    9.2 du notebook."""
+    9.2 du notebook.
+
+    carreaux_filtre_ids: si fourni, restreint les carreaux AFFICHÉS à cet
+    ensemble d'id (ex: filtre par décile de niveau de vie) — la légende
+    (limite_commune) reste calculée sur tous les carreaux, pour une échelle
+    de couleur comparable quel que soit le filtre. Retourne None si le
+    filtre ne laisse aucun carreau.
+    """
     nom_domaine = DOMAINES_BPE.get(domaine, domaine)
 
     poles_domaine = land_use_data[["id", f"pole_equipements_{domaine}"]].rename(
@@ -232,6 +253,11 @@ def _carte_poles_accessibles_domaine(population_grid_agglo, land_use_data, ttm, 
 
     carte_30 = population_grid_agglo[["id", "geometry"]].merge(cum_30, on="id")
     carte_45 = population_grid_agglo[["id", "geometry"]].merge(cum_45, on="id")
+    if carreaux_filtre_ids is not None:
+        carte_30 = carte_30[carte_30["id"].isin(carreaux_filtre_ids)]
+        carte_45 = carte_45[carte_45["id"].isin(carreaux_filtre_ids)]
+    if carte_30.empty or carte_45.empty:
+        return None
 
     dual_map = DualMap(tiles=FONDS_CARTE[fond_carte], layout="horizontal")
     # legend=False sur les deux : branca cible tous les colorbars de la page
@@ -393,6 +419,30 @@ def accessibilite_index_page():
 
     fond_carte = st.selectbox("Fond de carte", options=list(FONDS_CARTE.keys()))
 
+    deciles_disponibles = sorted(niveau_vie["decile_niveau_vie"].unique().astype(int))
+    deciles_selectionnes = st.multiselect(
+        "Filtrer les cartes par décile de niveau de vie (D1 = plus modeste, D10 = plus aisé) — "
+        "les carreaux hors sélection n'apparaissent pas sur les cartes ci-dessous",
+        options=deciles_disponibles,
+        default=deciles_disponibles,
+        format_func=lambda d: f"D{d}",
+    )
+
+    if not deciles_selectionnes:
+        st.warning("Sélectionnez au moins un décile pour afficher les cartes.")
+        return
+
+    # None (plutôt qu'un ensemble reprenant tous les déciles) quand rien n'est
+    # exclu : garde aussi les carreaux sans donnée ind_snv publiée (secret
+    # statistique, absents de niveau_vie donc d'aucun décile), qui seraient
+    # sinon exclus des cartes même sans filtre actif de la part de l'utilisateur.
+    if set(deciles_selectionnes) == set(deciles_disponibles):
+        carreaux_filtre_ids = None
+    else:
+        carreaux_filtre_ids = set(
+            niveau_vie.loc[niveau_vie["decile_niveau_vie"].isin(deciles_selectionnes), "id"]
+        )
+
     st.markdown("### Cartes d'accessibilité par domaine d'équipement")
 
     onglets = st.tabs([f"{d} - {nom}" for d, nom in DOMAINES_BPE.items()])
@@ -401,21 +451,25 @@ def accessibilite_index_page():
             st.markdown("#### Temps d'accès au pôle d'équipements le plus proche")
             with st.spinner(f"Calcul du temps d'accès {domaine}..."):
                 carte_temps = _carte_temps_acces_pole_domaine(
-                    population_grid_agglo, land_use_data, BPE_agglo, ttm, domaine, fond_carte
+                    population_grid_agglo, land_use_data, BPE_agglo, ttm, domaine, fond_carte,
+                    carreaux_filtre_ids=carreaux_filtre_ids,
                 )
-            st.components.v1.html(carte_temps.get_root().render(), height=520, scrolling=False)
+            if carte_temps is None:
+                st.info("Aucun carreau dans les déciles sélectionnés.")
+            else:
+                st.components.v1.html(carte_temps.get_root().render(), height=520, scrolling=False)
 
-            html_path_temps = os.path.join(OUTPUT_DIR, f"accessibilite_temps_{domaine}_{nom_reseau_str}.html")
-            os.makedirs(OUTPUT_DIR, exist_ok=True)
-            carte_temps.save(html_path_temps)
-            with open(html_path_temps, "rb") as f:
-                st.download_button(
-                    f"💾 Télécharger la carte temps d'accès {domaine} (HTML)",
-                    data=f,
-                    file_name=os.path.basename(html_path_temps),
-                    mime="text/html",
-                    key=f"download_temps_{domaine}",
-                )
+                html_path_temps = os.path.join(OUTPUT_DIR, f"accessibilite_temps_{domaine}_{nom_reseau_str}.html")
+                os.makedirs(OUTPUT_DIR, exist_ok=True)
+                carte_temps.save(html_path_temps)
+                with open(html_path_temps, "rb") as f:
+                    st.download_button(
+                        f"💾 Télécharger la carte temps d'accès {domaine} (HTML)",
+                        data=f,
+                        file_name=os.path.basename(html_path_temps),
+                        mime="text/html",
+                        key=f"download_temps_{domaine}",
+                    )
 
             st.markdown("#### Pôles d'équipements accessibles (30 min vs 45 min)")
             st.caption(
@@ -424,20 +478,24 @@ def accessibilite_index_page():
             )
             with st.spinner(f"Calcul des pôles accessibles {domaine}..."):
                 carte_poles = _carte_poles_accessibles_domaine(
-                    population_grid_agglo, land_use_data, ttm, domaine, fond_carte
+                    population_grid_agglo, land_use_data, ttm, domaine, fond_carte,
+                    carreaux_filtre_ids=carreaux_filtre_ids,
                 )
-            st.components.v1.html(carte_poles.get_root().render(), height=520, scrolling=False)
+            if carte_poles is None:
+                st.info("Aucun carreau dans les déciles sélectionnés.")
+            else:
+                st.components.v1.html(carte_poles.get_root().render(), height=520, scrolling=False)
 
-            html_path_poles = os.path.join(OUTPUT_DIR, f"accessibilite_poles_{domaine}_{nom_reseau_str}.html")
-            carte_poles.save(html_path_poles)
-            with open(html_path_poles, "rb") as f:
-                st.download_button(
-                    f"💾 Télécharger la carte pôles accessibles {domaine} (HTML)",
-                    data=f,
-                    file_name=os.path.basename(html_path_poles),
-                    mime="text/html",
-                    key=f"download_poles_{domaine}",
-                )
+                html_path_poles = os.path.join(OUTPUT_DIR, f"accessibilite_poles_{domaine}_{nom_reseau_str}.html")
+                carte_poles.save(html_path_poles)
+                with open(html_path_poles, "rb") as f:
+                    st.download_button(
+                        f"💾 Télécharger la carte pôles accessibles {domaine} (HTML)",
+                        data=f,
+                        file_name=os.path.basename(html_path_poles),
+                        mime="text/html",
+                        key=f"download_poles_{domaine}",
+                    )
 
             st.markdown("#### % moyen de pôles atteignables par décile de niveau de vie")
             lignes_decile = [
