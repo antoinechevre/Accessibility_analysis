@@ -28,12 +28,40 @@ LIBELLES_MODE = {
 }
 
 
+def _retirer_table_vide_du_zip(zip_path, nom_fichier):
+    """Retire nom_fichier du zip GTFS zip_path (réécrit en place) s'il est
+    présent mais vide (en-tête seul, aucune ligne de données).
+
+    Un fichier GTFS présent-mais-vide est valide selon la spec (ex:
+    calendar_dates.txt vide quand calendar.txt porte tout le calendrier),
+    mais gtfs_kit (gk.read_feed) le rejette avec une EmptyTableError plutôt
+    que de le traiter comme absent — même situation que calendar.txt côté
+    r5py, cf. preparer_gtfs_pour_r5py ci-dessous, mais avec le lecteur
+    gtfs_kit cette fois (utilisé lui par tout le reste du pipeline).
+    """
+    zip_path = pathlib.Path(zip_path)
+    with zipfile.ZipFile(zip_path) as z:
+        if nom_fichier not in z.namelist():
+            return
+        with z.open(nom_fichier) as f:
+            nb_lignes = sum(1 for _ in csv.reader(io.TextIOWrapper(f, "utf-8"))) - 1
+        if nb_lignes > 0:
+            return
+        contenu = {n: z.read(n) for n in z.namelist() if n != nom_fichier}
+
+    print(f"{nom_fichier} vide dans {zip_path.name} : retrait avant chargement gtfs_kit")
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zout:
+        for nom, data in contenu.items():
+            zout.writestr(nom, data)
+
+
 def charger_gtfs(zip_path):
     """
     Charge le fichier GTFS à l'aide de gtfs_kit.
     Returns:
         feed: gtfs_kit Feed object
     """
+    _retirer_table_vide_du_zip(zip_path, "calendar_dates.txt")
     print(f"Chargement du fichier GTFS : {zip_path}")
     feed = gk.read_feed(zip_path, dist_units='km')
     print(f"✓ GTFS chargé avec succès")
