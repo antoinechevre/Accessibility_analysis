@@ -4,7 +4,8 @@ import folium
 import geopandas as gpd
 import requests
 
-from src.cartographie import script_reajuster_si_masque
+from src.cartographie import script_legende_en_bas, script_reajuster_si_masque
+from src.hf_cache import recuperer_depuis_hf
 
 
 BASE_DIR = os.getcwd()  # Remonte d'un niveau depuis scripts/
@@ -20,6 +21,10 @@ def import_BPE(BPE_URL):
     # re-télécharge pas à chaque run pour éviter de retélécharger 160+ Mo à chaque
     # fois (supprimer le fichier local pour forcer une mise à jour).
    
+    if not os.path.exists(BPE_PATH) and recuperer_depuis_hf("BPE25.parquet", BPE_PATH):
+        print(f"BPE25 récupéré depuis le cache Hugging Face : {BPE_PATH}")
+        return
+
     if not os.path.exists(BPE_PATH):
         print(f"Téléchargement du BPE25 depuis {BPE_URL}...")
         with requests.get(BPE_URL, stream=True, timeout=60) as r:
@@ -130,6 +135,7 @@ def carte_ponderation_domaine(DOMAINES_BPE,population_grid_agglo,BPE_agglo,land_
     carte.get_root().html.add_child(
         folium.Element(script_reajuster_si_masque(carte, [[miny, minx], [maxy, maxx]]))
     )
+    carte.get_root().html.add_child(folium.Element(script_legende_en_bas()))
 
     return carte
 

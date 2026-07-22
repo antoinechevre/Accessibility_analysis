@@ -4,6 +4,7 @@ import numpy as np
 import branca.colormap as cm
 import gtfs_kit as gk
 import base64
+import json
 import os
 import mimetypes
 
@@ -50,8 +51,14 @@ def script_reajuster_si_masque(m, bounds):
 
     m: objet folium.Map (dont l'un des volets m1/m2 d'un DualMap).
     bounds: [[miny, minx], [maxy, maxx]] (mêmes coordonnées que fit_bounds).
+        Accepte des numpy.float64 (ex: issus de .total_bounds) : castés en
+        float Python avant sérialisation JSON — leur repr Python
+        ("np.float64(43.57)", depuis numpy 2.x) n'est pas du JS valide, {{bounds!r}}
+        cassait silencieusement ce script (ReferenceError: np is not defined,
+        visible seulement en pageerror, jamais atteint la correction de zoom).
     """
     nom_carte = m.get_name()
+    bounds_json = json.dumps([[float(lat), float(lon)] for lat, lon in bounds])
     return f"""
     <script>
     window.addEventListener("load", function() {{
@@ -65,13 +72,89 @@ def script_reajuster_si_masque(m, bounds):
             for (var entree of entries) {{
                 if (entree.contentRect.width > 0 && entree.contentRect.height > 0) {{
                     carte.invalidateSize();
-                    carte.fitBounds({bounds!r});
+                    carte.fitBounds({bounds_json});
                 }}
             }}
         }});
         observer.observe(carte.getContainer());
     }});
     </script>
+    """
+
+
+def echelle_continue_html(vmin, vmax, cmap, caption, cote="gauche"):
+    """Légende flottante (dégradé + bornes) en bas d'une carte folium plein
+    cadre, position fixed (comme titre_carte_html) — pour une échelle
+    continue (colonne numérique sans scheme).
+
+    Remplace le colorbar ajouté par .explore(legend=True, ...) : sur un
+    DualMap, le template branca cible TOUS les colorbars de la page via un
+    sélecteur CSS non isolé par carte (d3.select(".legend.leaflet-control"),
+    premier match seulement) — le second colorbar s'empile dans le premier
+    au lieu de s'afficher sur son propre panneau. D'où .explore(...,
+    legend=False) sur les cartes concernées et cette légende maison à la
+    place (pas de bug équivalent pour une légende catégorielle à scheme,
+    cf. script_legende_en_bas pour ce cas).
+
+    vmin, vmax: bornes numériques de l'échelle.
+    cmap: nom de colormap matplotlib (ex: "inferno", "cividis_r").
+    caption: légende texte.
+    cote: "gauche", "droite" ou "centre" — bas de la page (les deux
+        panneaux d'un DualMap partagent le même document HTML, donc
+        "gauche"/"droite" correspond directement à chaque panneau).
+    """
+    from matplotlib import colormaps
+    from matplotlib.colors import to_hex
+
+    palette = colormaps[cmap]
+    degrade_css = ", ".join(to_hex(palette(i / 7)) for i in range(8))
+    position_css = {
+        "gauche": "left: 20px;",
+        "droite": "right: 20px;",
+        "centre": "left: 50%; transform: translateX(-50%);",
+    }[cote]
+
+    return f"""
+    <div style="
+        position: fixed;
+        bottom: 20px;
+        {position_css}
+        z-index: 9999;
+        background: white;
+        padding: 8px 12px;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 12px;
+        color: #333;
+        width: 180px;
+    ">
+        <div style="margin-bottom:4px;">{caption}</div>
+        <div style="height:10px;border-radius:3px;background:linear-gradient(to right,{degrade_css});"></div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:#555;margin-top:2px;">
+            <span>{vmin:.0f}</span><span>{vmax:.0f}</span>
+        </div>
+    </div>
+    """
+
+
+def script_legende_en_bas():
+    """<style> qui déplace en bas la légende native ajoutée par
+    .explore(legend=True, ...) (colorbar continu ou légende catégorielle à
+    scheme, positionnée en haut à droite par défaut par branca — cf.
+    branca/templates/color_scale.js, L.control({{position: 'topright'}})) :
+    évite qu'elle chevauche le titre flottant (titre_carte_html, lui aussi
+    en haut). Repositionnement CSS pur : sûr uniquement pour une carte
+    SEULE dans la page (contrairement à un DualMap, où c'est le contenu
+    même de la légende qui est cassé, pas seulement sa position — cf.
+    echelle_continue_html pour ce cas)."""
+    return """
+    <style>
+    .leaflet-top.leaflet-right {
+        top: auto !important;
+        bottom: 20px !important;
+    }
+    </style>
     """
 
 

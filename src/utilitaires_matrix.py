@@ -1,4 +1,62 @@
 import numpy as np
+import pandas as pd
+
+
+def pct_poles_atteignables_par_carreau(land_use_data, ttm, domaine, cutoff):
+    """DataFrame [id, population, pct_poles] : % (0-100) des pôles
+    d'équipements majeurs du domaine (land_use_data[f"pole_equipements_{domaine}"],
+    cf. SEUILS_DOMAINE dans src/pipeline_donnees.py) atteignables en <= cutoff
+    minutes depuis chaque carreau.
+
+    Calcul séparé de moyenne_ponderee_pct_poles() ci-dessous (plutôt qu'une
+    seule fonction bornes+moyenne) pour ne filtrer ttm qu'une fois par
+    (domaine, cutoff) même quand on a besoin de la moyenne sur plusieurs
+    sous-ensembles de carreaux (ex: par décile de niveau de vie)."""
+    poles = set(land_use_data.loc[land_use_data[f"pole_equipements_{domaine}"] == 1, "id"])
+    base = land_use_data[["id", "population"]].copy()
+
+    if not poles:
+        base["pct_poles"] = float("nan")
+        return base
+
+    nb_poles_atteignables = (
+        ttm.loc[ttm["to_id"].isin(poles) & (ttm["travel_time"] <= cutoff)]
+        .groupby("from_id")["to_id"]
+        .nunique()
+    )
+
+    base = base.merge(
+        nb_poles_atteignables.rename("nb_poles").reset_index().rename(columns={"from_id": "id"}),
+        on="id",
+        how="left",
+    )
+    # Carreaux absents de nb_poles_atteignables : aucun pôle atteignable (0), pas NaN.
+    base["nb_poles"] = base["nb_poles"].fillna(0)
+    base["pct_poles"] = 100 * base["nb_poles"] / len(poles)
+    return base.drop(columns="nb_poles")
+
+
+def moyenne_ponderee_pct_poles(pct_par_carreau, carreaux_ids=None):
+    """Moyenne pondérée par la population de pct_par_carreau["pct_poles"]
+    (issu de pct_poles_atteignables_par_carreau), restreinte à carreaux_ids
+    si fourni (sinon calculée sur toute la population)."""
+    base = pct_par_carreau
+    if carreaux_ids is not None:
+        base = base[base["id"].isin(carreaux_ids)]
+    population_totale = base["population"].sum()
+    if population_totale == 0:
+        return float("nan")
+    return (base["pct_poles"] * base["population"]).sum() / population_totale
+
+
+def deciles_niveau_vie(population_grid_agglo):
+    """DataFrame [id, ind_snv, decile_niveau_vie] : décile de niveau de vie
+    (ind_snv, Filosofi INSEE) par carreau. Carreaux sans donnée publiée
+    (ind_snv <= 0, secret statistique) exclus : les inclure fausserait le
+    décile le plus pauvre avec des carreaux "sans donnée"."""
+    niveau_vie = population_grid_agglo.loc[population_grid_agglo["ind_snv"] > 0, ["id", "ind_snv"]].copy()
+    niveau_vie["decile_niveau_vie"] = pd.qcut(niveau_vie["ind_snv"], 10, labels=False, duplicates="drop") + 1
+    return niveau_vie
 
 
 def cumulative_cutoff(travel_time_matrix, land_use_data, opportunity, travel_cost, cutoff):

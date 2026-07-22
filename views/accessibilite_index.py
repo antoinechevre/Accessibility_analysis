@@ -10,16 +10,23 @@ import os
 import datetime
 
 import folium
+import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
 from folium.plugins import DualMap
 
 from src.BPE_traitement import land_use_data_domaine
 from src.build_data_agglo import osm_pbf_creator
-from src.cartographie import script_reajuster_si_masque, titre_carte_html
+from src.cartographie import echelle_continue_html, script_reajuster_si_masque, titre_carte_html
 from src.hf_cache import recuperer_depuis_hf
 from src.pipeline_donnees import DOMAINES_BPE, chemins_reseau, construire_donnees_bpe
-from src.utilitaires_matrix import cost_to_closest, cumulative_cutoff
+from src.utilitaires_matrix import (
+    cost_to_closest,
+    cumulative_cutoff,
+    deciles_niveau_vie,
+    moyenne_ponderee_pct_poles,
+    pct_poles_atteignables_par_carreau,
+)
 from src.utils import preparer_gtfs_pour_r5py
 
 BASE_DIR = os.getcwd()
@@ -30,6 +37,10 @@ FONDS_CARTE = {
     "CartoDB Positron": "CartoDB positron",
     "CartoDB Dark Matter": "CartoDB dark_matter",
 }
+
+# Durées utilisées pour les courbes "% moyen de pôles atteignables" (vue
+# d'ensemble par domaine + déclinaison par décile de niveau de vie).
+CUTOFFS_PCT_MOYEN_POLES = [15, 30, 45, 60]
 
 # r5py est importé paresseusement (cf. _assurer_r5py_pret ci-dessous), pas au
 # chargement du module : app.py importe ce module de façon inconditionnelle
@@ -178,13 +189,21 @@ def _carte_temps_acces_pole_domaine(population_grid_agglo, land_use_data, BPE_ag
         column="travel_time_plafonne",
         cmap="cividis_r",
         tiles=FONDS_CARTE[fond_carte],
-        legend=True,
-        legend_kwds={"caption": "Temps (min)"},
+        legend=False,  # légende maison ci-dessous (cf. echelle_continue_html)
         style_kwds={"weight": 0, "opacity": 0},
     )
 
     carte.get_root().html.add_child(
         folium.Element(titre_carte_html(f"Temps d'accès au pôle d'équipements le plus proche – {nom_domaine}"))
+    )
+    carte.get_root().html.add_child(
+        folium.Element(echelle_continue_html(
+            carte_temps["travel_time_plafonne"].min(),
+            carte_temps["travel_time_plafonne"].max(),
+            "cividis_r",
+            "Temps (min)",
+            cote="centre",
+        ))
     )
 
     minx, miny, maxx, maxy = carte_temps.to_crs(epsg=4326).total_bounds
@@ -215,13 +234,17 @@ def _carte_poles_accessibles_domaine(population_grid_agglo, land_use_data, ttm, 
     carte_45 = population_grid_agglo[["id", "geometry"]].merge(cum_45, on="id")
 
     dual_map = DualMap(tiles=FONDS_CARTE[fond_carte], layout="horizontal")
+    # legend=False sur les deux : branca cible tous les colorbars de la page
+    # via un sélecteur CSS non isolé par carte (d3.select(".legend.leaflet-control"),
+    # premier match seulement) — le second colorbar s'empile dans le premier
+    # au lieu de s'afficher sur son propre panneau. Légendes maison à la
+    # place (cf. echelle_continue_html ci-dessous), une par côté.
     carte_30.explore(
         column=domaine,
         cmap="inferno",
         vmin=0,
         vmax=limite_commune,
-        legend=True,
-        legend_kwds={"caption": f"{nom_domaine} (pôles) – 30 min"},
+        legend=False,
         style_kwds={"weight": 0, "opacity": 0},
         m=dual_map.m1,
     )
@@ -230,8 +253,7 @@ def _carte_poles_accessibles_domaine(population_grid_agglo, land_use_data, ttm, 
         cmap="inferno",
         vmin=0,
         vmax=limite_commune,
-        legend=True,
-        legend_kwds={"caption": f"{nom_domaine} (pôles) – 45 min"},
+        legend=False,
         style_kwds={"weight": 0, "opacity": 0},
         m=dual_map.m2,
     )
@@ -248,10 +270,32 @@ def _carte_poles_accessibles_domaine(population_grid_agglo, land_use_data, ttm, 
     dual_map.get_root().html.add_child(
         folium.Element(titre_carte_html(f"Pôles d'équipements accessibles – {nom_domaine} (30 min / 45 min)"))
     )
+    dual_map.get_root().html.add_child(
+        folium.Element(echelle_continue_html(0, limite_commune, "inferno", f"{nom_domaine} (pôles) – 30 min", cote="gauche"))
+    )
+    dual_map.get_root().html.add_child(
+        folium.Element(echelle_continue_html(0, limite_commune, "inferno", f"{nom_domaine} (pôles) – 45 min", cote="droite"))
+    )
     dual_map.get_root().html.add_child(folium.Element(script_reajuster_si_masque(dual_map.m1, bounds)))
     dual_map.get_root().html.add_child(folium.Element(script_reajuster_si_masque(dual_map.m2, bounds)))
 
     return dual_map
+
+
+def _courbe_pct_moyen_poles(tableau, titre, titre_legende, cmap=None):
+    """Figure matplotlib : une courbe par colonne de tableau.T (durées en
+    index après transposition), affichée via st.pyplot. Partagée par la vue
+    d'ensemble par domaine et la déclinaison par décile de niveau de vie
+    (même tableau Domaine/Décile x durée, juste la source qui change)."""
+    fig, ax = plt.subplots(figsize=(8, 5))
+    tableau.T.plot(marker="o", ax=ax, cmap=cmap)
+    ax.set_xlabel("Durée de trajet (min)")
+    ax.set_ylabel("% moyen de pôles atteignables")
+    ax.set_ylim(0, 100)
+    ax.set_title(titre)
+    ax.legend(title=titre_legende, bbox_to_anchor=(1.02, 1), loc="upper left")
+    st.pyplot(fig)
+    plt.close(fig)
 
 
 def accessibilite_index_page():
@@ -310,6 +354,43 @@ def accessibilite_index_page():
 
     st.success(f"✓ {len(population_grid_agglo)} carreaux actifs — matrice des temps de trajet prête.")
 
+    st.markdown("### % moyen de pôles d'équipements majeurs atteignables (pondéré par la population)")
+    st.caption(
+        "Moyenne, pondérée par la population de chaque carreau, du % de pôles majeurs "
+        "d'un domaine atteignables depuis ce carreau — une mesure continue plutôt qu'un "
+        "seuil (cf onglet pondérations équipements pour comprendre l'analyse des équipements)."
+    )
+    with st.spinner("Calcul de la vue d'ensemble par domaine..."):
+        # Calculé une seule fois par (domaine, durée), réutilisé ci-dessous pour
+        # la vue d'ensemble et pour la déclinaison par décile dans chaque onglet
+        # (évite de refiltrer ttm à chaque décile).
+        pct_par_carreau_domaine_cutoff = {
+            (d, c): pct_poles_atteignables_par_carreau(land_use_data, ttm, d, c)
+            for d in DOMAINES_BPE
+            for c in CUTOFFS_PCT_MOYEN_POLES
+        }
+
+        tableau_pct_moyen_poles = pd.DataFrame(
+            [
+                {
+                    "Domaine": nom,
+                    **{
+                        f"{c} min": moyenne_ponderee_pct_poles(pct_par_carreau_domaine_cutoff[(d, c)])
+                        for c in CUTOFFS_PCT_MOYEN_POLES
+                    },
+                }
+                for d, nom in DOMAINES_BPE.items()
+            ]
+        ).set_index("Domaine")
+
+        _courbe_pct_moyen_poles(
+            tableau_pct_moyen_poles,
+            f"% moyen de pôles d'équipements majeurs atteignables, par domaine – {nom_reseau_str}",
+            "Domaine",
+        )
+
+        niveau_vie = deciles_niveau_vie(population_grid_agglo)
+
     fond_carte = st.selectbox("Fond de carte", options=list(FONDS_CARTE.keys()))
 
     st.markdown("### Cartes d'accessibilité par domaine d'équipement")
@@ -357,3 +438,25 @@ def accessibilite_index_page():
                     mime="text/html",
                     key=f"download_poles_{domaine}",
                 )
+
+            st.markdown("#### % moyen de pôles atteignables par décile de niveau de vie")
+            lignes_decile = [
+                {
+                    "Décile": int(decile),
+                    **{
+                        f"{c} min": moyenne_ponderee_pct_poles(
+                            pct_par_carreau_domaine_cutoff[(domaine, c)],
+                            carreaux_ids=niveau_vie.loc[niveau_vie["decile_niveau_vie"] == decile, "id"],
+                        )
+                        for c in CUTOFFS_PCT_MOYEN_POLES
+                    },
+                }
+                for decile in sorted(niveau_vie["decile_niveau_vie"].unique())
+            ]
+            tableau_decile_poles = pd.DataFrame(lignes_decile).set_index("Décile")
+            _courbe_pct_moyen_poles(
+                tableau_decile_poles,
+                f"% moyen de pôles atteignables par décile de niveau de vie – {DOMAINES_BPE[domaine]}",
+                "Décile (D1=modeste, D10=aisé)",
+                cmap="viridis",
+            )
