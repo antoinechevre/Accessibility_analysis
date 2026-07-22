@@ -45,7 +45,8 @@ Le projet s'inspire des travaux du livre *Introduction to urban accessibility* (
   5.2 coût au plus proche, 
   5.3 gravité, 
   5.4 compétition (Enhanced 2SFCA).
-6. Exporte des cartes interactives (HTML/Folium) et statiques (PNG) par domaine d'équipement.
+6. Exporte des cartes interactives (HTML/Folium) et statiques (PNG) par domaine d'équipement avec une déclinaison par déciles de population
+
 
 ## Structure du dépôt
 
