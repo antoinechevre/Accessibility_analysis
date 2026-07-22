@@ -16,6 +16,7 @@ from folium.plugins import DualMap
 
 from src.BPE_traitement import land_use_data_domaine
 from src.build_data_agglo import osm_pbf_creator
+from src.cartographie import titre_carte_html
 from src.pipeline_donnees import DOMAINES_BPE, chemins_reseau, construire_donnees_bpe
 from src.utilitaires_matrix import cost_to_closest, cumulative_cutoff
 from src.utils import preparer_gtfs_pour_r5py
@@ -164,11 +165,9 @@ def _carte_accessibilite_domaine(population_grid_agglo, land_use_data, BPE_agglo
         style_kwds={"weight": 0, "opacity": 0},
     )
 
-    titre_html = (
-        f'<h3 align="center" style="font-size:16px">'
-        f"<b>Accessibilité {nom_domaine} à {CUTOFF_MINUTES} min</b></h3>"
+    carte.get_root().html.add_child(
+        folium.Element(titre_carte_html(f"Accessibilité {nom_domaine} à {CUTOFF_MINUTES} min"))
     )
-    carte.get_root().html.add_child(folium.Element(titre_html))
 
     return carte
 
@@ -209,11 +208,9 @@ def _carte_temps_acces_pole_domaine(population_grid_agglo, land_use_data, BPE_ag
         style_kwds={"weight": 0, "opacity": 0},
     )
 
-    titre_html = (
-        f'<h3 align="center" style="font-size:16px">'
-        f"<b>Temps d'accès au pôle d'équipements le plus proche – {nom_domaine}</b></h3>"
+    carte.get_root().html.add_child(
+        folium.Element(titre_carte_html(f"Temps d'accès au pôle d'équipements le plus proche – {nom_domaine}"))
     )
-    carte.get_root().html.add_child(folium.Element(titre_html))
 
     return carte
 
@@ -259,11 +256,17 @@ def _carte_poles_accessibles_domaine(population_grid_agglo, land_use_data, ttm, 
         m=dual_map.m2,
     )
 
-    titre_html = (
-        f'<h3 align="center" style="font-size:16px">'
-        f"<b>Pôles d'équipements accessibles – {nom_domaine} (30 min / 45 min)</b></h3>"
+    # .explore(m=...) ajoute la couche à une carte existante sans recentrer
+    # dessus (contrairement à .explore() sans m=, qui fait un fit_bounds
+    # automatique) : DualMap() démarre donc sur sa vue par défaut ([0, 0],
+    # zoom 1) sans ce fit_bounds explicite sur les deux volets.
+    minx, miny, maxx, maxy = carte_30.to_crs(epsg=4326).total_bounds
+    dual_map.m1.fit_bounds([[miny, minx], [maxy, maxx]])
+    dual_map.m2.fit_bounds([[miny, minx], [maxy, maxx]])
+
+    dual_map.get_root().html.add_child(
+        folium.Element(titre_carte_html(f"Pôles d'équipements accessibles – {nom_domaine} (30 min / 45 min)"))
     )
-    dual_map.get_root().html.add_child(folium.Element(titre_html))
 
     return dual_map
 

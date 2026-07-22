@@ -9,6 +9,32 @@ import mimetypes
 
 from src.i18n import t
 
+
+def titre_carte_html(titre):
+    """Titre flottant pour une carte folium plein cadre (position: fixed,
+    au-dessus de la carte), au lieu d'un <h3> en flux normal : le div Leaflet
+    de la carte (position: absolute, top:0, height:100%) recouvre sinon
+    entièrement un titre placé en flux normal au-dessus de lui dans le body,
+    le rendant invisible à l'affichage bien qu'il soit présent dans le DOM."""
+    return f"""
+    <div style="
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 9999;
+        background: white;
+        padding: 10px 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+        font-family: Arial, Helvetica, sans-serif;
+        white-space: nowrap;
+    ">
+        <div style="font-size: 16px; font-weight: bold;">{titre}</div>
+    </div>
+    """
+
+
 def create_carte_arrets(df, nom_reseau_str,date_service_str, date_analyse, zip_path, output_path, chemin_logo=None, lang="fr"):
     # Carte des arrêts avec leur nombre de passages
 
