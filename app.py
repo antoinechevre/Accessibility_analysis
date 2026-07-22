@@ -13,6 +13,7 @@ import streamlit as st
 
 from src.utils import charger_gtfs, obtenir_service_ids_pour_date
 from src.info_reseau import dates_service, recuperer_logo_reseau, nom_reseau
+from src.hf_cache import lister_fichiers_hf, recuperer_depuis_hf
 from views.home import home_page
 from views.accessibilite_index import accessibilite_index_page
 from views.ponderation_equipements import ponderation_equipements_page
@@ -73,16 +74,26 @@ if "selected_page" not in st.session_state:
 st.sidebar.header("📁 Paramètres d'analyse")
 uploaded_file = st.sidebar.file_uploader("Uploader le fichier GTFS (zip)", type="zip")
 
-# Alternative à l'upload : choisir un GTFS déjà présent dans data/GTFS (poste
-# de dev local uniquement — ce dossier n'est pas versionné par git donc vide
-# sur un déploiement fraîchement cloné, cf. .gitignore et README).
+# Alternative à l'upload : choisir un GTFS déjà présent dans data/GTFS. Ce
+# dossier n'est pas versionné par git (cf. .gitignore) donc vide sur un
+# déploiement fraîchement démarré sans stockage persistant (ex. Space HF au
+# redémarrage) : on retombe alors sur le catalogue du dataset HF (mêmes
+# fichiers, déjà téléversés une fois pour toutes, cf. src/hf_cache.py), et le
+# fichier choisi est téléchargé à la demande au moment du chargement.
 AUCUN_GTFS_LOCAL = "— aucun —"
 GTFS_DATA_DIR = os.path.join(os.getcwd(), "data", "GTFS")
 gtfs_locaux = sorted(
     f for f in os.listdir(GTFS_DATA_DIR) if f.lower().endswith(".zip")
 ) if os.path.isdir(GTFS_DATA_DIR) else []
+
+gtfs_source_hf = False
+if not gtfs_locaux:
+    gtfs_locaux = sorted(f for f in lister_fichiers_hf("GTFS") if f.lower().endswith(".zip"))
+    gtfs_source_hf = True
+
 gtfs_local_choisi = st.sidebar.selectbox(
-    "...ou choisir un GTFS déjà présent",
+    "...ou choisir un GTFS déjà présent"
+    + (" (dataset Hugging Face)" if gtfs_source_hf else ""),
     options=[AUCUN_GTFS_LOCAL] + gtfs_locaux,
 )
 
@@ -132,6 +143,11 @@ def charger_donnees_gtfs():
     elif gtfs_local_choisi != AUCUN_GTFS_LOCAL:
         nom_gtfs = gtfs_local_choisi
         chemin_gtfs_local = os.path.join(GTFS_DATA_DIR, gtfs_local_choisi)
+        if gtfs_source_hf and not os.path.exists(chemin_gtfs_local):
+            with st.spinner(f"Récupération de {gtfs_local_choisi} depuis Hugging Face..."):
+                if not recuperer_depuis_hf(f"GTFS/{gtfs_local_choisi}", chemin_gtfs_local):
+                    st.error(f"Impossible de récupérer {gtfs_local_choisi} depuis Hugging Face.")
+                    return False
         lire_gtfs = lambda: open(chemin_gtfs_local, "rb").read()
     else:
         return False

@@ -48,3 +48,28 @@ def recuperer_depuis_hf(nom_fichier_hf, destination_locale):
     os.makedirs(os.path.dirname(destination_locale), exist_ok=True)
     shutil.copy(chemin_telecharge, destination_locale)
     return True
+
+
+def lister_fichiers_hf(sous_dossier):
+    """Liste les fichiers du dataset HF sous sous_dossier/ (ex: "GTFS"),
+    noms de fichiers (basename, sans le préfixe de dossier) triés.
+
+    Liste vide si le dataset est inaccessible (token absent, hors ligne,
+    huggingface_hub non installé...) — l'appelant doit alors se rabattre sur
+    sa source habituelle plutôt que planter."""
+    try:
+        from huggingface_hub import HfApi
+    except ImportError:
+        return []
+
+    try:
+        fichiers = HfApi().list_repo_files(
+            repo_id=HF_DATA_REPO_ID,
+            repo_type="dataset",
+            token=os.environ.get("HF_TOKEN"),
+        )
+    except Exception:
+        return []
+
+    prefixe = f"{sous_dossier}/"
+    return sorted(f[len(prefixe):] for f in fichiers if f.startswith(prefixe) and f != prefixe)
