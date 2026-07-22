@@ -17,6 +17,7 @@ import requests
 
 from src.build_data_agglo import build_decoupage_agglo, decoupage_agglo_geojson, build_grid_agglo
 from src.BPE_traitement import filtre_BPE, filtre_BPE_actifs, land_use_data_domaine
+from src.ponderation_bpe import GAMMES_POIDS_PAR_DOMAINE, SEUILS_DOMAINE
 from src.utils import exporter_df_to_csv
 
 BASE_DIR = os.getcwd()
@@ -39,32 +40,6 @@ DOMAINES_BPE = {
     "F": "Sports, loisirs et culture",
     "G": "Tourisme",
 }
-
-# Seuil (en multiple de la moyenne du domaine) au-delà duquel un carreau est
-# considéré comme un "pôle d'équipements" pour ce domaine (cf. notebook
-# "analyse BPE 1.1" et section 9.1/9.2). Utilisé par les cartes "temps d'accès
-# au pôle le plus proche" et "pôles accessibles" de views/accessibilite_index.py.
-SEUILS_DOMAINE = {
-    "A": 1,
-    "B": 1,
-    "C": 1,
-    "D": 1,
-    "E": 1,
-    "F": 1,
-    "G": 1,
-    "O": 1.5,
-}
-
-GAMMES_POIDS_PAR_DOMAINE = {
-    "A": {"Gamme de proximité": 2, "Gamme intermédiaire": 3, "Gamme supérieure": 4, "Hors Gamme": 3},
-    "B": {"Gamme de proximité": 2, "Gamme intermédiaire": 4, "Gamme supérieure": 6, "Hors Gamme": 8},
-    "C": {"Gamme de proximité": 4, "Gamme intermédiaire": 6, "Gamme supérieure": 8, "Hors Gamme": 10},
-    "D": {"Gamme de proximité": 2, "Gamme intermédiaire": 4, "Gamme supérieure": 6, "Hors Gamme": 8},
-    "E": {"Gamme de proximité": 2, "Gamme intermédiaire": 4, "Gamme supérieure": 6, "Hors Gamme": 8},
-    "F": {"Gamme de proximité": 2, "Gamme intermédiaire": 4, "Gamme supérieure": 6, "Hors Gamme": 8},
-    "G": {"Gamme de proximité": 2, "Gamme intermédiaire": 4, "Gamme supérieure": 6, "Hors Gamme": 8},
-}
-
 
 def chemins_reseau(nom_reseau_str):
     """Chemins de cache disque (par réseau) utilisés par le pipeline."""
