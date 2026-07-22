@@ -1,10 +1,13 @@
 FROM python:3.12-slim
 
-# Java (JVM pour r5py) et osmium-tool (extraction OSM), cf.
-# src/build_data_agglo.py::osm_pbf_creator et views/accessibilite_index.py.
+# Java (JVM pour r5py), osmium-tool (extraction OSM) et p7zip-full (le
+# carroyage Filosofi 200m d'insee.fr est un zip contenant une archive .7z
+# imbriquée, cf. src/build_data_agglo.py::assurer_carreaux_200m_local) :
+# cf. src/build_data_agglo.py::osm_pbf_creator et views/accessibilite_index.py.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     default-jdk-headless \
     osmium-tool \
+    p7zip-full \
     && rm -rf /var/lib/apt/lists/*
 
 ENV JAVA_HOME=/usr/lib/jvm/default-java

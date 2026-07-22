@@ -26,10 +26,15 @@ def assurer_carreaux_200m_local():
     """Télécharge et extrait le carroyage population INSEE Filosofi 200m
     (France métropolitaine) depuis insee.fr si absent en local.
 
-    Le zip source (~200 Mo) contient 3 gpkg (métropole/Martinique/Réunion) ;
-    seul carreaux_200m_met.gpkg (~1,1 Go décompressé) est conservé, les deux
-    autres n'étant pas utilisés par ce projet. Le zip est supprimé après
-    extraction pour ne pas doubler l'espace disque utilisé.
+    Le zip source (~200 Mo) ne contient pas directement les gpkg mais une
+    seule archive .7z imbriquée (vérifié par téléchargement direct : le zip
+    n'a qu'un membre, qui se termine par ".7z"), qui elle contient les 3 gpkg
+    (métropole/Martinique/Réunion) en un unique bloc solide. Seul
+    carreaux_200m_met.gpkg (~1,1 Go décompressé) est conservé, les deux
+    autres n'étant pas utilisés par ce projet. Le zip et le .7z intermédiaire
+    sont supprimés après extraction pour ne pas tripler l'espace disque
+    utilisé. Nécessite le binaire `7z` (paquet p7zip-full, cf. Dockerfile et
+    packages.txt) : zipfile (stdlib) ne sait pas lire le format .7z.
     """
     output_dir = pathlib.Path(DATA_DIR) / "extracted"
     output_path = output_dir / "carreaux_200m_met.gpkg"
@@ -47,11 +52,18 @@ def assurer_carreaux_200m_local():
                 f.write(chunk)
 
     with zipfile.ZipFile(zip_path) as z:
-        membre = next(n for n in z.namelist() if n.endswith("carreaux_200m_met.gpkg"))
-        with z.open(membre) as source, open(output_path, "wb") as dest:
-            shutil.copyfileobj(source, dest)
-
+        membre_7z = next(n for n in z.namelist() if n.endswith(".7z"))
+        z.extract(membre_7z, path=output_dir)
     zip_path.unlink()
+
+    print("Extraction de l'archive .7z imbriquée (bloc solide, peut prendre quelques minutes)...")
+    archive_7z_path = output_dir / membre_7z
+    subprocess.run(
+        ["7z", "e", str(archive_7z_path), f"-o{output_dir}", "carreaux_200m_met.gpkg", "-y"],
+        check=True,
+    )
+    archive_7z_path.unlink()
+
     print(f"✓ Carroyage population téléchargé et extrait : {output_path}")
 
 
