@@ -1,7 +1,10 @@
 import pandas as pd
 import os
+import folium
 import geopandas as gpd
 import requests
+
+from src.cartographie import script_reajuster_si_masque
 
 
 BASE_DIR = os.getcwd()  # Remonte d'un niveau depuis scripts/
@@ -112,7 +115,7 @@ def carte_ponderation_domaine(DOMAINES_BPE,population_grid_agglo,BPE_agglo,land_
     # style_kwds : contours des carreaux transparents (weight=0, opacity=0),
     # comme pour overview_map_cda (cellule 2) — sinon le quadrillage noir
     # écrase le fond de carte.
-    return grille.explore(
+    carte = grille.explore(
         column=domaine,
         cmap="inferno",
         scheme="NaturalBreaks",
@@ -122,6 +125,13 @@ def carte_ponderation_domaine(DOMAINES_BPE,population_grid_agglo,BPE_agglo,land_
         legend_kwds={"caption": f"{nom_domaine} (pondéré)"},
         style_kwds={"weight": 0, "opacity": 0},
     )
+
+    minx, miny, maxx, maxy = grille.to_crs(epsg=4326).total_bounds
+    carte.get_root().html.add_child(
+        folium.Element(script_reajuster_si_masque(carte, [[miny, minx], [maxy, maxx]]))
+    )
+
+    return carte
 
 
 def mask_domaine_bpe(BPE_agglo,domaine):

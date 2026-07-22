@@ -35,6 +35,46 @@ def titre_carte_html(titre):
     """
 
 
+def script_reajuster_si_masque(m, bounds):
+    """<script> qui réajuste une carte Leaflet (invalidateSize + fitBounds)
+    quand son conteneur redevient visible.
+
+    Cas concret : dans un onglet Streamlit (st.tabs), le script Python
+    s'exécute une seule fois et rend TOUS les onglets dans le DOM, seul
+    l'onglet actif étant affiché (masqué en CSS pour les autres). Leaflet
+    calcule sa vue initiale (fit_bounds) sur un conteneur de taille 0 pour
+    les onglets inactifs à ce moment-là, d'où la vue par défaut ([0, 0],
+    zoom 1) qu'on obtient à l'affichage — et il ne la recalcule jamais tout
+    seul une fois l'onglet effectivement affiché. Un ResizeObserver sur le
+    conteneur de la carte permet de détecter ce moment et de la rafraîchir.
+
+    m: objet folium.Map (dont l'un des volets m1/m2 d'un DualMap).
+    bounds: [[miny, minx], [maxy, maxx]] (mêmes coordonnées que fit_bounds).
+    """
+    nom_carte = m.get_name()
+    return f"""
+    <script>
+    window.addEventListener("load", function() {{
+        // Différé à "load" : ce <script>, ajouté via get_root().html, est
+        // injecté dans le body AVANT le <script> (ajouté via get_root().script
+        // par folium) qui déclare {nom_carte} = L.map(...) — y accéder plus tôt
+        // lèverait une ReferenceError, {nom_carte} n'existe pas encore à ce
+        // stade du parsing.
+        var carte = {nom_carte};
+        var observer = new ResizeObserver(function(entries) {{
+            for (var entree of entries) {{
+                if (entree.contentRect.width > 0 && entree.contentRect.height > 0) {{
+                    carte.invalidateSize();
+                    carte.fitBounds({bounds!r});
+                }}
+            }}
+        }});
+        observer.observe(carte.getContainer());
+    }});
+    </script>
+    """
+
+
 def create_carte_arrets(df, nom_reseau_str,date_service_str, date_analyse, zip_path, output_path, chemin_logo=None, lang="fr"):
     # Carte des arrêts avec leur nombre de passages
 

@@ -16,7 +16,7 @@ from folium.plugins import DualMap
 
 from src.BPE_traitement import land_use_data_domaine
 from src.build_data_agglo import osm_pbf_creator
-from src.cartographie import titre_carte_html
+from src.cartographie import script_reajuster_si_masque, titre_carte_html
 from src.hf_cache import recuperer_depuis_hf
 from src.pipeline_donnees import DOMAINES_BPE, chemins_reseau, construire_donnees_bpe
 from src.utilitaires_matrix import cost_to_closest, cumulative_cutoff
@@ -24,8 +24,6 @@ from src.utils import preparer_gtfs_pour_r5py
 
 BASE_DIR = os.getcwd()
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
-
-CUTOFF_MINUTES = 30
 
 FONDS_CARTE = {
     "OpenStreetMap": "OpenStreetMap",
@@ -149,38 +147,6 @@ def _construire_pipeline(zip_path, nom_reseau_str, date_JOB):
     return population_grid_agglo, land_use_data, BPE_agglo, ttm
 
 
-def _carte_accessibilite_domaine(population_grid_agglo, land_use_data, BPE_agglo, ttm, domaine, fond_carte):
-    """Carte HTML interactive de l'accessibilité (opportunités cumulées à
-    CUTOFF_MINUTES min) pour un domaine BPE donné. Équivalent de la cellule
-    3.3.1 du notebook."""
-    nom_domaine = DOMAINES_BPE.get(domaine, domaine)
-
-    cum_cutoff = cumulative_cutoff(
-        ttm,
-        land_use_data=land_use_data_domaine(BPE_agglo, land_use_data, domaine),
-        opportunity=domaine,
-        travel_cost="travel_time",
-        cutoff=CUTOFF_MINUTES,
-    )
-
-    spatial_access = population_grid_agglo[["id", "geometry"]].merge(cum_cutoff, on="id")
-
-    carte = spatial_access.explore(
-        column=domaine,
-        cmap="inferno",
-        tiles=FONDS_CARTE[fond_carte],
-        legend=True,
-        legend_kwds={"caption": f"{nom_domaine} (pondéré)"},
-        style_kwds={"weight": 0, "opacity": 0},
-    )
-
-    carte.get_root().html.add_child(
-        folium.Element(titre_carte_html(f"Accessibilité {nom_domaine} à {CUTOFF_MINUTES} min"))
-    )
-
-    return carte
-
-
 def _carte_temps_acces_pole_domaine(population_grid_agglo, land_use_data, BPE_agglo, ttm, domaine, fond_carte):
     """Carte HTML interactive du temps d'accès au pôle d'équipements le plus
     proche pour un domaine BPE donné (cost_to_closest, restreint aux carreaux
@@ -219,6 +185,11 @@ def _carte_temps_acces_pole_domaine(population_grid_agglo, land_use_data, BPE_ag
 
     carte.get_root().html.add_child(
         folium.Element(titre_carte_html(f"Temps d'accès au pôle d'équipements le plus proche – {nom_domaine}"))
+    )
+
+    minx, miny, maxx, maxy = carte_temps.to_crs(epsg=4326).total_bounds
+    carte.get_root().html.add_child(
+        folium.Element(script_reajuster_si_masque(carte, [[miny, minx], [maxy, maxx]]))
     )
 
     return carte
@@ -270,12 +241,15 @@ def _carte_poles_accessibles_domaine(population_grid_agglo, land_use_data, ttm, 
     # automatique) : DualMap() démarre donc sur sa vue par défaut ([0, 0],
     # zoom 1) sans ce fit_bounds explicite sur les deux volets.
     minx, miny, maxx, maxy = carte_30.to_crs(epsg=4326).total_bounds
-    dual_map.m1.fit_bounds([[miny, minx], [maxy, maxx]])
-    dual_map.m2.fit_bounds([[miny, minx], [maxy, maxx]])
+    bounds = [[miny, minx], [maxy, maxx]]
+    dual_map.m1.fit_bounds(bounds)
+    dual_map.m2.fit_bounds(bounds)
 
     dual_map.get_root().html.add_child(
         folium.Element(titre_carte_html(f"Pôles d'équipements accessibles – {nom_domaine} (30 min / 45 min)"))
     )
+    dual_map.get_root().html.add_child(folium.Element(script_reajuster_si_masque(dual_map.m1, bounds)))
+    dual_map.get_root().html.add_child(folium.Element(script_reajuster_si_masque(dual_map.m2, bounds)))
 
     return dual_map
 
@@ -343,25 +317,6 @@ def accessibilite_index_page():
     onglets = st.tabs([f"{d} - {nom}" for d, nom in DOMAINES_BPE.items()])
     for onglet, domaine in zip(onglets, DOMAINES_BPE):
         with onglet:
-            st.markdown("#### Accessibilité pondérée cumulée (30 min)")
-            with st.spinner(f"Calcul de la carte {domaine}..."):
-                carte = _carte_accessibilite_domaine(
-                    population_grid_agglo, land_use_data, BPE_agglo, ttm, domaine, fond_carte
-                )
-            st.components.v1.html(carte.get_root().render(), height=520, scrolling=False)
-
-            html_path = os.path.join(OUTPUT_DIR, f"accessibilite_spatiale_{domaine}_{nom_reseau_str}.html")
-            os.makedirs(OUTPUT_DIR, exist_ok=True)
-            carte.save(html_path)
-            with open(html_path, "rb") as f:
-                st.download_button(
-                    f"💾 Télécharger la carte {domaine} (HTML)",
-                    data=f,
-                    file_name=os.path.basename(html_path),
-                    mime="text/html",
-                    key=f"download_{domaine}",
-                )
-
             st.markdown("#### Temps d'accès au pôle d'équipements le plus proche")
             with st.spinner(f"Calcul du temps d'accès {domaine}..."):
                 carte_temps = _carte_temps_acces_pole_domaine(
@@ -370,6 +325,7 @@ def accessibilite_index_page():
             st.components.v1.html(carte_temps.get_root().render(), height=520, scrolling=False)
 
             html_path_temps = os.path.join(OUTPUT_DIR, f"accessibilite_temps_{domaine}_{nom_reseau_str}.html")
+            os.makedirs(OUTPUT_DIR, exist_ok=True)
             carte_temps.save(html_path_temps)
             with open(html_path_temps, "rb") as f:
                 st.download_button(
@@ -381,6 +337,10 @@ def accessibilite_index_page():
                 )
 
             st.markdown("#### Pôles d'équipements accessibles (30 min vs 45 min)")
+            st.caption(
+                "Pôles majeurs d'équipements accessible depuis chaque carreau à 30 min et 45 min "
+                "(cf onglet pondérations équipements pour comprendre l'analyse des équipements)."
+            )
             with st.spinner(f"Calcul des pôles accessibles {domaine}..."):
                 carte_poles = _carte_poles_accessibles_domaine(
                     population_grid_agglo, land_use_data, ttm, domaine, fond_carte
