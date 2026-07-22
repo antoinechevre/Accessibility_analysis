@@ -32,7 +32,7 @@ def home_page():
    
     Pour analyser les GTFS 
     - **📓 Cerema [Notebook Google Colab](https://colab.research.google.com/github/CEREMA/hackathon-gtfs/blob/main/gtfs_notebook.ipynb)** : Prendre en main le code, exécuter les cellules et regarder les cartographies dynamiques
-    - **📓 Antoine Chèvre [Git analyse GTFS](https://github.com/antoinechevre/gtfs_analysis_app)et l'[application associée](https://gtfsanalysisme3zaa.streamlit.app/) 
+    - **📓 Antoine Chèvre [Git analyse GTFS](https://github.com/antoinechevre/gtfs_analysis_app)** et l'[application associée](https://gtfsanalysisme3zaa.streamlit.app/) 
         
     
     Les sources de données: 
@@ -63,14 +63,35 @@ def home_page():
     
     ### Fonctionnalités disponibles:  
     À partir d'un GTFS:
+    À partir d'un GTFS et d'un découpage communal :
 
-    1. Construit le réseau multimodal piéton + transport collectif (`r5py`) à partir du GTFS et d'OSM pour le volet piéton
-    2. Récupère le carroyage population INSEE 200x200 (Filosofi) et la Base Permanente des Équipements (BPE, INSEE) sur l'emprise du réseau.
-    3 . Pondère les équipements par gamme (proximité / intermédiaire / supérieure / hors gamme) et par domaine (santé, enseignement, commerces...).
-    4. Calcule la matrice des temps de trajet (`TravelTimeMatrix`) entre tous les carreaux.
-    5. Calcule plusieurs indicateurs d'accessibilité : opportunités cumulées, coût au plus proche, gravité, compétition (Enhanced 2SFCA).
-    6. Exporte des cartes interactives (HTML/Folium) et statiques (PNG) par domaine d'équipement.
-    
+    1. Construit le réseau multimodal piéton + transport collectif (`r5py`) à partir du GTFS pour une date JOB indiquée et le réseau viaire pour les cheminements piétons 
+    2. Récupère le carroyage population INSEE 200x200 2019 incluant les catégories socio économiques (Filosofi) et la Base Permanente des Équipements (BPE, INSEE) 
+    3. Pondère les équipements par gamme (proximité / intermédiaire / supérieure / hors gamme) et par domaine (santé, enseignement, commerces...) avec une pondération des équipements dans le fichier src/ponderation_bpe.py: 
+    2.1 Liste des équipements BPE - cf https://vscode.dev/github/antoinechevre/Accessibility_analysis/blob/main/data/BPE25_anonymisee_dessin_fichier.html 
+        "O": "Tout équipements pondérés",
+        "A": "Services pour les particuliers",
+        "B": "Commerces",
+        "C": "Enseignement",
+        "D": "Santé et action sociale",
+        "E": "Transports et déplacements",
+        "F": "Sports, loisirs et culture",
+        "G": "Tourisme",
+    2.2 pondération selon la classification
+        "Gamme de proximité"
+        "Gamme intermédiaire"
+        "Gamme supérieure"
+        "Hors Gamme"
+    2.3 des seuils sur pondération par carreaux de 200x200 et par domaine par rapport à la moyenne de pondération des carreaux par domaines (objectif de filtrer les carreaux significatifs)  
+
+    4. Calcule la matrice des temps de trajet (`TravelTimeMatrix`) entre tous les carreaux avec GTFS / Piétons OSM à l'heure de pointe en JOB 
+    5. Calcule plusieurs indicateurs d'accessibilité : 
+        5.1 opportunités cumulées, 
+        5.2 coût au plus proche, 
+        5.3 gravité, 
+        5.4 compétition (Enhanced 2SFCA).
+    6. Exporte des cartes interactives (HTML/Folium) et statiques (PNG) par domaine d'équipement avec une déclinaison par déciles de population
+    7. produit des indicateurs agrégés par décile et par type d'équipements du % accessible en fonction du temps de trajet  
     """
     )
     
