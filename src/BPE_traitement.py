@@ -97,8 +97,8 @@ def filtre_BPE_actifs (population_grid_agglo,land_use_data):
 # carreau (population_grid_cda) — pas l'accessibilité en temps de trajet, juste
 # la donnée d'offre brute (land_use_data_domaine).
 
-def carte_ponderation_domaine(DOMAINES_BPE,population_grid_agglo,BPE_agglo,land_use_data,domaine):
-    """Carte interactive (fond OSM) de la pondération cumulée par gamme d'un domaine BPE, par carreau."""
+def carte_ponderation_domaine(DOMAINES_BPE,population_grid_agglo,BPE_agglo,land_use_data,domaine,tiles="CartoDB positron"):
+    """Carte interactive de la pondération cumulée par gamme d'un domaine BPE, par carreau."""
     nom_domaine = DOMAINES_BPE.get(domaine, domaine)
     grille = population_grid_agglo[["id", "geometry"]].merge(land_use_data_domaine(BPE_agglo, land_use_data, domaine), on="id")
 
@@ -111,13 +111,13 @@ def carte_ponderation_domaine(DOMAINES_BPE,population_grid_agglo,BPE_agglo,land_
     # réduirait k à 2 classes (0 vs tout le reste).
     # style_kwds : contours des carreaux transparents (weight=0, opacity=0),
     # comme pour overview_map_cda (cellule 2) — sinon le quadrillage noir
-    # écrase le fond OSM.
+    # écrase le fond de carte.
     return grille.explore(
         column=domaine,
         cmap="inferno",
         scheme="NaturalBreaks",
         k=5,
-        tiles="OpenStreetMap",
+        tiles=tiles,
         legend=True,
         legend_kwds={"caption": f"{nom_domaine} (pondéré)"},
         style_kwds={"weight": 0, "opacity": 0},
