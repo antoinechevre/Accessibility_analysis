@@ -15,6 +15,8 @@ from urllib3.util.retry import Retry
 import shapely.geometry
 import os
 
+from src.hf_cache import recuperer_depuis_hf
+
 
 BASE_DIR = os.getcwd()  # Remonte d'un niveau depuis scripts/
 DATA_DIR = os.path.join(BASE_DIR,"data")
@@ -39,6 +41,10 @@ def assurer_carreaux_200m_local():
     output_dir = pathlib.Path(DATA_DIR) / "extracted"
     output_path = output_dir / "carreaux_200m_met.gpkg"
     if output_path.exists() and output_path.stat().st_size > 0:
+        return
+
+    if recuperer_depuis_hf("extracted/carreaux_200m_met.gpkg", str(output_path)):
+        print(f"✓ Carroyage population récupéré depuis le cache Hugging Face : {output_path}")
         return
 
     output_dir.mkdir(parents=True, exist_ok=True)

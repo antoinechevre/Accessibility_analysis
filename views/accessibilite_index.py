@@ -17,6 +17,7 @@ from folium.plugins import DualMap
 from src.BPE_traitement import land_use_data_domaine
 from src.build_data_agglo import osm_pbf_creator
 from src.cartographie import titre_carte_html
+from src.hf_cache import recuperer_depuis_hf
 from src.pipeline_donnees import DOMAINES_BPE, chemins_reseau, construire_donnees_bpe
 from src.utilitaires_matrix import cost_to_closest, cumulative_cutoff
 from src.utils import preparer_gtfs_pour_r5py
@@ -104,9 +105,17 @@ def _construire_pipeline(zip_path, nom_reseau_str, date_JOB):
         ttm_path = chemins["ttm"]
 
         if not os.path.exists(osm_pbf_path):
-            st.write("Extraction des données OSM (Overpass)... peut prendre plusieurs minutes")
-            osm_pbf_creator(chemins["decoupage_geojson"], output_pbf_path=osm_pbf_path)
-            st.write("✓ Extrait OSM prêt")
+            if recuperer_depuis_hf(f"memory_pbf/agglo_osm_pbf_{nom_reseau_str}.osm.pbf", osm_pbf_path):
+                st.write("✓ Extrait OSM récupéré depuis le cache Hugging Face")
+            else:
+                st.write("Extraction des données OSM (Overpass)... peut prendre plusieurs minutes")
+                osm_pbf_creator(chemins["decoupage_geojson"], output_pbf_path=osm_pbf_path)
+                st.write("✓ Extrait OSM prêt")
+
+        if not os.path.exists(ttm_path) and recuperer_depuis_hf(
+            f"memory_ttm/ttm_{nom_reseau_str}.parquet", ttm_path
+        ):
+            st.write("✓ Matrice des temps de trajet récupérée depuis le cache Hugging Face")
 
         if not os.path.exists(ttm_path):
             st.write(
@@ -272,7 +281,7 @@ def _carte_poles_accessibles_domaine(population_grid_agglo, land_use_data, ttm, 
 
 
 def accessibilite_index_page():
-    st.header("♿ Accessibilité aux équipements (30 min)")
+    st.header("♿ Accessibilité aux équipements (30 min / 45 min)")
 
     if st.session_state.get("feed") is None:
         st.info("👆 Veuillez charger un fichier GTFS dans la barre latérale.")

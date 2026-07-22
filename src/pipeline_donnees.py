@@ -17,6 +17,7 @@ import requests
 
 from src.build_data_agglo import build_decoupage_agglo, decoupage_agglo_geojson, build_grid_agglo
 from src.BPE_traitement import filtre_BPE, filtre_BPE_actifs, land_use_data_domaine
+from src.hf_cache import HF_DATA_REPO_ID, recuperer_depuis_hf
 from src.ponderation_bpe import GAMMES_POIDS_PAR_DOMAINE, SEUILS_DOMAINE
 from src.utils import exporter_df_to_csv
 
@@ -53,8 +54,11 @@ def chemins_reseau(nom_reseau_str):
 
 
 def assurer_bpe_local():
-    """Télécharge le fichier détail BPE25 depuis insee.fr si absent en local (~160 Mo)."""
+    """Récupère le fichier détail BPE25 (~160 Mo) si absent en local : d'abord
+    depuis le cache HF (plus rapide, déjà téléversé), sinon depuis insee.fr."""
     if os.path.exists(BPE_PATH):
+        return
+    if recuperer_depuis_hf("BPE25.parquet", BPE_PATH):
         return
     os.makedirs(os.path.dirname(BPE_PATH), exist_ok=True)
     with requests.get(BPE_URL, stream=True, timeout=60) as r:
@@ -64,8 +68,21 @@ def assurer_bpe_local():
                 f.write(chunk)
 
 
+def assurer_bpe_xls_local():
+    """Récupère depuis le cache HF le fichier des gammes d'équipements
+    BPE_gammes_equipements_2025.xlsx si absent en local : fichier propre à ce
+    projet (pas de source publique équivalente à télécharger)."""
+    if os.path.exists(BPE_XLS_PATH):
+        return
+    if not recuperer_depuis_hf("BPE_gammes_equipements_2025.xlsx", BPE_XLS_PATH):
+        raise FileNotFoundError(
+            f"{BPE_XLS_PATH} introuvable en local et absent du dataset HF {HF_DATA_REPO_ID}."
+        )
+
+
 def ponderer_bpe(BPE_agglo):
     """Ajoute la colonne poids_gamme à BPE_agglo (cf. notebook "#analyse BPE 1.1")."""
+    assurer_bpe_xls_local()
     gamme_typequ = pd.read_excel(
         BPE_XLS_PATH,
         sheet_name="Gammes 2025 1 ligne 1 Typequ",
@@ -103,6 +120,7 @@ def construire_donnees_bpe(zip_path, nom_reseau_str, on_step=None):
     chemins = chemins_reseau(nom_reseau_str)
 
     decoupage_reference_path = os.path.join(MEMORY_CSV_AGGLO_DIR, f"decoupage_agglo_{nom_reseau_str}.csv")
+    recuperer_depuis_hf(f"memory_csv_agglo/decoupage_agglo_{nom_reseau_str}.csv", decoupage_reference_path)
     if not os.path.exists(decoupage_reference_path):
         decoupage_reference_path = None
 

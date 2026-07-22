@@ -20,11 +20,31 @@ Le projet s'inspire des travaux du livre *Introduction to urban accessibility* (
 
 À partir d'un GTFS et d'un découpage communal :
 
-1. Construit le réseau multimodal piéton + transport collectif (`r5py`).
-2. Récupère le carroyage population INSEE 200x200 (Filosofi) et la Base Permanente des Équipements (BPE, INSEE) sur l'emprise du réseau.
-3. Pondère les équipements par gamme (proximité / intermédiaire / supérieure / hors gamme) et par domaine (santé, enseignement, commerces...).
-4. Calcule la matrice des temps de trajet (`TravelTimeMatrix`) entre tous les carreaux.
-5. Calcule plusieurs indicateurs d'accessibilité : opportunités cumulées, coût au plus proche, gravité, compétition (Enhanced 2SFCA).
+1. Construit le réseau multimodal piéton + transport collectif (`r5py`) à partir du GTFS pour une date JOB indiquée et le réseau viaire pour les cheminements piétons 
+2. Récupère le carroyage population INSEE 200x200 2019 incluant les catégories socio économiques (Filosofi) et la Base Permanente des Équipements (BPE, INSEE) 
+3. Pondère les équipements par gamme (proximité / intermédiaire / supérieure / hors gamme) et par domaine (santé, enseignement, commerces...) avec une pondération des équipements dans le fichier src/ponderation_bpe.py: 
+  2.1 Liste des équipements BPE - cf https://vscode.dev/github/antoinechevre/Accessibility_analysis/blob/main/data/BPE25_anonymisee_dessin_fichier.html 
+    "O": "Tout équipements pondérés",
+    "A": "Services pour les particuliers",
+    "B": "Commerces",
+    "C": "Enseignement",
+    "D": "Santé et action sociale",
+    "E": "Transports et déplacements",
+    "F": "Sports, loisirs et culture",
+    "G": "Tourisme",
+  2.2 pondération selon la classification
+    "Gamme de proximité"
+    "Gamme intermédiaire"
+    "Gamme supérieure"
+    "Hors Gamme"
+  2.3 des seuils sur pondération par carreaux de 200x200 et par domaine par rapport à la moyenne de pondération des carreaux par domaines (objectif de filtrer les carreaux significatifs)  
+
+4. Calcule la matrice des temps de trajet (`TravelTimeMatrix`) entre tous les carreaux avec GTFS / Piétons OSM à l'heure de pointe en JOB 
+5. Calcule plusieurs indicateurs d'accessibilité : 
+  5.1 opportunités cumulées, 
+  5.2 coût au plus proche, 
+  5.3 gravité, 
+  5.4 compétition (Enhanced 2SFCA).
 6. Exporte des cartes interactives (HTML/Folium) et statiques (PNG) par domaine d'équipement.
 
 ## Structure du dépôt
@@ -51,6 +71,7 @@ requirements.txt
 - **Streamlit Community Cloud** : `packages.txt` installe Java (`default-jdk-headless`) et `osmium-tool` via apt. Le tier gratuit (~1 Go RAM) est cependant limite pour ce pipeline (JVM r5py + carroyage INSEE 1,1 Go).
 - **Hugging Face Spaces (SDK Docker)** : `Dockerfile` fourni, plus adapté (tier gratuit ~16 Go RAM / 2 vCPU).
 - **Tier payant (Hugging Face Spaces, hardware upgrade)** : aucun changement de code nécessaire, juste changer le hardware du Space dans ses paramètres (Settings → Space hardware). Pour que le calcul profite réellement de la RAM supplémentaire, remonter aussi la mémoire allouée à la JVM r5py via la variable d'environnement `R5PY_MAX_JVM_MEMORY_MB` (Settings → Variables and secrets), sans quoi elle reste plafonnée à 512 Mo par défaut (cf. `Dockerfile` et `views/accessibilite_index.py`). Penser aussi à activer le stockage persistant du Space pour conserver le cache disque (`data/decoupage_agglo.*`, `data/agglo.osm.pbf`, `data/ttm_<réseau>.parquet`) entre les redémarrages, sans quoi il est reconstruit à chaque fois.
+- **Cache de secours Hugging Face** : le contenu de `data/` (BPE, carroyage INSEE, extraits OSM et matrices de temps de trajet déjà calculées par réseau) est sauvegardé dans le dataset privé [antoinechevre/accessibility-data](https://huggingface.co/datasets/antoinechevre/accessibility-data) (cf. `src/hf_cache.py`). Avant tout téléchargement/calcul coûteux, le pipeline regarde d'abord si le fichier existe déjà dans ce dataset ; sans stockage persistant sur le Space, c'est ce qui évite de tout reconstruire (dont le calcul r5py, potentiellement long) à chaque redémarrage. Nécessite un secret `HF_TOKEN` (Settings → Variables and secrets), un token Hugging Face avec accès lecture au dataset — sans lui, le pipeline se rabat silencieusement sur le calcul/téléchargement habituel.
 
 ## Installation
 
