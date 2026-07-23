@@ -12,7 +12,7 @@ sys.path.append('..')
 import streamlit as st
 
 from src.utils import charger_gtfs
-from src.info_reseau import dates_service, nom_reseau
+from src.info_reseau import dates_service, nom_reseau_str
 from src.hf_cache import envoyer_vers_hf, lister_fichiers_hf, recuperer_depuis_hf
 from views.home import home_page
 from views.accessibilite_index import accessibilite_index_page
@@ -177,7 +177,12 @@ def charger_donnees_gtfs():
         _, _, _, date_JOB = dates_service(feed)
         date_str = date_JOB
 
-        reseau_str = str(nom_reseau(feed))
+        # nom_reseau_str() (pas nom_reseau()) : sanitize les noms d'agences pour
+        # un usage sûr dans un chemin de fichier (cf. chemins_reseau) — nom_reseau()
+        # seul joint les agences par " / ", qui casse la construction des chemins
+        # pour un GTFS multi-agences (ex: Valenciennes, OSError "non-existent
+        # directory" car chaque "/" est lu comme un séparateur de répertoire).
+        reseau_str = str(nom_reseau_str(feed))
 
         # Stocker dans session_state
         st.session_state.feed = feed
