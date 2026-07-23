@@ -500,7 +500,6 @@ def accessibilite_index_page():
             f"(ville principale : {ville_principale_reseau}) — "
             f"{tableau_benchmark_complet['reseau'].nunique()} réseau(x) au total dans l'index."
         )
-        st.dataframe(tableau_benchmark)
 
     fond_carte = st.selectbox(
         "Fond de carte", options=list(FONDS_CARTE.keys()), index=list(FONDS_CARTE.keys()).index("CartoDB Positron")
