@@ -19,7 +19,7 @@ from src.BPE_traitement import land_use_data_domaine
 from src.build_data_agglo import osm_pbf_creator, ville_principale
 from src.cartographie import echelle_continue_html, script_reajuster_si_masque, titre_carte_html
 from src.hf_cache import envoyer_vers_hf, fusionner_et_envoyer_csv, recuperer_depuis_hf
-from src.pipeline_donnees import DOMAINES_BPE, chemins_reseau, construire_donnees_bpe
+from src.pipeline_donnees import MEMORY_CSV_AGGLO_DIR, DOMAINES_BPE, chemins_reseau, construire_donnees_bpe
 from src.utilitaires_matrix import (
     calculer_index_benchmark,
     cost_to_closest,
@@ -349,9 +349,15 @@ def accessibilite_index_page():
     date_str = st.session_state.date_str
     zip_path = st.session_state.zip_path
 
-    # Ville principale : seulement si le découpage communal de ce réseau a
-    # déjà été calculé lors d'un run précédent (chemin_decoupage en cache sur
-    # disque) — pas de géocodage à la volée ici, ce n'est qu'un affichage.
+    # Ville principale : seulement si le découpage communal de ce réseau est
+    # déjà disponible quelque part sur disque — pas de géocodage à la volée
+    # ici, ce n'est qu'un affichage. Deux sources possibles : le chemin de
+    # travail (calculé lors d'un run précédent DANS CETTE SESSION) ou, à
+    # défaut, le cache mémoire par réseau (memory_csv_agglo, committé sur git
+    # donc déjà présent même sur un déploiement tout juste démarré, cf.
+    # src/pipeline_donnees.py) — sans ce repli, un réseau déjà connu (ex.
+    # IRIGO) n'affichait sa ville qu'après avoir cliqué "Lancer l'analyse"
+    # au moins une fois dans la session en cours.
     # st.cache_data évite de rappeler l'API geo.api.gouv.fr (ville_principale)
     # à chaque interaction pour un même réseau déjà résolu.
     @st.cache_data(show_spinner=False)
@@ -359,8 +365,15 @@ def accessibilite_index_page():
         codes_insee = pd.read_csv(chemin_decoupage, dtype={"code_insee": str})["code_insee"]
         return ville_principale(codes_insee)
 
-    chemin_decoupage_cache = chemins_reseau(nom_reseau_str)["decoupage_csv"]
-    ville_reseau = _ville_principale_affichage(chemin_decoupage_cache) if os.path.exists(chemin_decoupage_cache) else None
+    chemin_decoupage_travail = chemins_reseau(nom_reseau_str)["decoupage_csv"]
+    chemin_decoupage_memoire = os.path.join(MEMORY_CSV_AGGLO_DIR, f"decoupage_agglo_{nom_reseau_str}.csv")
+    if os.path.exists(chemin_decoupage_travail):
+        chemin_decoupage_cache = chemin_decoupage_travail
+    elif os.path.exists(chemin_decoupage_memoire):
+        chemin_decoupage_cache = chemin_decoupage_memoire
+    else:
+        chemin_decoupage_cache = None
+    ville_reseau = _ville_principale_affichage(chemin_decoupage_cache) if chemin_decoupage_cache else None
 
     date_affichage = datetime.datetime.strptime(date_str, "%Y%m%d").strftime("%d/%m/%Y")
     reseau_affichage = f"{nom_reseau_str} ({ville_reseau})" if ville_reseau else nom_reseau_str

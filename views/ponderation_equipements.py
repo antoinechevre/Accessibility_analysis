@@ -11,10 +11,12 @@ carroyage population et la BPE.
 
 import os
 
+import pandas as pd
 import streamlit as st
 
 from src.BPE_traitement import carte_ponderation_domaine
 from src.pipeline_donnees import DOMAINES_BPE, construire_donnees_bpe
+from src.ponderation_bpe import GAMMES_POIDS_PAR_DOMAINE, SEUILS_DOMAINE
 
 BASE_DIR = os.getcwd()
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
@@ -86,3 +88,34 @@ def ponderation_equipements_page():
                     mime="text/html",
                     key=f"download_ponderation_{domaine}",
                 )
+
+    st.markdown("### Hypothèses de pondération")
+    st.caption(
+        "Paramètres utilisés pour scorer la BPE par domaine (src/ponderation_bpe.py), "
+        "communs à toutes les cartes ci-dessus."
+    )
+
+    st.markdown("#### Poids par gamme d'équipement, par domaine")
+    st.caption(
+        "Chaque équipement de la BPE est pondéré selon sa gamme (proximité / intermédiaire / "
+        "supérieure / hors gamme), avec une grille de poids propre à chaque domaine — une même "
+        "gamme peut compter différemment selon le domaine."
+    )
+    tableau_poids = pd.DataFrame(GAMMES_POIDS_PAR_DOMAINE).T
+    tableau_poids.index = [f"{d} - {DOMAINES_BPE.get(d, d)}" for d in tableau_poids.index]
+    tableau_poids.index.name = "Domaine"
+    st.dataframe(tableau_poids, use_container_width=True)
+
+    st.markdown("#### Seuil de détection des pôles d'équipements")
+    st.caption(
+        "Un carreau est considéré comme un pôle d'équipements majeur pour un domaine si sa "
+        "pondération cumulée dépasse ce multiple de la moyenne des carreaux de ce domaine "
+        "(utilisé par les cartes \"pôles\" de l'onglet Accessibilité)."
+    )
+    tableau_seuils = pd.DataFrame(
+        [
+            {"Domaine": f"{d} - {DOMAINES_BPE.get(d, d)}", "Seuil (x moyenne du domaine)": seuil}
+            for d, seuil in SEUILS_DOMAINE.items()
+        ]
+    ).set_index("Domaine")
+    st.dataframe(tableau_seuils, use_container_width=True)

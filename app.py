@@ -181,7 +181,7 @@ def charger_donnees_gtfs():
         # regroupant de nombreuses agences ferait exploser les temps de calcul
         # et n'a pas de sens pour les indicateurs arrêts/tronçons proposés ici)
         nb_agences = len(feed.agency)
-        if nb_agences > 3:
+        if nb_agences > 4:
             raise TropAgencesError(nb_agences)
 
         # Plage de service fiable et jour ouvré de base (mardi/jeudi au hasard)
