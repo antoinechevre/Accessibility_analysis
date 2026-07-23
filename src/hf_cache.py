@@ -83,6 +83,53 @@ def envoyer_vers_hf(chemin_local, nom_fichier_hf):
     return True
 
 
+def fusionner_et_envoyer_csv(nouvelles_lignes, nom_fichier_hf, chemin_local, colonne_cle, valeur_cle):
+    """Fusionne nouvelles_lignes (DataFrame) dans un CSV partagé entre
+    plusieurs machines/déploiements via le dataset HF (ex: index de
+    benchmark inter-réseaux, alimenté aussi bien depuis le notebook en
+    local que depuis l'app sur un Space) : contrairement à
+    recuperer_depuis_hf (qui garde la copie locale si déjà présente), on
+    retélécharge ici TOUJOURS la version la plus récente avant de fusionner
+    — ce fichier est modifié depuis plusieurs sources, la copie locale peut
+    être en retard sur des lignes ajoutées ailleurs.
+
+    Les lignes existantes où colonne_cle == valeur_cle sont retirées avant
+    d'ajouter nouvelles_lignes (une relance remplace plutôt que duplique).
+    Sauvegarde en local puis renvoie vers HF (best-effort, cf.
+    envoyer_vers_hf — un échec d'envoi n'empêche pas la sauvegarde locale).
+
+    Retourne le DataFrame fusionné (celui effectivement écrit en local).
+    """
+    import pandas as pd
+
+    index_existant = None
+    try:
+        from huggingface_hub import hf_hub_download
+
+        chemin_distant = hf_hub_download(
+            repo_id=HF_DATA_REPO_ID,
+            repo_type="dataset",
+            filename=nom_fichier_hf,
+            token=os.environ.get("HF_TOKEN"),
+            force_download=True,
+        )
+        index_existant = pd.read_csv(chemin_distant)
+    except Exception:
+        if os.path.exists(chemin_local):
+            index_existant = pd.read_csv(chemin_local)
+
+    if index_existant is not None:
+        index_existant = index_existant[index_existant[colonne_cle] != valeur_cle]
+        tableau_final = pd.concat([index_existant, nouvelles_lignes], ignore_index=True)
+    else:
+        tableau_final = nouvelles_lignes
+
+    os.makedirs(os.path.dirname(chemin_local), exist_ok=True)
+    tableau_final.to_csv(chemin_local, index=False)
+    envoyer_vers_hf(chemin_local, nom_fichier_hf)
+    return tableau_final
+
+
 def lister_fichiers_hf(sous_dossier):
     """Liste les fichiers du dataset HF sous sous_dossier/ (ex: "GTFS"),
     noms de fichiers (basename, sans le préfixe de dossier) triés.

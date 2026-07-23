@@ -101,6 +101,41 @@ def codes_communes_via_api(stops_gdf, session, pause=0.05, timeout=30):
     return codes
 
 
+def ville_principale(codes_insee, session=None, pause=0.05, timeout=30):
+    """Nom de la commune la plus peuplée parmi codes_insee (ex: communes
+    desservies par le GTFS, decoupage_agglo["code_insee"]), via l'API
+    geo.api.gouv.fr (même source que codes_communes_via_api/details_communes
+    ci-dessus, champ "population" = population légale la plus récente).
+
+    Retourne None si codes_insee est vide ou si l'API est inaccessible pour
+    toutes les communes — ne doit jamais faire échouer l'appelant (cf.
+    usage benchmark, src/utilitaires_matrix.calculer_index_benchmark)."""
+    codes_insee = set(codes_insee)
+    if not codes_insee:
+        return None
+
+    session = session or session_avec_retries()
+    population_max = -1
+    nom_max = None
+    for code in sorted(codes_insee):
+        try:
+            r = session.get(
+                f"https://geo.api.gouv.fr/communes/{code}",
+                params={"fields": "nom,population"},
+                timeout=timeout,
+            )
+            r.raise_for_status()
+            commune = r.json()
+        except Exception:
+            continue
+        population = commune.get("population") or 0
+        if population > population_max:
+            population_max = population
+            nom_max = commune.get("nom")
+        time.sleep(pause)
+    return nom_max
+
+
 def details_communes(codes, session, pause=0.05, timeout=30):
     """Récupère nom/centre/contour de chaque commune (même schéma que decoupage_cda.csv)."""
     lignes = []

@@ -16,18 +16,19 @@ import streamlit as st
 from folium.plugins import DualMap
 
 from src.BPE_traitement import land_use_data_domaine
-from src.build_data_agglo import osm_pbf_creator
+from src.build_data_agglo import osm_pbf_creator, ville_principale
 from src.cartographie import echelle_continue_html, script_reajuster_si_masque, titre_carte_html
-from src.hf_cache import envoyer_vers_hf, recuperer_depuis_hf
+from src.hf_cache import envoyer_vers_hf, fusionner_et_envoyer_csv, recuperer_depuis_hf
 from src.pipeline_donnees import DOMAINES_BPE, chemins_reseau, construire_donnees_bpe
 from src.utilitaires_matrix import (
+    calculer_index_benchmark,
     cost_to_closest,
     cumulative_cutoff,
     deciles_niveau_vie,
     moyenne_ponderee_pct_poles,
     pct_poles_atteignables_par_carreau,
 )
-from src.utils import preparer_gtfs_pour_r5py
+from src.utils import km_par_ligne_jour, longueur_lignes, preparer_gtfs_pour_r5py
 
 BASE_DIR = os.getcwd()
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
@@ -337,7 +338,8 @@ def _courbe_pct_moyen_poles(tableau, titre, titre_legende, cmap=None):
 
 
 def accessibilite_index_page():
-    st.header("♿ Accessibilité aux équipements (30 min / 45 min)")
+    st.header("Accessibilité aux équipements (30 min / 45 min)")
+    st.caption("🚌 Bus · 🚊 Tramway · 🚇 Métro · ⛴️ Ferry · 🚶 Piétons")
 
     if st.session_state.get("feed") is None:
         st.info("👆 Veuillez charger un fichier GTFS dans la barre latérale.")
@@ -428,6 +430,51 @@ def accessibilite_index_page():
         )
 
         niveau_vie = deciles_niveau_vie(population_grid_agglo)
+
+    st.markdown("### Indicateurs de benchmark inter-réseaux")
+    st.caption(
+        "Enregistre, pour ce réseau, le % moyen d'équipements pondérés accessibles à "
+        "30/45/60 min et le temps moyen pour en atteindre 25/50/75%, par domaine et par "
+        "décile de niveau de vie, dans un fichier CSV unique partagé (local + dataset "
+        "Hugging Face) pour comparer plusieurs réseaux entre eux — même fichier que celui "
+        "alimenté par le notebook."
+    )
+    if st.button("💾 Enregistrer les indicateurs de ce run"):
+        with st.spinner("Calcul des indicateurs de benchmark..."):
+            tableau_benchmark = calculer_index_benchmark(BPE_agglo, land_use_data, ttm, DOMAINES_BPE, niveau_vie)
+
+            chemin_decoupage = chemins_reseau(nom_reseau_str)["decoupage_csv"]
+            codes_insee_reseau = pd.read_csv(chemin_decoupage, dtype={"code_insee": str})["code_insee"]
+            ville_principale_reseau = ville_principale(codes_insee_reseau)
+
+            longueur_par_ligne = longueur_lignes(st.session_state.feed)
+            vkm_par_ligne_job = km_par_ligne_jour(st.session_state.feed, longueur_par_ligne, date_str)
+            total_vkm_job = vkm_par_ligne_job["total_km"].sum()
+
+            population_totale_reseau = land_use_data["population"].sum()
+
+            tableau_benchmark.insert(0, "population_totale", population_totale_reseau)
+            tableau_benchmark.insert(0, "vehicules_km_JOB", total_vkm_job)
+            tableau_benchmark.insert(0, "date_JOB", date_str)
+            tableau_benchmark.insert(0, "ville_principale", ville_principale_reseau)
+            tableau_benchmark.insert(0, "date_run", datetime.datetime.now().strftime("%Y-%m-%d %H:%M"))
+            tableau_benchmark.insert(0, "reseau", nom_reseau_str)
+
+            chemin_local_benchmark = os.path.join(OUTPUT_DIR, "index_benchmark_reseaux.csv")
+            tableau_benchmark_complet = fusionner_et_envoyer_csv(
+                tableau_benchmark,
+                "benchmark/index_benchmark_reseaux.csv",
+                chemin_local_benchmark,
+                colonne_cle="reseau",
+                valeur_cle=nom_reseau_str,
+            )
+
+        st.success(
+            f"✓ {len(tableau_benchmark)} ligne(s) enregistrée(s) pour {nom_reseau_str} "
+            f"(ville principale : {ville_principale_reseau}) — "
+            f"{tableau_benchmark_complet['reseau'].nunique()} réseau(x) au total dans l'index."
+        )
+        st.dataframe(tableau_benchmark)
 
     fond_carte = st.selectbox("Fond de carte", options=list(FONDS_CARTE.keys()))
 

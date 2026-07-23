@@ -158,6 +158,42 @@ def script_legende_en_bas():
     """
 
 
+def carte_population_infracommunale(population_grid_agglo, tiles="CartoDB positron", carreaux_filtre_ids=None):
+    """Carte HTML interactive de la population par carreau (carroyage INSEE
+    200x200, Filosofi 2019) — offre brute de données, pas d'accessibilité.
+    Partagée entre le notebook (cellule "Retourne différentes dates") et
+    l'onglet Cartographie INSEE de l'app (aperçu local au-dessus du lien
+    vers l'outil officiel, qui ne peut pas être intégré en iframe).
+
+    carreaux_filtre_ids: si fourni, restreint les carreaux affichés à cet
+    ensemble d'id (ex: filtre par décile de niveau de vie, cf.
+    src.utilitaires_matrix.deciles_niveau_vie). Retourne None si le filtre
+    ne laisse aucun carreau.
+    """
+    grille = population_grid_agglo
+    if carreaux_filtre_ids is not None:
+        grille = grille[grille["id"].isin(carreaux_filtre_ids)]
+    if grille.empty:
+        return None
+
+    carte = grille.explore(
+        "population",
+        cmap="Reds",
+        tiles=tiles,
+        style_kwds={
+            "style_function": lambda x: {
+                "fillOpacity": 0 if x["properties"]["population"] == 0 else 0.7,
+                "weight": 0,
+                "opacity": 0,
+            }
+        },
+    )
+    carte.get_root().html.add_child(
+        folium.Element(titre_carte_html("Population infracommunale INSEE 2019"))
+    )
+    return carte
+
+
 def create_carte_arrets(df, nom_reseau_str,date_service_str, date_analyse, zip_path, output_path, chemin_logo=None, lang="fr"):
     # Carte des arrêts avec leur nombre de passages
 

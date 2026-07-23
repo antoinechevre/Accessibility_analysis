@@ -59,6 +59,95 @@ def deciles_niveau_vie(population_grid_agglo):
     return niveau_vie
 
 
+def calculer_index_benchmark(
+    BPE_agglo, land_use_data, ttm, DOMAINES_BPE, niveau_vie, cutoffs=(30, 45, 60), seuils=(25, 50, 75), max_time=120
+):
+    """Indicateurs de benchmark inter-réseaux, par domaine BPE et par
+    groupe de carreaux ("Tous" + un par décile de niveau de vie) :
+
+    - pct_equipement_pondere_<cutoff>min : % moyen (pondéré par la
+      population du carreau d'origine) des équipements pondérés du domaine
+      (poids_gamme — PAS restreint aux "pôles" majeurs, contrairement à
+      pct_poles_atteignables_par_carreau ci-dessus) accessibles en <=
+      cutoff minutes.
+    - temps_atteinte_<seuil>pct_min : temps moyen (idem, pondéré population)
+      pour atteindre au moins seuil % du total des équipements pondérés du
+      domaine — inverse de cumulative_cutoff (qui fixe le temps et mesure
+      la quantité atteinte) : ici on fixe la quantité et on mesure le
+      temps. Carreaux qui n'atteignent jamais le seuil dans la limite de la
+      matrice : plafonnés à max_time plutôt qu'exclus (comme TMISA, cf.
+      notebook section 9.3), pour ne pas biaiser la moyenne vers le bas.
+
+    Un DataFrame en sortie (une ligne par domaine x groupe), colonnes
+    domaine/nom_domaine/decile + les indicateurs ci-dessus — sans colonnes
+    de métadonnées de run (réseau, date, ville principale, population
+    totale : à l'appelant de les ajouter avant sauvegarde, cf.
+    src.hf_cache.fusionner_et_envoyer_csv). Pensé pour être appelé de la
+    même façon depuis le notebook et depuis l'app Streamlit.
+    """
+    from src.BPE_traitement import land_use_data_domaine
+
+    def _moyenne_ponderee_carreaux(valeurs_par_carreau, carreaux_ids=None, valeur_defaut=0.0):
+        base = land_use_data[["id", "population"]].set_index("id")
+        if carreaux_ids is not None:
+            base = base[base.index.isin(carreaux_ids)]
+        valeurs = valeurs_par_carreau.reindex(base.index).fillna(valeur_defaut)
+        population_totale = base["population"].sum()
+        if population_totale == 0:
+            return float("nan")
+        return (valeurs * base["population"]).sum() / population_totale
+
+    lignes = []
+    for d, nom_domaine in DOMAINES_BPE.items():
+        land_use_data_d = land_use_data_domaine(BPE_agglo, land_use_data, d)
+        total_equipement_d = land_use_data_d[d].sum()
+        if total_equipement_d == 0:
+            continue
+
+        # % moyen des équipements pondérés accessibles par cutoff (réutilise
+        # cumulative_cutoff, cf. plus haut dans ce module).
+        pct_par_carreau_cutoff = {}
+        for cutoff in cutoffs:
+            cum = cumulative_cutoff(
+                ttm, land_use_data=land_use_data_d, opportunity=d, travel_cost="travel_time", cutoff=cutoff
+            )
+            pct_par_carreau_cutoff[cutoff] = 100 * cum.set_index("id")[d] / total_equipement_d
+
+        # Temps pour atteindre chaque seuil : cumul croissant par temps de
+        # trajet croissant, par carreau d'origine.
+        equipement_par_destination = land_use_data_d.loc[land_use_data_d[d] > 0, ["id", d]].rename(
+            columns={"id": "to_id"}
+        )
+        trajets_d = ttm.merge(equipement_par_destination, on="to_id", how="inner").sort_values(
+            ["from_id", "travel_time"]
+        )
+        trajets_d["cumule_pct"] = 100 * trajets_d.groupby("from_id")[d].cumsum() / total_equipement_d
+
+        temps_par_carreau_seuil = {}
+        for seuil in seuils:
+            temps_par_carreau_seuil[seuil] = (
+                trajets_d.loc[trajets_d["cumule_pct"] >= seuil].groupby("from_id")["travel_time"].min()
+            )
+
+        groupes_decile = {"Tous": None}
+        for decile in sorted(niveau_vie["decile_niveau_vie"].unique()):
+            groupes_decile[f"D{int(decile)}"] = niveau_vie.loc[niveau_vie["decile_niveau_vie"] == decile, "id"]
+
+        for nom_groupe, carreaux_ids in groupes_decile.items():
+            ligne = {"domaine": d, "nom_domaine": nom_domaine, "decile": nom_groupe}
+            for cutoff in cutoffs:
+                ligne[f"pct_equipement_pondere_{cutoff}min"] = _moyenne_ponderee_carreaux(
+                    pct_par_carreau_cutoff[cutoff], carreaux_ids=carreaux_ids, valeur_defaut=0.0
+                )
+            for seuil in seuils:
+                ligne[f"temps_atteinte_{seuil}pct_min"] = _moyenne_ponderee_carreaux(
+                    temps_par_carreau_seuil[seuil], carreaux_ids=carreaux_ids, valeur_defaut=max_time
+                )
+            lignes.append(ligne)
+
+    return pd.DataFrame(lignes)
+
+
 def cumulative_cutoff(travel_time_matrix, land_use_data, opportunity, travel_cost, cutoff):
     """Équivalent minimal de accessibility::cumulative_cutoff()."""
     reachable = travel_time_matrix[travel_time_matrix[travel_cost] <= cutoff]
