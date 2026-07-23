@@ -156,14 +156,11 @@ TEMPLATE_HTML = r"""<!doctype html>
     height: 100vh;
     margin: 0 auto;
     padding: 24px 20px 20px;
-    display: flex;
-    flex-direction: column;
     overflow-y: auto;
   }
-  h1 { flex: 0 0 auto; font-size: 20px; font-weight: 600; margin: 0 0 4px; }
-  .sous-titre { flex: 0 0 auto; color: var(--text-secondary); font-size: 13px; margin: 0 0 20px; }
+  h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
+  .sous-titre { color: var(--text-secondary); font-size: 13px; margin: 0 0 20px; }
   .filtres {
-    flex: 0 0 auto;
     display: flex;
     flex-wrap: wrap;
     gap: 16px;
@@ -205,14 +202,13 @@ TEMPLATE_HTML = r"""<!doctype html>
   }
   .deciles input { cursor: pointer; }
   #chart {
-    flex: 1 1 auto;
     min-height: 260px;
     width: 100%;
     background: var(--surface-1);
     border: 1px solid var(--border);
     border-radius: 10px;
   }
-  .bas-de-page { flex: 0 0 auto; display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+  .bas-de-page { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
   .bas-de-page button {
     font: inherit;
     font-size: 12px;
@@ -223,7 +219,7 @@ TEMPLATE_HTML = r"""<!doctype html>
     color: var(--text-primary);
     cursor: pointer;
   }
-  #zone-tableau { flex: 0 0 auto; margin-top: 16px; display: none; max-height: 240px; overflow-y: auto; }
+  #zone-tableau { margin-top: 16px; display: none; max-height: 240px; overflow-y: auto; }
   table { width: 100%; border-collapse: collapse; font-size: 12px; background: var(--surface-1); }
   th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--gridline); }
   th { color: var(--text-muted); font-weight: 600; text-transform: uppercase; font-size: 10px; letter-spacing: .03em; }
@@ -286,6 +282,27 @@ function couleurDecile(decile) {
   if (decile === "Tous") return "#2a78d6"; // slot catégoriel 1 : seule série par défaut
   const rang = parseInt(decile.slice(1), 10) - 1; // D1 -> 0 ... D10 -> 9
   return interpolerHex("#86b6ef", "#184f95", rang / 9);
+}
+
+// Hauteur du graphique fixée une fois (espace disponible dans .page, sous
+// le titre/les filtres, avant l'apparition éventuelle du tableau) plutôt que
+// recalculée en continu via flexbox : #zone-tableau est display:none à ce
+// stade, donc l'espace mesuré ici correspond à la vue "tableau fermé" —
+// l'ouvrir agrandit .page (qui défile, cf. overflow-y:auto) sans jamais
+// redimensionner le graphique déjà tracé. Un graphique redimensionné en
+// continu par flexbox ne peut pas rétrécir sous la hauteur que Plotly lui a
+// donnée à son premier rendu (min-height auto = taille du contenu), ce qui
+// écrasait titres d'axes/légende les uns sur les autres dès que le tableau
+// s'ouvrait.
+function ajusterHauteurChart() {
+  const page = document.querySelector(".page");
+  const chart = document.getElementById("chart");
+  const autresElements = Array.from(page.children).filter(el => el !== chart && el.id !== "zone-tableau");
+  const hauteurAutres = autresElements.reduce((somme, el) => somme + el.offsetHeight, 0);
+  const stylePage = getComputedStyle(page);
+  const paddingVertical = parseFloat(stylePage.paddingTop) + parseFloat(stylePage.paddingBottom);
+  const hauteurDisponible = page.clientHeight - hauteurAutres - paddingVertical;
+  chart.style.height = Math.max(280, hauteurDisponible) + "px";
 }
 
 function remplirSelect(select, options, valeurDefaut) {
@@ -471,6 +488,12 @@ document.getElementById("btn-tableau").addEventListener("click", () => {
 [selectX, selectY, selectDomaine].forEach(el => el.addEventListener("change", redessiner));
 zoneDeciles.addEventListener("change", redessiner);
 
+window.addEventListener("resize", () => {
+  ajusterHauteurChart();
+  Plotly.Plots.resize("chart");
+});
+
+ajusterHauteurChart();
 redessiner();
 </script>
 </body>
