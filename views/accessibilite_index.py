@@ -18,7 +18,8 @@ from folium.plugins import DualMap
 from src.BPE_traitement import land_use_data_domaine
 from src.build_data_agglo import osm_pbf_creator, ville_principale
 from src.cartographie import echelle_continue_html, script_reajuster_si_masque, titre_carte_html
-from src.hf_cache import envoyer_vers_hf, fusionner_et_envoyer_csv, recuperer_depuis_hf
+from src.hf_cache import envoyer_vers_hf, fusionner_et_envoyer_csv, lire_csv_partage, recuperer_depuis_hf
+from src.nuage_points_benchmark import generer_html_str
 from src.pipeline_donnees import MEMORY_CSV_AGGLO_DIR, DOMAINES_BPE, chemins_reseau, construire_donnees_bpe
 from src.utilitaires_matrix import (
     calculer_index_benchmark,
@@ -605,3 +606,19 @@ def accessibilite_index_page():
                 "Décile (D1=modeste, D10=aisé)",
                 cmap="viridis",
             )
+
+    st.markdown("### Benchmark inter-réseaux")
+    st.caption(
+        "Ce réseau (en rouge) comparé aux autres déjà enregistrés dans l'index de benchmark "
+        "(en bleu) — axes, domaine et décile paramétrables directement dans le graphique."
+    )
+    chemin_local_benchmark = os.path.join(OUTPUT_DIR, "index_benchmark_reseaux.csv")
+    tableau_benchmark_complet = lire_csv_partage("benchmark/index_benchmark_reseaux.csv", chemin_local_benchmark)
+    if tableau_benchmark_complet is None or tableau_benchmark_complet.empty:
+        st.info(
+            "Aucun réseau n'a encore été enregistré dans l'index de benchmark — utilise le bouton "
+            "\"Enregistrer les indicateurs de ce run\" ci-dessus."
+        )
+    else:
+        html_benchmark = generer_html_str(tableau_benchmark_complet, reseau_actuel=nom_reseau_str)
+        st.components.v1.html(html_benchmark, height=760, scrolling=True)

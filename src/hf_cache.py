@@ -83,26 +83,17 @@ def envoyer_vers_hf(chemin_local, nom_fichier_hf):
     return True
 
 
-def fusionner_et_envoyer_csv(nouvelles_lignes, nom_fichier_hf, chemin_local, colonne_cle, valeur_cle):
-    """Fusionne nouvelles_lignes (DataFrame) dans un CSV partagé entre
-    plusieurs machines/déploiements via le dataset HF (ex: index de
-    benchmark inter-réseaux, alimenté aussi bien depuis le notebook en
-    local que depuis l'app sur un Space) : contrairement à
+def _telecharger_dernier_csv(nom_fichier_hf, chemin_local):
+    """Lit un CSV partagé entre plusieurs machines/déploiements via le
+    dataset HF (ex: index de benchmark inter-réseaux) : contrairement à
     recuperer_depuis_hf (qui garde la copie locale si déjà présente), on
-    retélécharge ici TOUJOURS la version la plus récente avant de fusionner
-    — ce fichier est modifié depuis plusieurs sources, la copie locale peut
-    être en retard sur des lignes ajoutées ailleurs.
-
-    Les lignes existantes où colonne_cle == valeur_cle sont retirées avant
-    d'ajouter nouvelles_lignes (une relance remplace plutôt que duplique).
-    Sauvegarde en local puis renvoie vers HF (best-effort, cf.
-    envoyer_vers_hf — un échec d'envoi n'empêche pas la sauvegarde locale).
-
-    Retourne le DataFrame fusionné (celui effectivement écrit en local).
+    retélécharge ici TOUJOURS la version la plus récente — ce fichier est
+    modifié depuis plusieurs sources, la copie locale peut être en retard
+    sur des lignes ajoutées ailleurs. Retombe sur la copie locale si HF est
+    inaccessible, puis sur None si aucune des deux n'existe.
     """
     import pandas as pd
 
-    index_existant = None
     try:
         from huggingface_hub import hf_hub_download
 
@@ -113,11 +104,38 @@ def fusionner_et_envoyer_csv(nouvelles_lignes, nom_fichier_hf, chemin_local, col
             token=os.environ.get("HF_TOKEN"),
             force_download=True,
         )
-        index_existant = pd.read_csv(chemin_distant)
+        return pd.read_csv(chemin_distant)
     except Exception:
-        if os.path.exists(chemin_local):
-            index_existant = pd.read_csv(chemin_local)
+        pass
 
+    if os.path.exists(chemin_local):
+        return pd.read_csv(chemin_local)
+    return None
+
+
+def lire_csv_partage(nom_fichier_hf, chemin_local):
+    """Version lecture seule de _telecharger_dernier_csv, pour un affichage
+    (ex: nuage de points benchmark) sans vouloir y fusionner de nouvelles
+    lignes. Retourne None si introuvable sur HF et en local."""
+    return _telecharger_dernier_csv(nom_fichier_hf, chemin_local)
+
+
+def fusionner_et_envoyer_csv(nouvelles_lignes, nom_fichier_hf, chemin_local, colonne_cle, valeur_cle):
+    """Fusionne nouvelles_lignes (DataFrame) dans un CSV partagé entre
+    plusieurs machines/déploiements via le dataset HF (ex: index de
+    benchmark inter-réseaux, alimenté aussi bien depuis le notebook en
+    local que depuis l'app sur un Space) — cf. _telecharger_dernier_csv.
+
+    Les lignes existantes où colonne_cle == valeur_cle sont retirées avant
+    d'ajouter nouvelles_lignes (une relance remplace plutôt que duplique).
+    Sauvegarde en local puis renvoie vers HF (best-effort, cf.
+    envoyer_vers_hf — un échec d'envoi n'empêche pas la sauvegarde locale).
+
+    Retourne le DataFrame fusionné (celui effectivement écrit en local).
+    """
+    import pandas as pd
+
+    index_existant = _telecharger_dernier_csv(nom_fichier_hf, chemin_local)
     if index_existant is not None:
         index_existant = index_existant[index_existant[colonne_cle] != valeur_cle]
         tableau_final = pd.concat([index_existant, nouvelles_lignes], ignore_index=True)

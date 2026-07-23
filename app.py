@@ -28,8 +28,7 @@ class TropAgencesError(Exception):
 st.set_page_config(page_title="Analyse accessibilite aux différents équipements d'agglomération piéton / transport collectif (GTFS)", page_icon="🚌", layout="wide")
 
 # Titre principal
-st.title("Analyse accessibilite aux différents équipements d'agglomération piéton / transport collectif (GTFS)")
-st.caption("🚌 Bus · 🚊 Tramway · 🚇 Métro · ⛴️ Ferry · 🚶 Piétons")
+st.title("Application accessibilite équipements d'agglomération piéton / transport collectif ")
 
 
 # Navigation horizontale en haut
@@ -39,6 +38,9 @@ st.markdown(
 .stButton button {
     width: 100% !important;
     margin: 0 !important;
+}
+h1 {
+    margin-bottom: 1.5rem !important;
 }
 </style>
 """,
