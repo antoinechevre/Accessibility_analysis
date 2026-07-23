@@ -400,6 +400,8 @@ def accessibilite_index_page():
 
     if "reseau_calcule" not in st.session_state:
         st.session_state.reseau_calcule = None
+    if "benchmark_a_enregistrer" not in st.session_state:
+        st.session_state.benchmark_a_enregistrer = False
 
     if lancer:
         try:
@@ -414,6 +416,11 @@ def accessibilite_index_page():
 
         st.session_state.reseau_calcule = nom_reseau_str
         st.session_state.pipeline_data = (population_grid_agglo, land_use_data, BPE_agglo, ttm)
+        # Enregistrement dans l'index de benchmark déclenché automatiquement à
+        # la fin de ce run (cf. bouton "Enregistrer les indicateurs" plus bas) :
+        # un run "oublié" (bouton jamais cliqué) n'apparaissait sinon jamais
+        # dans le graphique de benchmark, piège rencontré plusieurs fois.
+        st.session_state.benchmark_a_enregistrer = True
 
     if "pipeline_data" not in st.session_state or st.session_state.reseau_calcule != nom_reseau_str:
         st.info("Cliquez sur le bouton ci-dessus pour lancer l'analyse.")
@@ -454,9 +461,11 @@ def accessibilite_index_page():
         "30/45/60 min et le temps moyen pour en atteindre 25/50/75%, par domaine et par "
         "décile de niveau de vie, dans un fichier CSV unique partagé (local + dataset "
         "Hugging Face) pour comparer plusieurs réseaux entre eux — même fichier que celui "
-        "alimenté par le notebook."
+        "alimenté par le notebook. Enregistré automatiquement à la fin de chaque run ; "
+        "le bouton ci-dessous permet de ré-enregistrer manuellement si besoin."
     )
-    if st.button("💾 Enregistrer les indicateurs de ce run"):
+    if st.button("💾 Réenregistrer les indicateurs de ce run") or st.session_state.benchmark_a_enregistrer:
+        st.session_state.benchmark_a_enregistrer = False
         with st.spinner("Calcul des indicateurs de benchmark..."):
             tableau_benchmark = calculer_index_benchmark(BPE_agglo, land_use_data, ttm, DOMAINES_BPE, niveau_vie)
 
