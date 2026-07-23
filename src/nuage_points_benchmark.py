@@ -70,7 +70,16 @@ def generer_html_str(df, reseau_actuel=None):
     comparaison, utilisé par l'onglet Accessibilité) — indépendamment du
     nombre de déciles sélectionnés. Sinon (défaut, mode autonome), la
     couleur suit le décile (dégradé bleu ordinal, cf. couleurDecile en JS).
+
+    Si un même réseau apparaît avec plusieurs date_JOB différentes (ex:
+    fusions concurrentes app/notebook/batch qui se sont chevauchées), seules
+    les lignes de la date_JOB la plus récente pour ce réseau sont gardées —
+    date_JOB est au format YYYYMMDD (ordre lexicographique = ordre
+    chronologique), pas besoin de le parser en date.
     """
+    if "date_JOB" in df.columns:
+        df = df.loc[df.groupby("reseau")["date_JOB"].transform("max") == df["date_JOB"]]
+
     options_x_dispo = [(c, l, t) for c, l, t in OPTIONS_X if c in df.columns]
     options_y_dispo = options_y(df.columns)
 

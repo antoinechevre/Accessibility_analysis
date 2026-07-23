@@ -18,6 +18,7 @@ from views.home import home_page
 from views.accessibilite_index import accessibilite_index_page
 from views.ponderation_equipements import ponderation_equipements_page
 from views.cartographie_insee import cartographie_insee_page
+from views.benchmark_reseaux import benchmark_reseaux_page
 
 
 class TropAgencesError(Exception):
@@ -48,7 +49,7 @@ h1 {
 )
 
 st.markdown("---")
-col1, col2, col3, col4, col5 = st.columns([1, 1, 1, 1, 2])  # colonnes pour équilibrer l'espace
+col1, col2, col3, col4, col5, col6 = st.columns([1, 1, 1, 1, 1, 1])  # colonnes pour équilibrer l'espace
 
 with col1:
     if st.button("🏠 Accueil", use_container_width=True):
@@ -67,6 +68,10 @@ with col4:
         st.session_state.selected_page = "Cartographie INSEE"
 
 with col5:
+    if st.button("📊 Benchmark Villes Françaises", use_container_width=True):
+        st.session_state.selected_page = "Benchmark Villes Françaises"
+
+with col6:
     st.write("")  # Espace vide pour équilibrer
 
 
@@ -227,3 +232,5 @@ elif st.session_state.selected_page == "Pondération équipements":
     ponderation_equipements_page()
 elif st.session_state.selected_page == "Cartographie INSEE":
     cartographie_insee_page()
+elif st.session_state.selected_page == "Benchmark Villes Françaises":
+    benchmark_reseaux_page()
