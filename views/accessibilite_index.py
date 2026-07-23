@@ -401,6 +401,8 @@ def accessibilite_index_page():
         st.session_state.reseau_calcule = None
     if "benchmark_a_enregistrer" not in st.session_state:
         st.session_state.benchmark_a_enregistrer = False
+    if "analyse_detaillee" not in st.session_state:
+        st.session_state.analyse_detaillee = False
 
     if lancer:
         try:
@@ -420,6 +422,10 @@ def accessibilite_index_page():
         # un run "oublié" (bouton jamais cliqué) n'apparaissait sinon jamais
         # dans le graphique de benchmark, piège rencontré plusieurs fois.
         st.session_state.benchmark_a_enregistrer = True
+        # Nouveau run : repart sur la vue rapide (domaine "Tout équipements
+        # pondérés" seul, déciles fusionnés) plutôt que de garder le mode
+        # détaillé d'un run précédent — cf. analyse_detaillee ci-dessous.
+        st.session_state.analyse_detaillee = False
 
     if "pipeline_data" not in st.session_state or st.session_state.reseau_calcule != nom_reseau_str:
         st.info("Cliquez sur le bouton ci-dessus pour lancer l'analyse.")
@@ -429,13 +435,22 @@ def accessibilite_index_page():
 
     st.success(f"✓ {len(population_grid_agglo)} carreaux actifs — matrice des temps de trajet prête.")
 
-    with st.spinner("Calcul de la vue d'ensemble par domaine..."):
+    # Vue rapide par défaut (juste après "Lancer l'analyse") : un seul domaine
+    # ("O" - Tout équipements pondérés) et les déciles fusionnés, pour ne pas
+    # payer d'entrée de jeu le coût des 8 domaines x cartes + déclinaison par
+    # décile. L'analyse complète (tous domaines, filtre par décile) n'est
+    # calculée que si l'utilisateur la demande explicitement (bouton plus bas)
+    # — cf. analyse_detaillee, remis à False à chaque nouveau run.
+    domaines_a_afficher = DOMAINES_BPE if st.session_state.analyse_detaillee else {"O": DOMAINES_BPE["O"]}
+
+    with st.spinner("Calcul de la vue d'ensemble..."):
         # Calculé une seule fois par (domaine, durée), réutilisé ci-dessous pour
         # la vue d'ensemble et pour la déclinaison par décile dans chaque onglet
-        # (évite de refiltrer ttm à chaque décile).
+        # (évite de refiltrer ttm à chaque décile) — seulement pour les domaines
+        # affichés (domaines_a_afficher), pas les 8 systématiquement.
         pct_par_carreau_domaine_cutoff = {
             (d, c): pct_poles_atteignables_par_carreau(land_use_data, ttm, d, c)
-            for d in DOMAINES_BPE
+            for d in domaines_a_afficher
             for c in CUTOFFS_PCT_MOYEN_POLES
         }
 
@@ -448,7 +463,7 @@ def accessibilite_index_page():
                         for c in CUTOFFS_PCT_MOYEN_POLES
                     },
                 }
-                for d, nom in DOMAINES_BPE.items()
+                for d, nom in domaines_a_afficher.items()
             ]
         ).set_index("Domaine")
 
@@ -504,34 +519,51 @@ def accessibilite_index_page():
         "Fond de carte", options=list(FONDS_CARTE.keys()), index=list(FONDS_CARTE.keys()).index("CartoDB Positron")
     )
 
-    deciles_disponibles = sorted(niveau_vie["decile_niveau_vie"].unique().astype(int))
-    deciles_selectionnes = st.multiselect(
-        "Filtrer les cartes par décile de niveau de vie (D1 = plus modeste, D10 = plus aisé) — "
-        "les carreaux hors sélection n'apparaissent pas sur les cartes ci-dessous",
-        options=deciles_disponibles,
-        default=deciles_disponibles,
-        format_func=lambda d: f"D{d}",
-    )
-
-    if not deciles_selectionnes:
-        st.warning("Sélectionnez au moins un décile pour afficher les cartes.")
-        return
-
-    # None (plutôt qu'un ensemble reprenant tous les déciles) quand rien n'est
-    # exclu : garde aussi les carreaux sans donnée ind_snv publiée (secret
-    # statistique, absents de niveau_vie donc d'aucun décile), qui seraient
-    # sinon exclus des cartes même sans filtre actif de la part de l'utilisateur.
-    if set(deciles_selectionnes) == set(deciles_disponibles):
-        carreaux_filtre_ids = None
-    else:
-        carreaux_filtre_ids = set(
-            niveau_vie.loc[niveau_vie["decile_niveau_vie"].isin(deciles_selectionnes), "id"]
+    if not st.session_state.analyse_detaillee:
+        st.info(
+            "Vue rapide : domaine \"Tout équipements pondérés\" uniquement, déciles de niveau de "
+            "vie fusionnés — pour ne pas attendre le calcul des 8 domaines à chaque run."
         )
+        if st.button(
+            "📊 Voulez-vous analyser avec les déciles de niveau de revenu et les différents "
+            "domaines d'équipement avec la sortie actuelle ?",
+            use_container_width=True,
+        ):
+            st.session_state.analyse_detaillee = True
+            st.rerun()
+
+    if st.session_state.analyse_detaillee:
+        deciles_disponibles = sorted(niveau_vie["decile_niveau_vie"].unique().astype(int))
+        deciles_selectionnes = st.multiselect(
+            "Filtrer les cartes par décile de niveau de vie (D1 = plus modeste, D10 = plus aisé) — "
+            "les carreaux hors sélection n'apparaissent pas sur les cartes ci-dessous",
+            options=deciles_disponibles,
+            default=deciles_disponibles,
+            format_func=lambda d: f"D{d}",
+        )
+
+        if not deciles_selectionnes:
+            st.warning("Sélectionnez au moins un décile pour afficher les cartes.")
+            return
+
+        # None (plutôt qu'un ensemble reprenant tous les déciles) quand rien n'est
+        # exclu : garde aussi les carreaux sans donnée ind_snv publiée (secret
+        # statistique, absents de niveau_vie donc d'aucun décile), qui seraient
+        # sinon exclus des cartes même sans filtre actif de la part de l'utilisateur.
+        if set(deciles_selectionnes) == set(deciles_disponibles):
+            carreaux_filtre_ids = None
+        else:
+            carreaux_filtre_ids = set(
+                niveau_vie.loc[niveau_vie["decile_niveau_vie"].isin(deciles_selectionnes), "id"]
+            )
+    else:
+        # Vue rapide : pas de filtre par décile, tous les déciles fusionnés.
+        carreaux_filtre_ids = None
 
     st.markdown("### Cartes d'accessibilité par domaine d'équipement")
 
-    onglets = st.tabs([f"{d} - {nom}" for d, nom in DOMAINES_BPE.items()])
-    for onglet, domaine in zip(onglets, DOMAINES_BPE):
+    onglets = st.tabs([f"{d} - {nom}" for d, nom in domaines_a_afficher.items()])
+    for onglet, domaine in zip(onglets, domaines_a_afficher):
         with onglet:
             st.markdown("#### Temps d'accès au pôle d'équipements le plus proche")
             with st.spinner(f"Calcul du temps d'accès {domaine}..."):
@@ -582,27 +614,28 @@ def accessibilite_index_page():
                         key=f"download_poles_{domaine}",
                     )
 
-            st.markdown("#### % moyen de pôles atteignables par décile de niveau de vie")
-            lignes_decile = [
-                {
-                    "Décile": int(decile),
-                    **{
-                        f"{c} min": moyenne_ponderee_pct_poles(
-                            pct_par_carreau_domaine_cutoff[(domaine, c)],
-                            carreaux_ids=niveau_vie.loc[niveau_vie["decile_niveau_vie"] == decile, "id"],
-                        )
-                        for c in CUTOFFS_PCT_MOYEN_POLES
-                    },
-                }
-                for decile in sorted(niveau_vie["decile_niveau_vie"].unique())
-            ]
-            tableau_decile_poles = pd.DataFrame(lignes_decile).set_index("Décile")
-            _courbe_pct_moyen_poles(
-                tableau_decile_poles,
-                f"% moyen de pôles atteignables par décile de niveau de vie – {DOMAINES_BPE[domaine]}",
-                "Décile (D1=modeste, D10=aisé)",
-                cmap="viridis",
-            )
+            if st.session_state.analyse_detaillee:
+                st.markdown("#### % moyen de pôles atteignables par décile de niveau de vie")
+                lignes_decile = [
+                    {
+                        "Décile": int(decile),
+                        **{
+                            f"{c} min": moyenne_ponderee_pct_poles(
+                                pct_par_carreau_domaine_cutoff[(domaine, c)],
+                                carreaux_ids=niveau_vie.loc[niveau_vie["decile_niveau_vie"] == decile, "id"],
+                            )
+                            for c in CUTOFFS_PCT_MOYEN_POLES
+                        },
+                    }
+                    for decile in sorted(niveau_vie["decile_niveau_vie"].unique())
+                ]
+                tableau_decile_poles = pd.DataFrame(lignes_decile).set_index("Décile")
+                _courbe_pct_moyen_poles(
+                    tableau_decile_poles,
+                    f"% moyen de pôles atteignables par décile de niveau de vie – {DOMAINES_BPE[domaine]}",
+                    "Décile (D1=modeste, D10=aisé)",
+                    cmap="viridis",
+                )
 
     st.markdown("### % moyen de pôles d'équipements majeurs atteignables (pondéré par la population)")
     st.caption(
