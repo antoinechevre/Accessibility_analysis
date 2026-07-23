@@ -189,6 +189,49 @@ TEMPLATE_HTML = r"""<!doctype html>
     color: var(--text-primary);
     min-width: 220px;
   }
+  .menu-perso { position: relative; }
+  .menu-perso-bouton {
+    font: inherit;
+    font-size: 13px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--baseline);
+    background: var(--surface-1);
+    color: var(--text-primary);
+    min-width: 220px;
+    text-align: left;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+  .menu-perso-bouton::after { content: "▾"; color: var(--text-muted); font-size: 10px; }
+  .menu-perso-liste {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 20;
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 4px;
+    margin: 0;
+    list-style: none;
+    min-width: 100%;
+    max-height: 240px;
+    overflow-y: auto;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  }
+  .menu-perso-liste[hidden] { display: none; }
+  .menu-perso-liste li {
+    padding: 6px 10px;
+    font-size: 13px;
+    border-radius: 6px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .menu-perso-liste li:hover, .menu-perso-liste li.actif { background: var(--gridline); }
   .deciles { display: flex; flex-wrap: wrap; gap: 4px 10px; max-width: 420px; }
   .deciles label {
     display: inline-flex;
@@ -233,16 +276,16 @@ TEMPLATE_HTML = r"""<!doctype html>
 
   <div class="filtres">
     <div class="filtre">
-      <label for="select-x">Abscisses</label>
-      <select id="select-x"></select>
+      <label>Abscisses</label>
+      <select id="select-x" hidden></select>
     </div>
     <div class="filtre">
-      <label for="select-y">Ordonnées</label>
-      <select id="select-y"></select>
+      <label>Ordonnées</label>
+      <select id="select-y" hidden></select>
     </div>
     <div class="filtre">
-      <label for="select-domaine">Domaine d'équipement</label>
-      <select id="select-domaine"></select>
+      <label>Domaine d'équipement</label>
+      <select id="select-domaine" hidden></select>
     </div>
     <div class="filtre">
       <label>Décile de niveau de vie (D1 = plus modeste, D10 = plus aisé)</label>
@@ -316,6 +359,58 @@ function remplirSelect(select, options, valeurDefaut) {
   if (valeurDefaut) select.value = valeurDefaut;
 }
 
+// Menu déroulant "maison" (bouton + liste en JS pur) au-dessus d'un <select>
+// natif gardé caché en DOM comme état/interface (redessiner() continue de
+// lire selectX.value etc. sans changement) : l'iframe sandboxée de Streamlit
+// (components.v1.html) a sandbox="allow-same-origin allow-scripts
+// allow-downloads", sans allow-forms — Chrome y bloque l'ouverture du menu
+// natif d'un <select> au clic réel (les <input type=checkbox> des déciles,
+// eux, n'ont pas besoin d'un popup natif et restent utilisables). Vérifié
+// par un test headless reproduisant exactement ce sandbox.
+function creerMenuPersonnalise(select) {
+  const conteneur = document.createElement("div");
+  conteneur.className = "menu-perso";
+  const bouton = document.createElement("button");
+  bouton.type = "button";
+  bouton.className = "menu-perso-bouton";
+  const liste = document.createElement("ul");
+  liste.className = "menu-perso-liste";
+  liste.hidden = true;
+  conteneur.appendChild(bouton);
+  conteneur.appendChild(liste);
+  select.insertAdjacentElement("afterend", conteneur);
+
+  function libelleDe(valeur) {
+    const opt = Array.from(select.options).find(o => o.value === valeur);
+    return opt ? opt.textContent : "";
+  }
+
+  function rafraichir() {
+    bouton.textContent = libelleDe(select.value);
+    liste.textContent = "";
+    for (const opt of select.options) {
+      const li = document.createElement("li");
+      li.textContent = opt.textContent;
+      if (opt.value === select.value) li.classList.add("actif");
+      li.addEventListener("click", () => {
+        select.value = opt.value;
+        select.dispatchEvent(new Event("change"));
+        liste.hidden = true;
+        rafraichir();
+      });
+      liste.appendChild(li);
+    }
+  }
+
+  bouton.addEventListener("click", (e) => {
+    e.stopPropagation();
+    liste.hidden = !liste.hidden;
+  });
+  document.addEventListener("click", () => { liste.hidden = true; });
+
+  rafraichir();
+}
+
 const selectX = document.getElementById("select-x");
 const selectY = document.getElementById("select-y");
 const selectDomaine = document.getElementById("select-domaine");
@@ -328,6 +423,8 @@ remplirSelect(
   DOMAINES.map(([code, libelle]) => [code, `$${code} - $${libelle}`]),
   (DOMAINES.find(([code]) => code === "O") || DOMAINES[0])[0]
 );
+
+[selectX, selectY, selectDomaine].forEach(creerMenuPersonnalise);
 
 for (const decile of DECILES) {
   const label = document.createElement("label");
@@ -362,6 +459,25 @@ function valeurX(ligne, colonneX) {
 
 let derniereSelection = [];
 
+// Plusieurs déciles cochés à la fois : un point par réseau x décile
+// tombait à la même abscisse (population_totale/vehicules_km_JOB/date_JOB
+// ne varient pas par décile pour un même réseau), donc les points/étiquettes
+// se superposaient. Combine en un seul point par réseau, moyenne (simple)
+// de colY sur les déciles sélectionnés.
+function agregerParReseau(pts, colY) {
+  const parReseau = new Map();
+  for (const p of pts) {
+    if (!parReseau.has(p.reseau)) parReseau.set(p.reseau, []);
+    parReseau.get(p.reseau).push(p);
+  }
+  const resultat = [];
+  for (const lignes of parReseau.values()) {
+    const moyenneY = lignes.reduce((somme, l) => somme + l[colY], 0) / lignes.length;
+    resultat.push({ ...lignes[0], [colY]: moyenneY, decile: lignes.map(l => l.decile).join(", ") });
+  }
+  return resultat;
+}
+
 function traceDe(nom, couleur, pts, colX, colY, libelleX, libelleY, couleurTexte, couleurAnneau) {
   return {
     x: pts.map(l => valeurX(l, colX)),
@@ -388,7 +504,9 @@ function redessiner() {
   const libelleX = OPTIONS_X.find(o => o[0] === colX)[1];
   const libelleY = OPTIONS_Y.find(o => o[0] === colY)[1];
 
-  const filtre = DONNEES.filter(l => l.domaine === domaine && deciles.includes(l.decile));
+  const filtreBrut = DONNEES.filter(l => l.domaine === domaine && deciles.includes(l.decile));
+  const combineDeciles = deciles.length > 1;
+  const filtre = combineDeciles ? agregerParReseau(filtreBrut, colY) : filtreBrut;
   derniereSelection = filtre;
 
   const couleurTexte = cssVar("--text-secondary");
@@ -405,12 +523,21 @@ function redessiner() {
       traceDe(`$${RESEAU_ACTUEL} (ce réseau)`, cssVar("--couleur-actuel"), actuel, colX, colY, libelleX, libelleY, couleurTexte, couleurAnneau),
     ];
     showlegend = true;
+  } else if (combineDeciles) {
+    // Plusieurs déciles cochés, mode autonome : un seul point (agrégé) par
+    // réseau plutôt qu'une couleur par décile, qui n'a plus de sens ici.
+    traces = [
+      traceDe(`Moyenne ($${deciles.join(", ")})`, couleurDecile("Tous"), filtre, colX, colY, libelleX, libelleY, couleurTexte, couleurAnneau),
+    ];
+    showlegend = true;
   } else {
-    // Mode autonome : une couleur par décile (dégradé ordinal).
+    // Un seul décile coché : une couleur par décile (dégradé ordinal) —
+    // en pratique une seule trace ici, mais garde la couleur cohérente
+    // avec le reste du dégradé D1..D10.
     traces = deciles.map(decile =>
       traceDe(decile, couleurDecile(decile), filtre.filter(l => l.decile === decile), colX, colY, libelleX, libelleY, couleurTexte, couleurAnneau)
     );
-    showlegend = deciles.length > 1;
+    showlegend = false;
   }
 
   const couleurGrille = cssVar("--gridline");
