@@ -13,7 +13,7 @@ import streamlit as st
 
 from src.utils import charger_gtfs
 from src.info_reseau import dates_service, nom_reseau
-from src.hf_cache import lister_fichiers_hf, recuperer_depuis_hf
+from src.hf_cache import envoyer_vers_hf, lister_fichiers_hf, recuperer_depuis_hf
 from views.home import home_page
 from views.accessibilite_index import accessibilite_index_page
 from views.ponderation_equipements import ponderation_equipements_page
@@ -185,6 +185,17 @@ def charger_donnees_gtfs():
         st.session_state.zip_path = GTFS_PATH
         st.session_state.nom_reseau_str = reseau_str
         st.session_state.last_uploaded_name = nom_gtfs
+
+        # GTFS uploadé (pas choisi dans le catalogue existant) et jamais vu :
+        # renvoyé vers le dataset HF pour que les prochains déploiements /
+        # visiteurs le retrouvent dans "...ou choisir un GTFS déjà présent"
+        # sans avoir à le réuploader — même principe que les caches dérivés
+        # (extrait OSM, matrice des temps de trajet, découpage communal, cf.
+        # src/hf_cache.py et src/pipeline_donnees.py). Best-effort, comme les
+        # autres appels à envoyer_vers_hf : n'empêche jamais le run en cours.
+        if uploaded_file is not None and nom_gtfs not in gtfs_locaux:
+            if envoyer_vers_hf(GTFS_PATH, f"GTFS/{nom_gtfs}"):
+                st.toast(f"✓ {nom_gtfs} envoyé vers Hugging Face (réutilisable aux prochains déploiements)")
 
         return True
 
