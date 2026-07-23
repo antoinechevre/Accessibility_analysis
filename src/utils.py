@@ -68,17 +68,22 @@ def charger_gtfs(zip_path):
     return feed
 
 
+# Tables optionnelles de la spec GTFS observées présentes-mais-vides (en-tête
+# seul, aucune ligne de données) dans des exports réels — valide selon la
+# spec, mais le lecteur GTFS utilisé par r5py (Conveyal/OneBusAway) distingue
+# "fichier absent" de "fichier présent mais vide" et rejette le second cas
+# avec une EmptyTableError au lieu de l'ignorer. calendar.txt : vérifié sur
+# le GTFS Tisseo (Toulouse) ; transfers.txt : vérifié sur le GTFS Valence.
+TABLES_OPTIONNELLES_VIDABLES_R5PY = ["calendar.txt", "transfers.txt"]
+
+
 def preparer_gtfs_pour_r5py(zip_path, output_path=None):
     """
-    Retire calendar.txt d'un GTFS s'il est présent mais vide (en-tête seul, aucun
-    service défini). Ce cas est valide selon la spec GTFS (le calendrier peut être
-    entièrement porté par calendar_dates.txt), mais le lecteur GTFS utilisé par r5py
-    (Conveyal/OneBusAway) distingue "fichier absent" de "fichier présent mais vide"
-    et rejette le second cas avec une EmptyTableError plutôt que de basculer sur
-    calendar_dates.txt. Vérifié sur le GTFS Tisseo (Toulouse).
+    Retire du GTFS les tables de TABLES_OPTIONNELLES_VIDABLES_R5PY présentes
+    mais vides (cf. commentaire ci-dessus).
 
-    Si calendar.txt est absent, ou présent avec au moins un service, le zip d'origine
-    est renvoyé tel quel (aucune copie créée).
+    Si aucune de ces tables n'est présente-mais-vide, le zip d'origine est
+    renvoyé tel quel (aucune copie créée).
 
     zip_path: chemin vers le GTFS à préparer.
     output_path: chemin du GTFS nettoyé (par défaut : "<zip_path stem>_r5py.zip").
@@ -86,19 +91,26 @@ def preparer_gtfs_pour_r5py(zip_path, output_path=None):
     """
     zip_path = pathlib.Path(zip_path)
     with zipfile.ZipFile(zip_path) as z:
-        if "calendar.txt" not in z.namelist():
-            return zip_path
-        with z.open("calendar.txt") as f:
-            nb_services = sum(1 for _ in csv.reader(io.TextIOWrapper(f, "utf-8"))) - 1
-        if nb_services > 0:
+        noms_presents = set(z.namelist())
+        a_retirer = []
+        for nom in TABLES_OPTIONNELLES_VIDABLES_R5PY:
+            if nom not in noms_presents:
+                continue
+            with z.open(nom) as f:
+                nb_lignes = sum(1 for _ in csv.reader(io.TextIOWrapper(f, "utf-8"))) - 1
+            if nb_lignes <= 0:
+                a_retirer.append(nom)
+
+        if not a_retirer:
             return zip_path
 
-        print(f"calendar.txt vide dans {zip_path.name} : retrait avant chargement r5py")
+        for nom in a_retirer:
+            print(f"{nom} vide dans {zip_path.name} : retrait avant chargement r5py")
         if output_path is None:
             output_path = zip_path.with_name(f"{zip_path.stem}_r5py.zip")
         with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as zout:
             for item in z.infolist():
-                if item.filename == "calendar.txt":
+                if item.filename in a_retirer:
                     continue
                 zout.writestr(item, z.read(item.filename))
     print(f"✓ GTFS nettoyé écrit dans {output_path}")
