@@ -11,8 +11,8 @@ sys.path.append('..')
 
 import streamlit as st
 
-from src.utils import charger_gtfs, obtenir_service_ids_pour_date
-from src.info_reseau import dates_service, recuperer_logo_reseau, nom_reseau
+from src.utils import charger_gtfs
+from src.info_reseau import dates_service, nom_reseau
 from src.hf_cache import lister_fichiers_hf, recuperer_depuis_hf
 from views.home import home_page
 from views.accessibilite_index import accessibilite_index_page
@@ -99,45 +99,31 @@ gtfs_local_choisi = st.sidebar.selectbox(
     options=[AUCUN_GTFS_LOCAL] + gtfs_locaux,
 )
 
-# Variables globales pour stocker les résultats
+# Variables globales pour stocker les résultats. Uniquement celles
+# effectivement lues ailleurs (views/*.py, charger_donnees_gtfs ci-dessous) :
+# indicateurs_arrets/bus/tram/metro/trolley/ferry, total_vk_plage,
+# modes_disponibles, last_date_str, active_service_ids,
+# decoupage_reference_path_reseau, decoupage_agglo et chemin_logo étaient
+# initialisées (et pour certaines calculées) sans jamais être lues nulle
+# part — vestiges d'une fonctionnalité "indicateurs tronçons/arrêts" jamais
+# branchée à une page (cf. src/indicateurs_troncons.py, script autonome non
+# utilisé par l'app).
 if "feed" not in st.session_state:
     st.session_state.feed = None
-if "active_service_ids" not in st.session_state:
-    st.session_state.active_service_ids = None
 if "date_str" not in st.session_state:
     st.session_state.date_str = None
-if "indicateurs_arrets" not in st.session_state:
-    st.session_state.indicateurs_arrets = None
-if "indicateurs_bus" not in st.session_state:
-    st.session_state.indicateurs_bus = None
-if "indicateurs_tram" not in st.session_state:
-    st.session_state.indicateurs_tram = None
-if "indicateurs_metro" not in st.session_state:
-    st.session_state.indicateurs_metro = None
-if "indicateurs_trolley" not in st.session_state:
-    st.session_state.indicateurs_trolley = None
-if "indicateurs_ferry" not in st.session_state:
-    st.session_state.indicateurs_ferry = None
-if "total_vk_plage" not in st.session_state:
-    st.session_state.total_vk_plage = None
-if "modes_disponibles" not in st.session_state:
-    st.session_state.modes_disponibles = None
-if "last_date_str" not in st.session_state:
-    st.session_state.last_date_str = None
 if "nom_reseau_str" not in st.session_state:
     st.session_state.nom_reseau_str = None
 if "zip_path" not in st.session_state:
     st.session_state.zip_path = None
-if "chemin_logo" not in st.session_state:
-    st.session_state.chemin_logo = None
 if "last_uploaded_name" not in st.session_state:
     st.session_state.last_uploaded_name = None
 
 
 # Fonction pour charger les données. La date d'analyse (date_JOB) n'est
 # pas choisie par l'utilisateur : elle est déterminée automatiquement à
-# partir du GTFS (un mardi ou un jeudi tiré au hasard dans la plage de
-# service fiable, voir src/info_reseau.dates_service).
+# partir du GTFS (le dernier mardi ou jeudi de la plage de service fiable,
+# toujours le même pour un GTFS donné — voir src/info_reseau.dates_service).
 def charger_donnees_gtfs():
     if uploaded_file is not None:
         nom_gtfs = uploaded_file.name
@@ -156,8 +142,8 @@ def charger_donnees_gtfs():
     else:
         return False
 
-    # Ne recharger le GTFS (et le logo, qui nécessite une requête réseau)
-    # que si un nouveau fichier a été sélectionné, pas à chaque interaction
+    # Ne recharger le GTFS que si un nouveau fichier a été sélectionné,
+    # pas à chaque interaction
     nouveau_fichier = nom_gtfs != st.session_state.last_uploaded_name
 
     if not nouveau_fichier and st.session_state.feed is not None:
@@ -186,32 +172,20 @@ def charger_donnees_gtfs():
         if nb_agences > 4:
             raise TropAgencesError(nb_agences)
 
-        # Plage de service fiable et jour ouvré de base (mardi/jeudi au hasard)
+        # Plage de service fiable et jour ouvré de base (dernier mardi/jeudi,
+        # cf. src/info_reseau.dates_service)
         _, _, _, date_JOB = dates_service(feed)
         date_str = date_JOB
 
-        # Obtenir les services actifs
-        active_service_ids = obtenir_service_ids_pour_date(feed, date_str)
-
-        # Nom du réseau et logo (best-effort : le logo nécessite une
-        # requête réseau vers le site de l'agence, ne doit pas bloquer
-        # l'appli en cas d'échec)
         reseau_str = str(nom_reseau(feed))
-        try:
-            chemin_logo = recuperer_logo_reseau(feed, dossier_sortie=tempfile.gettempdir())
-        except Exception:
-            chemin_logo = None
 
         # Stocker dans session_state
         st.session_state.feed = feed
-        st.session_state.active_service_ids = active_service_ids
         st.session_state.date_str = date_str
         st.session_state.zip_path = GTFS_PATH
         st.session_state.nom_reseau_str = reseau_str
         st.session_state.last_uploaded_name = nom_gtfs
-        st.session_state.decoupage_reference_path_reseau = None
-        st.session_state.decoupage_agglo = None
-                
+
         return True
 
     except TropAgencesError as e:

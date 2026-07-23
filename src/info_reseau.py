@@ -6,7 +6,6 @@ from urllib.parse import urljoin, urlparse
 from datetime import datetime
 import sys
 sys.path.append('..')
-import random
 
 from src.utils import longueur_lignes
 from src.i18n import t
@@ -68,7 +67,7 @@ def dates_service (feed):
         d.strftime("%Y%m%d") for d in dates_parsees
         if d.weekday() in (1, 3)  # 1=mardi, 3=jeudi
     ]
-    date_JOB = random.choice(dates__mar_jeu) if dates__mar_jeu else random.choice(dates_service)
+    date_JOB = max(dates__mar_jeu) if dates__mar_jeu else max(dates_service)
     
     return dates_service, date_debut, date_fin, date_JOB
 
