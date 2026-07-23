@@ -87,17 +87,30 @@ def session_avec_retries(methods=("GET",), total=5, backoff_factor=1):
 
 
 def codes_communes_via_api(stops_gdf, session, pause=0.05, timeout=30):
-    """Reverse-géocode chaque arrêt (lat/lon) en code INSEE via geo.api.gouv.fr."""
+    """Reverse-géocode chaque arrêt (lat/lon) en code INSEE via geo.api.gouv.fr.
+
+    Best-effort par arrêt : une erreur ponctuelle sur un arrêt (ex. 502 côté
+    API, déjà tolérée jusqu'à 5x par session_avec_retries mais parfois
+    persistante quelques minutes) est ignorée plutôt que de perdre tout le
+    géocodage déjà fait pour les arrêts précédents — même logique que
+    ville_principale ci-dessous.
+    """
     codes = set()
+    echecs = 0
     for lat, lon in stops_gdf[["stop_lat", "stop_lon"]].itertuples(index=False):
-        r = session.get(
-            "https://geo.api.gouv.fr/communes",
-            params={"lat": lat, "lon": lon, "fields": "code"},
-            timeout=timeout,
-        )
-        r.raise_for_status()
-        codes.update(c["code"] for c in r.json())
+        try:
+            r = session.get(
+                "https://geo.api.gouv.fr/communes",
+                params={"lat": lat, "lon": lon, "fields": "code"},
+                timeout=timeout,
+            )
+            r.raise_for_status()
+            codes.update(c["code"] for c in r.json())
+        except Exception:
+            echecs += 1
         time.sleep(pause)
+    if echecs:
+        print(f"⚠ {echecs} arrêt(s) non géocodé(s) (API geo.api.gouv.fr indisponible) — ignoré(s)")
     return codes
 
 
@@ -137,17 +150,27 @@ def ville_principale(codes_insee, session=None, pause=0.05, timeout=30):
 
 
 def details_communes(codes, session, pause=0.05, timeout=30):
-    """Récupère nom/centre/contour de chaque commune (même schéma que decoupage_cda.csv)."""
+    """Récupère nom/centre/contour de chaque commune (même schéma que decoupage_cda.csv).
+
+    Best-effort par commune : une commune qui échoue (ex. API indisponible)
+    est ignorée — absente du découpage — plutôt que de faire échouer tout le
+    run, même logique que codes_communes_via_api ci-dessus.
+    """
     lignes = []
     for code in sorted(codes):
-        r = session.get(
-            f"https://geo.api.gouv.fr/communes/{code}",
-            params={"fields": "nom,centre,contour"},
-            timeout=timeout,
-        )
-        r.raise_for_status()
-        commune = r.json()
-        lon, lat = commune["centre"]["coordinates"]
+        try:
+            r = session.get(
+                f"https://geo.api.gouv.fr/communes/{code}",
+                params={"fields": "nom,centre,contour"},
+                timeout=timeout,
+            )
+            r.raise_for_status()
+            commune = r.json()
+            lon, lat = commune["centre"]["coordinates"]
+        except Exception:
+            print(f"⚠ Commune {code} non récupérée (API geo.api.gouv.fr indisponible) — ignorée")
+            time.sleep(pause)
+            continue
         lignes.append({
             "code_insee": commune["code"],
             "nom_commune": commune["nom"],
