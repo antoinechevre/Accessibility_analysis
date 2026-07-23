@@ -145,10 +145,11 @@ def construire_donnees_bpe(zip_path, nom_reseau_str, on_step=None):
 
     if not os.path.exists(chemins["gpkg"]):
         _step("Construction du carroyage population 200x200 (INSEE)...")
-        # build_grid_agglo() écrit toujours dans data/population_grid_agglo.gpkg
-        # (chemin fixe côté src/) : on renomme ensuite vers le chemin par réseau.
-        build_grid_agglo(chemins["decoupage_geojson"])
-        os.replace(os.path.join(DATA_DIR, "population_grid_agglo.gpkg"), chemins["gpkg"])
+        # Chemin de sortie par réseau explicite (pas le chemin générique par
+        # défaut de build_grid_agglo) : un run concurrent pour un autre réseau
+        # (app ou notebook tournant en parallèle sur la même machine) ne doit
+        # jamais pouvoir écrire/renommer le même fichier partagé.
+        build_grid_agglo(chemins["decoupage_geojson"], output_path=chemins["gpkg"])
         _step("✓ Carroyage population prêt")
 
     population_grid_agglo = gpd.read_file(chemins["gpkg"])

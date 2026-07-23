@@ -398,14 +398,19 @@ def osm_pbf_creator(
 
 
 
-def build_grid_agglo(path):
-
-
+def build_grid_agglo(path, output_path=None):
     """Build population_grid_cda: full 200m grid clipped to the CDA La Rochelle boundary.
 
     Includes cells not published by INSEE Filosofi (population too low to satisfy
     statistical secrecy, generally < 11 households) with population=0, rather than
     only the sparse subset of cells that Filosofi publishes.
+
+    output_path: chemin de sortie du gpkg. Par défaut (None), le chemin générique
+    historique data/population_grid_agglo.gpkg (utilisé par le notebook, qui le
+    relit ensuite depuis ce même chemin fixe) — à fournir explicitement (chemin
+    par réseau) pour tout appelant tournant potentiellement en parallèle d'un
+    autre run (ex. l'app, cf. src/pipeline_donnees.py), afin d'éviter que deux
+    runs concurrents n'écrivent/renomment le même fichier partagé.
     """
     assurer_carreaux_200m_local()
 
@@ -490,7 +495,7 @@ def build_grid_agglo(path):
     population_grid_agglo["population"] = population_grid_agglo["ind"]
     population_grid_agglo["id"] = population_grid_agglo["idcar_200m"]  # required by r5py.TravelTimeMatrix
 
-    output_path = f"{DATA_DIR}/population_grid_agglo.gpkg"
+    output_path = output_path or f"{DATA_DIR}/population_grid_agglo.gpkg"
     population_grid_agglo.to_file(output_path, driver="GPKG")
 
     print(f"carreaux dans l'agglo (grille complète): {len(population_grid_agglo)}")
