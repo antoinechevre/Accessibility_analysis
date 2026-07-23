@@ -34,21 +34,22 @@ def home_page():
         )
 
     with onglet_fonctionnalites:
-        st.markdown(
-            """
-    À partir d'un GTFS et d'un découpage communal :
+        st.markdown("À partir d'un GTFS et d'un découpage communal :")
 
-    1. Construit le réseau multimodal piéton + transport collectif (`r5py`) à partir du GTFS pour une date JOB indiquée et le réseau viaire pour les cheminements piétons
-    2. Récupère le carroyage population INSEE 200x200 2019 incluant les catégories socio économiques (Filosofi) et la Base Permanente des Équipements (BPE, INSEE)
-    3. Pondère les équipements par gamme (proximité / intermédiaire / supérieure / hors gamme) et par domaine (santé, enseignement, commerces...) — cf. `src/ponderation_bpe.py` (détail ci-dessous)
-    4. Calcule la matrice des temps de trajet (`TravelTimeMatrix`) entre tous les carreaux avec GTFS / Piétons OSM à l'heure de pointe en JOB
-    5. Calcule plusieurs indicateurs d'accessibilité (détail ci-dessous)
-    6. Exporte des cartes interactives (HTML/Folium) et statiques (PNG) par domaine d'équipement avec une déclinaison par déciles de population
-    7. Propose un benchmark avec des indicateurs pour les différentes villes françaises en fonction des domaines d'équipements et des déciles de niveau de richesse (détail ci-dessous)
-    """
+        st.markdown(
+            "1. Construit le réseau multimodal piéton + transport collectif (`r5py`) à partir du GTFS "
+            "pour une date JOB indiquée et le réseau viaire pour les cheminements piétons"
+        )
+        st.markdown(
+            "2. Récupère le carroyage population INSEE 200x200 2019 incluant les catégories socio "
+            "économiques (Filosofi) et la Base Permanente des Équipements (BPE, INSEE)"
         )
 
-        with st.expander("3. Détail de la pondération des équipements (BPE)"):
+        st.markdown(
+            "3. Pondère les équipements par gamme (proximité / intermédiaire / supérieure / hors gamme) "
+            "et par domaine (santé, enseignement, commerces...) — cf. `src/ponderation_bpe.py`"
+        )
+        with st.expander("Détail de la pondération des équipements (BPE)"):
             st.markdown(
                 """
     **3.1 — Domaines d'équipements** ([liste complète des équipements BPE](https://vscode.dev/github/antoinechevre/Accessibility_analysis/blob/main/data/BPE25_anonymisee_dessin_fichier.html))
@@ -72,7 +73,13 @@ def home_page():
     """
             )
 
-        with st.expander("5. Détail des indicateurs d'accessibilité"):
+        st.markdown(
+            "4. Calcule la matrice des temps de trajet (`TravelTimeMatrix`) entre tous les carreaux "
+            "avec GTFS / Piétons OSM à l'heure de pointe en JOB"
+        )
+
+        st.markdown("5. Calcule plusieurs indicateurs d'accessibilité")
+        with st.expander("Détail des indicateurs d'accessibilité"):
             st.markdown(
                 """
     - **5.1 Opportunités cumulées** : nombre d'opportunités / équipements atteignables depuis chaque carreau dans un temps de trajet donné
@@ -82,7 +89,16 @@ def home_page():
     """
             )
 
-        with st.expander("7. Détail du benchmark inter-réseaux"):
+        st.markdown(
+            "6. Exporte des cartes interactives (HTML/Folium) et statiques (PNG) par domaine "
+            "d'équipement avec une déclinaison par déciles de population"
+        )
+
+        st.markdown(
+            "7. Propose un benchmark avec des indicateurs pour les différentes villes françaises en "
+            "fonction des domaines d'équipements et des déciles de niveau de richesse"
+        )
+        with st.expander("Détail du benchmark inter-réseaux"):
             st.markdown(
                 """
     - **7.1** Temps de trajet moyen pour atteindre 25 %, 50 %, 75 % des opportunités/équipements
