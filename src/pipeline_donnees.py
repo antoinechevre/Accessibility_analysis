@@ -17,7 +17,7 @@ import requests
 
 from src.build_data_agglo import build_decoupage_agglo, decoupage_agglo_geojson, build_grid_agglo
 from src.BPE_traitement import filtre_BPE, filtre_BPE_actifs, land_use_data_domaine
-from src.hf_cache import HF_DATA_REPO_ID, recuperer_depuis_hf
+from src.hf_cache import HF_DATA_REPO_ID, envoyer_vers_hf, recuperer_depuis_hf
 from src.ponderation_bpe import GAMMES_POIDS_PAR_DOMAINE, SEUILS_DOMAINE
 from src.utils import exporter_df_to_csv
 
@@ -132,10 +132,12 @@ def construire_donnees_bpe(zip_path, nom_reseau_str, on_step=None):
             decoupage_reference_path=decoupage_reference_path,
         )
         os.makedirs(MEMORY_CSV_AGGLO_DIR, exist_ok=True)
+        chemin_memoire_decoupage = os.path.join(MEMORY_CSV_AGGLO_DIR, f"decoupage_agglo_{nom_reseau_str}.csv")
         exporter_df_to_csv(
             pd.read_csv(chemins["decoupage_csv"], dtype={"code_insee": str}),
-            os.path.join(MEMORY_CSV_AGGLO_DIR, f"decoupage_agglo_{nom_reseau_str}.csv"),
+            chemin_memoire_decoupage,
         )
+        envoyer_vers_hf(chemin_memoire_decoupage, f"memory_csv_agglo/decoupage_agglo_{nom_reseau_str}.csv")
         _step("✓ Découpage communal prêt")
 
     if not os.path.exists(chemins["decoupage_geojson"]):

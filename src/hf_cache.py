@@ -50,6 +50,39 @@ def recuperer_depuis_hf(nom_fichier_hf, destination_locale):
     return True
 
 
+def envoyer_vers_hf(chemin_local, nom_fichier_hf):
+    """Envoie chemin_local vers le dataset HF sous nom_fichier_hf (chemin
+    relatif, ex: "memory_ttm/ttm_TAM.parquet") — pendant du fallback
+    recuperer_depuis_hf() : après un calcul neuf (réseau jamais traité), le
+    résultat est renvoyé vers le dataset pour que les prochains
+    déploiements/redémarrages en profitent aussi, plutôt que de rester
+    disponible seulement en local sur ce Space (perdu au redémarrage suivant
+    sans stockage persistant).
+
+    Best-effort, comme recuperer_depuis_hf : échec silencieux (retourne
+    False) si HF_TOKEN absent/sans droit d'écriture, dataset inaccessible,
+    etc. Ne doit jamais faire échouer le calcul lui-même, seulement son
+    enregistrement à distance — appelé après coup, jamais dans le chemin
+    critique.
+    """
+    try:
+        from huggingface_hub import HfApi
+    except ImportError:
+        return False
+
+    try:
+        HfApi().upload_file(
+            path_or_fileobj=chemin_local,
+            path_in_repo=nom_fichier_hf,
+            repo_id=HF_DATA_REPO_ID,
+            repo_type="dataset",
+            token=os.environ.get("HF_TOKEN"),
+        )
+    except Exception:
+        return False
+    return True
+
+
 def lister_fichiers_hf(sous_dossier):
     """Liste les fichiers du dataset HF sous sous_dossier/ (ex: "GTFS"),
     noms de fichiers (basename, sans le préfixe de dossier) triés.

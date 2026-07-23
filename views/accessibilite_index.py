@@ -18,7 +18,7 @@ from folium.plugins import DualMap
 from src.BPE_traitement import land_use_data_domaine
 from src.build_data_agglo import osm_pbf_creator
 from src.cartographie import echelle_continue_html, script_reajuster_si_masque, titre_carte_html
-from src.hf_cache import recuperer_depuis_hf
+from src.hf_cache import envoyer_vers_hf, recuperer_depuis_hf
 from src.pipeline_donnees import DOMAINES_BPE, chemins_reseau, construire_donnees_bpe
 from src.utilitaires_matrix import (
     cost_to_closest,
@@ -114,12 +114,18 @@ def _construire_pipeline(zip_path, nom_reseau_str, date_JOB):
         ttm_path = chemins["ttm"]
 
         if not os.path.exists(osm_pbf_path):
-            if recuperer_depuis_hf(f"memory_pbf/agglo_osm_pbf_{nom_reseau_str}.osm.pbf", osm_pbf_path):
+            nom_pbf_hf = f"memory_pbf/agglo_osm_pbf_{nom_reseau_str}.osm.pbf"
+            if recuperer_depuis_hf(nom_pbf_hf, osm_pbf_path):
                 st.write("✓ Extrait OSM récupéré depuis le cache Hugging Face")
             else:
                 st.write("Extraction des données OSM (Overpass)... peut prendre plusieurs minutes")
                 osm_pbf_creator(chemins["decoupage_geojson"], output_pbf_path=osm_pbf_path)
                 st.write("✓ Extrait OSM prêt")
+                st.write("Envoi de l'extrait OSM vers le cache Hugging Face...")
+                if envoyer_vers_hf(osm_pbf_path, nom_pbf_hf):
+                    st.write("✓ Extrait OSM envoyé vers Hugging Face (réutilisable aux prochains déploiements)")
+                else:
+                    st.write("⚠ Envoi vers Hugging Face échoué (pas bloquant, disponible seulement sur ce Space)")
 
         if not os.path.exists(ttm_path) and recuperer_depuis_hf(
             f"memory_ttm/ttm_{nom_reseau_str}.parquet", ttm_path
@@ -151,6 +157,12 @@ def _construire_pipeline(zip_path, nom_reseau_str, date_JOB):
             )
             ttm.to_parquet(ttm_path, index=False)
             st.write("✓ Matrice des temps de trajet prête")
+            st.write("Envoi de la matrice des temps de trajet vers le cache Hugging Face...")
+            nom_ttm_hf = f"memory_ttm/ttm_{nom_reseau_str}.parquet"
+            if envoyer_vers_hf(ttm_path, nom_ttm_hf):
+                st.write("✓ Matrice envoyée vers Hugging Face (réutilisable aux prochains déploiements)")
+            else:
+                st.write("⚠ Envoi vers Hugging Face échoué (pas bloquant, disponible seulement sur ce Space)")
 
         ttm = pd.read_parquet(ttm_path)
         status.update(label="Données d'accessibilité prêtes", state="complete", expanded=False)
