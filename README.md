@@ -23,7 +23,7 @@ Le projet s'inspire des travaux du livre *Introduction to urban accessibility* (
 1. Construit le réseau multimodal piéton + transport collectif (`r5py`) à partir du GTFS pour une date JOB indiquée et le réseau viaire pour les cheminements piétons 
 2. Récupère le carroyage population INSEE 200x200 2019 incluant les catégories socio économiques (Filosofi) et la Base Permanente des Équipements (BPE, INSEE) 
 3. Pondère les équipements par gamme (proximité / intermédiaire / supérieure / hors gamme) et par domaine (santé, enseignement, commerces...) avec une pondération des équipements dans le fichier src/ponderation_bpe.py: 
-  2.1 Liste des équipements BPE - cf https://vscode.dev/github/antoinechevre/Accessibility_analysis/blob/main/data/BPE25_anonymisee_dessin_fichier.html 
+  3.1 Liste des équipements BPE - cf https://vscode.dev/github/antoinechevre/Accessibility_analysis/blob/main/data/BPE25_anonymisee_dessin_fichier.html 
     "O": "Tout équipements pondérés",
     "A": "Services pour les particuliers",
     "B": "Commerces",
@@ -32,20 +32,23 @@ Le projet s'inspire des travaux du livre *Introduction to urban accessibility* (
     "E": "Transports et déplacements",
     "F": "Sports, loisirs et culture",
     "G": "Tourisme",
-  2.2 pondération selon la classification
+  3.2 pondération selon la classification
     "Gamme de proximité"
     "Gamme intermédiaire"
     "Gamme supérieure"
     "Hors Gamme"
-  2.3 des seuils sur pondération par carreaux de 200x200 et par domaine par rapport à la moyenne de pondération des carreaux par domaines (objectif de filtrer les carreaux significatifs)  
+  3.3 des seuils sur pondération par carreaux de 200x200 et par domaine par rapport à la moyenne de pondération des carreaux par domaines (objectif de filtrer les carreaux significatifs)  
 
 4. Calcule la matrice des temps de trajet (`TravelTimeMatrix`) entre tous les carreaux avec GTFS / Piétons OSM à l'heure de pointe en JOB 
 5. Calcule plusieurs indicateurs d'accessibilité : 
-  5.1 opportunités cumulées, 
-  5.2 coût au plus proche, 
-  5.3 gravité, 
-  5.4 compétition (Enhanced 2SFCA).
+  5.1 opportunités cumulées: calcul pour chaque carreau le nombre d'opportunités / équipements dans un temps de trajet donné 
+  5.2 coût au plus proche: calcul le temps minimum pour atteindre un certains nombres d'opportunités  
+  5.3 gravité: le poids de chaque opportunité décroit à mesure que le temps de trajet augmente (exponetiel inversé) 
+  5.4 compétition (Enhanced 2SFCA): calcul le niveau d'accessibilité en considérant la compétitions entre opportunités 
 6. Exporte des cartes interactives (HTML/Folium) et statiques (PNG) par domaine d'équipement avec une déclinaison par déciles de population
+7. propose un benchmark avec des indicateurs pour les différentes villes françaises en fonction des domaines d'équipements et des déciles de niveau de richesse 
+  7.1 temps de trajet moyen pour atteindre 25%, 50%, 75% des opportunités/équipements 
+  7.2 % opportunités/équipements pour un temps de trajet moyen de 30 min, 45 min, 60 min, 75 min  
 
 
 ## Structure du dépôt
