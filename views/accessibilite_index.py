@@ -423,12 +423,6 @@ def accessibilite_index_page():
 
     st.success(f"✓ {len(population_grid_agglo)} carreaux actifs — matrice des temps de trajet prête.")
 
-    st.markdown("### % moyen de pôles d'équipements majeurs atteignables (pondéré par la population)")
-    st.caption(
-        "Moyenne, pondérée par la population de chaque carreau, du % de pôles majeurs "
-        "d'un domaine atteignables depuis ce carreau — une mesure continue plutôt qu'un "
-        "seuil (cf onglet pondérations équipements pour comprendre l'analyse des équipements)."
-    )
     with st.spinner("Calcul de la vue d'ensemble par domaine..."):
         # Calculé une seule fois par (domaine, durée), réutilisé ci-dessous pour
         # la vue d'ensemble et pour la déclinaison par décile dans chaque onglet
@@ -451,12 +445,6 @@ def accessibilite_index_page():
                 for d, nom in DOMAINES_BPE.items()
             ]
         ).set_index("Domaine")
-
-        _courbe_pct_moyen_poles(
-            tableau_pct_moyen_poles,
-            f"% moyen de pôles d'équipements majeurs atteignables, par domaine – {nom_reseau_str}",
-            "Domaine",
-        )
 
         niveau_vie = deciles_niveau_vie(population_grid_agglo)
 
@@ -505,7 +493,9 @@ def accessibilite_index_page():
         )
         st.dataframe(tableau_benchmark)
 
-    fond_carte = st.selectbox("Fond de carte", options=list(FONDS_CARTE.keys()))
+    fond_carte = st.selectbox(
+        "Fond de carte", options=list(FONDS_CARTE.keys()), index=list(FONDS_CARTE.keys()).index("CartoDB Positron")
+    )
 
     deciles_disponibles = sorted(niveau_vie["decile_niveau_vie"].unique().astype(int))
     deciles_selectionnes = st.multiselect(
@@ -607,6 +597,18 @@ def accessibilite_index_page():
                 cmap="viridis",
             )
 
+    st.markdown("### % moyen de pôles d'équipements majeurs atteignables (pondéré par la population)")
+    st.caption(
+        "Moyenne, pondérée par la population de chaque carreau, du % de pôles majeurs "
+        "d'un domaine atteignables depuis ce carreau — une mesure continue plutôt qu'un "
+        "seuil (cf onglet pondérations équipements pour comprendre l'analyse des équipements)."
+    )
+    _courbe_pct_moyen_poles(
+        tableau_pct_moyen_poles,
+        f"% moyen de pôles d'équipements majeurs atteignables, par domaine – {nom_reseau_str}",
+        "Domaine",
+    )
+
     st.markdown("### Benchmark inter-réseaux")
     st.caption(
         "Ce réseau (en rouge) comparé aux autres déjà enregistrés dans l'index de benchmark "
@@ -621,4 +623,4 @@ def accessibilite_index_page():
         )
     else:
         html_benchmark = generer_html_str(tableau_benchmark_complet, reseau_actuel=nom_reseau_str)
-        st.components.v1.html(html_benchmark, height=760, scrolling=True)
+        st.components.v1.html(html_benchmark, height=760, scrolling=False)

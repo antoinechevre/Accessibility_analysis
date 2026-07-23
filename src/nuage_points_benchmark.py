@@ -144,16 +144,26 @@ TEMPLATE_HTML = r"""<!doctype html>
     }
   }
   * { box-sizing: border-box; }
+  html, body { height: 100%; }
   body {
     margin: 0;
     background: var(--page);
     color: var(--text-primary);
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   }
-  .page { max-width: 1200px; margin: 0 auto; padding: 24px 20px 48px; }
-  h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
-  .sous-titre { color: var(--text-secondary); font-size: 13px; margin: 0 0 20px; }
+  .page {
+    max-width: 1200px;
+    height: 100vh;
+    margin: 0 auto;
+    padding: 24px 20px 20px;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  h1 { flex: 0 0 auto; font-size: 20px; font-weight: 600; margin: 0 0 4px; }
+  .sous-titre { flex: 0 0 auto; color: var(--text-secondary); font-size: 13px; margin: 0 0 20px; }
   .filtres {
+    flex: 0 0 auto;
     display: flex;
     flex-wrap: wrap;
     gap: 16px;
@@ -194,8 +204,15 @@ TEMPLATE_HTML = r"""<!doctype html>
     cursor: pointer;
   }
   .deciles input { cursor: pointer; }
-  #chart { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; }
-  .bas-de-page { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+  #chart {
+    flex: 1 1 auto;
+    min-height: 260px;
+    width: 100%;
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .bas-de-page { flex: 0 0 auto; display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
   .bas-de-page button {
     font: inherit;
     font-size: 12px;
@@ -206,7 +223,7 @@ TEMPLATE_HTML = r"""<!doctype html>
     color: var(--text-primary);
     cursor: pointer;
   }
-  #zone-tableau { margin-top: 16px; display: none; }
+  #zone-tableau { flex: 0 0 auto; margin-top: 16px; display: none; max-height: 240px; overflow-y: auto; }
   table { width: 100%; border-collapse: collapse; font-size: 12px; background: var(--surface-1); }
   th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--gridline); }
   th { color: var(--text-muted); font-weight: 600; text-transform: uppercase; font-size: 10px; letter-spacing: .03em; }
@@ -237,7 +254,7 @@ TEMPLATE_HTML = r"""<!doctype html>
     </div>
   </div>
 
-  <div id="chart" style="width:100%; height:640px;"></div>
+  <div id="chart"></div>
 
   <div class="bas-de-page">
     <span class="sous-titre" id="compte-points"></span>
