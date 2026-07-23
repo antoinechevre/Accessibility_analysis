@@ -349,7 +349,22 @@ def accessibilite_index_page():
     date_str = st.session_state.date_str
     zip_path = st.session_state.zip_path
 
-    st.write(f"Réseau : **{nom_reseau_str}** — jour de référence : {date_str}")
+    # Ville principale : seulement si le découpage communal de ce réseau a
+    # déjà été calculé lors d'un run précédent (chemin_decoupage en cache sur
+    # disque) — pas de géocodage à la volée ici, ce n'est qu'un affichage.
+    # st.cache_data évite de rappeler l'API geo.api.gouv.fr (ville_principale)
+    # à chaque interaction pour un même réseau déjà résolu.
+    @st.cache_data(show_spinner=False)
+    def _ville_principale_affichage(chemin_decoupage):
+        codes_insee = pd.read_csv(chemin_decoupage, dtype={"code_insee": str})["code_insee"]
+        return ville_principale(codes_insee)
+
+    chemin_decoupage_cache = chemins_reseau(nom_reseau_str)["decoupage_csv"]
+    ville_reseau = _ville_principale_affichage(chemin_decoupage_cache) if os.path.exists(chemin_decoupage_cache) else None
+
+    date_affichage = datetime.datetime.strptime(date_str, "%Y%m%d").strftime("%d/%m/%Y")
+    reseau_affichage = f"{nom_reseau_str} ({ville_reseau})" if ville_reseau else nom_reseau_str
+    st.write(f"Réseau : **{reseau_affichage}** — jour de référence : {date_affichage}")
 
     # La matrice des temps de trajet (ttm) est mise en cache sur disque par
     # réseau (cf. _construire_pipeline) : si le fichier existe déjà, ce n'est
