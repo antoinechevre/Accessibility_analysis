@@ -85,10 +85,20 @@ def _assurer_r5py_pret():
     r5py = r5py_module
 
 
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(show_spinner=False, max_entries=2)
 def _construire_reseau_transport(osm_pbf_path, gtfs_r5py_path):
     """Construit le TransportNetwork r5py (objet Java non sérialisable : mis
-    en cache via st.cache_resource plutôt que st.session_state)."""
+    en cache via st.cache_resource plutôt que st.session_state).
+
+    max_entries=2 : sans limite, chaque réseau distinct testé sur un même
+    process Streamlit (Space long-lived, plusieurs analyses successives)
+    garde son TransportNetwork en mémoire pour toujours — objet Java lourd
+    (graphe routier + GTFS complet), jamais libéré. Ça s'accumule jusqu'à
+    dépasser la RAM allouée (observé : "Memory limit exceeded (32.0G)" sur
+    le Space après plusieurs réseaux testés dans la même session). Garder
+    seulement les 2 réseaux les plus récents (LRU) borne la mémoire tout en
+    évitant de reconstruire le réseau à chaque interaction pour l'analyse en
+    cours."""
     _assurer_r5py_pret()
     return r5py.TransportNetwork(osm_pbf=osm_pbf_path, gtfs=[gtfs_r5py_path])
 
