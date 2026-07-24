@@ -536,29 +536,6 @@ def accessibilite_index_page():
     onglets = st.tabs([f"{d} - {nom}" for d, nom in domaines_a_afficher.items()])
     for onglet, domaine in zip(onglets, domaines_a_afficher):
         with onglet:
-            st.markdown("#### Temps d'accès au pôle d'équipements le plus proche")
-            with st.spinner(f"Calcul du temps d'accès {domaine}..."):
-                carte_temps = _carte_temps_acces_pole_domaine(
-                    population_grid_agglo, land_use_data, BPE_agglo, ttm, domaine, fond_carte,
-                    carreaux_filtre_ids=carreaux_filtre_ids,
-                )
-            if carte_temps is None:
-                st.info("Aucun carreau dans les déciles sélectionnés.")
-            else:
-                st.components.v1.html(carte_temps.get_root().render(), height=520, scrolling=False)
-
-                html_path_temps = os.path.join(OUTPUT_DIR, f"accessibilite_temps_{domaine}_{nom_reseau_str}.html")
-                os.makedirs(OUTPUT_DIR, exist_ok=True)
-                carte_temps.save(html_path_temps)
-                with open(html_path_temps, "rb") as f:
-                    st.download_button(
-                        f"💾 Télécharger la carte temps d'accès {domaine} (HTML)",
-                        data=f,
-                        file_name=os.path.basename(html_path_temps),
-                        mime="text/html",
-                        key=f"download_temps_{domaine}",
-                    )
-
             st.markdown("#### Pôles d'équipements accessibles (30 min vs 45 min)")
             st.caption(
                 "Pôles majeurs d'équipements accessible depuis chaque carreau à 30 min et 45 min "
@@ -575,6 +552,7 @@ def accessibilite_index_page():
                 st.components.v1.html(carte_poles.get_root().render(), height=520, scrolling=False)
 
                 html_path_poles = os.path.join(OUTPUT_DIR, f"accessibilite_poles_{domaine}_{nom_reseau_str}.html")
+                os.makedirs(OUTPUT_DIR, exist_ok=True)
                 carte_poles.save(html_path_poles)
                 with open(html_path_poles, "rb") as f:
                     st.download_button(
@@ -583,6 +561,28 @@ def accessibilite_index_page():
                         file_name=os.path.basename(html_path_poles),
                         mime="text/html",
                         key=f"download_poles_{domaine}",
+                    )
+
+            st.markdown("#### Temps d'accès au pôle d'équipements le plus proche")
+            with st.spinner(f"Calcul du temps d'accès {domaine}..."):
+                carte_temps = _carte_temps_acces_pole_domaine(
+                    population_grid_agglo, land_use_data, BPE_agglo, ttm, domaine, fond_carte,
+                    carreaux_filtre_ids=carreaux_filtre_ids,
+                )
+            if carte_temps is None:
+                st.info("Aucun carreau dans les déciles sélectionnés.")
+            else:
+                st.components.v1.html(carte_temps.get_root().render(), height=520, scrolling=False)
+
+                html_path_temps = os.path.join(OUTPUT_DIR, f"accessibilite_temps_{domaine}_{nom_reseau_str}.html")
+                carte_temps.save(html_path_temps)
+                with open(html_path_temps, "rb") as f:
+                    st.download_button(
+                        f"💾 Télécharger la carte temps d'accès {domaine} (HTML)",
+                        data=f,
+                        file_name=os.path.basename(html_path_temps),
+                        mime="text/html",
+                        key=f"download_temps_{domaine}",
                     )
 
             if st.session_state.analyse_detaillee:
