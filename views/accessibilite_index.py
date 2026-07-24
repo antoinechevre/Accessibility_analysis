@@ -103,18 +103,20 @@ def _construire_reseau_transport(osm_pbf_path, gtfs_r5py_path):
     _assurer_r5py_pret()
     try:
         return r5py.TransportNetwork(osm_pbf=osm_pbf_path, gtfs=[gtfs_r5py_path])
-    except Exception as erreur:
-        # r5py met en cache le graphe OSM/GTFS déjà construit dans
-        # Config().CACHE_DIR (~/.cache/r5py), indexé par un hash du contenu
-        # des fichiers d'entrée — un run précédent interrompu en plein calcul
-        # (crash, kill mémoire...) peut y laisser un fichier .mapdb à moitié
-        # écrit. Tout run suivant avec le même GTFS retente alors de le
-        # relire et échoue systématiquement avec un java.io.IOError
-        # ("Wrong index checksum, store was not closed properly and could be
-        # corrupted"), sans jamais s'en remettre seul. On vide ce cache et on
-        # relance une fois avant d'abandonner pour de bon.
-        if "checksum" not in str(erreur).lower():
-            raise
+    except Exception:
+        # r5py met en cache dans Config().CACHE_DIR (~/.cache/r5py), à la fois
+        # le graphe OSM/GTFS déjà construit (indexé par hash du contenu des
+        # fichiers d'entrée) ET une copie/lien de travail de l'OSM pbf lui-même
+        # (WorkingCopy, nommée d'après le fichier source). Un run précédent
+        # interrompu en plein calcul (crash, kill mémoire...) peut y laisser
+        # un fichier à moitié écrit — observé avec deux erreurs Java
+        # distinctes selon lequel : "Wrong index checksum, store was not
+        # closed properly and could be corrupted" (cache du graphe), ou
+        # "Error occurred while parsing OSM file ...osm.pbf" (copie de
+        # travail de l'OSM pbf — vérifié sur T2C/Clermont-Ferrand : le pbf
+        # source, lui, est valide). Dans les deux cas ça ne se répare jamais
+        # tout seul. On vide ce cache et on relance une fois avant d'abandonner
+        # pour de bon.
         import shutil
 
         from r5py.util import Config
