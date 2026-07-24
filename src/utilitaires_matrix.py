@@ -170,6 +170,15 @@ def calculer_index_benchmark(
             return float("nan")
         return (valeurs * base["population"]).sum() / population_totale
 
+    # Filtré une fois par cutoff, pas une fois par (domaine, cutoff) : le
+    # filtre travel_time <= cutoff ne dépend pas du domaine, mais
+    # cumulative_cutoff() (appelée ci-dessous par domaine) le refaisait sur
+    # ttm en entier à chaque appel — 8 domaines x 3 cutoffs = 24 filtrages de
+    # la matrice complète au lieu de 3. Sur une grosse agglomération (ex.
+    # Toulouse), ttm est énorme : ce x8 de calcul/mémoire redondant a fait
+    # dépasser la limite mémoire du Space (32 Go).
+    ttm_par_cutoff = {cutoff: ttm.loc[ttm["travel_time"] <= cutoff, ["from_id", "to_id"]] for cutoff in cutoffs}
+
     lignes = []
     for d, nom_domaine in DOMAINES_BPE.items():
         land_use_data_d = land_use_data_domaine(BPE_agglo, land_use_data, d)
@@ -177,14 +186,22 @@ def calculer_index_benchmark(
         if total_equipement_d == 0:
             continue
 
-        # % moyen des équipements pondérés accessibles par cutoff (réutilise
-        # cumulative_cutoff, cf. plus haut dans ce module).
+        # % moyen des équipements pondérés accessibles par cutoff, à partir du
+        # sous-ensemble déjà filtré par cutoff (ttm_par_cutoff) plutôt que de
+        # rappeler cumulative_cutoff() sur ttm en entier — même résultat que
+        # cumulative_cutoff(ttm, land_use_data=land_use_data_d, opportunity=d,
+        # travel_cost="travel_time", cutoff=cutoff), sans refiltrer ttm.
         pct_par_carreau_cutoff = {}
         for cutoff in cutoffs:
-            cum = cumulative_cutoff(
-                ttm, land_use_data=land_use_data_d, opportunity=d, travel_cost="travel_time", cutoff=cutoff
+            cum = (
+                ttm_par_cutoff[cutoff]
+                .merge(land_use_data_d[["id", d]], left_on="to_id", right_on="id", how="left")
+                .groupby("from_id")[d]
+                .sum()
+                .reindex(land_use_data["id"])
+                .fillna(0)
             )
-            pct_par_carreau_cutoff[cutoff] = 100 * cum.set_index("id")[d] / total_equipement_d
+            pct_par_carreau_cutoff[cutoff] = 100 * cum / total_equipement_d
 
         # Temps pour atteindre chaque seuil : cumul croissant par temps de
         # trajet croissant, par carreau d'origine.
