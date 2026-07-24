@@ -1,5 +1,76 @@
+import math
+
 import numpy as np
 import pandas as pd
+
+
+def calculer_ttm_par_lots(
+    r5py_module,
+    transport_network,
+    points,
+    departure,
+    transport_modes,
+    max_time_walking,
+    max_time,
+    ttm_path,
+    taille_lot=1500,
+    on_step=None,
+):
+    """Calcule la TravelTimeMatrix r5py par lots d'origines plutôt qu'en un
+    seul appel origins=tous x destinations=tous : le pic mémoire (JVM +
+    DataFrame résultat côté Python) est alors borné à la taille d'un lot
+    plutôt qu'à la matrice complète. Nécessaire pour les grosses agglomérations
+    (ex: Lyon/TCL, dont le calcul en un seul bloc dépasse 32 Go de RAM même
+    avec 16 Go dédiés à la JVM — cf. views/accessibilite_index.py).
+
+    Écrit directement sur disque au fur et à mesure (pyarrow.parquet.ParquetWriter,
+    un row group par lot) : un lot jamais ajouté au précédent en mémoire Python,
+    contrairement à un accumulateur pandas (pd.concat) qui garderait la matrice
+    complète en RAM au moment de l'écriture finale.
+
+    r5py_module: module r5py déjà importé (passé en paramètre plutôt
+        qu'importé ici, pour ne pas déclencher le démarrage de sa JVM par le
+        seul fait d'importer ce module utilitaire — cf. _assurer_r5py_pret
+        dans views/accessibilite_index.py).
+    points: GeoDataFrame [id, geometry] (mêmes origines et destinations, comme
+        pour un appel TravelTimeMatrix classique).
+    on_step: callback optionnel appelé avec un message de progression avant
+        chaque lot (ex. st.write côté Streamlit).
+    """
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    nb_lots = math.ceil(len(points) / taille_lot)
+    writer = None
+    try:
+        for i in range(nb_lots):
+            lot = points.iloc[i * taille_lot : (i + 1) * taille_lot]
+            if on_step is not None:
+                on_step(f"Calcul de la matrice des temps de trajet... lot {i + 1}/{nb_lots}")
+
+            ttm_lot = r5py_module.TravelTimeMatrix(
+                transport_network,
+                origins=lot,
+                destinations=points,
+                transport_modes=transport_modes,
+                departure=departure,
+                max_time_walking=max_time_walking,
+                max_time=max_time,
+            )
+            # travel_time (minutes, plafonné à max_time) tient largement dans
+            # un int16 plutôt que le float64 par défaut — réduction directe,
+            # sans risque d'incohérence de schéma entre lots (contrairement à
+            # une colonne catégorielle, dont l'encodage pyarrow peut varier
+            # de largeur d'un lot à l'autre selon leur cardinalité).
+            ttm_lot["travel_time"] = ttm_lot["travel_time"].astype("int16")
+
+            table = pa.Table.from_pandas(ttm_lot, preserve_index=False)
+            if writer is None:
+                writer = pq.ParquetWriter(ttm_path, table.schema)
+            writer.write_table(table)
+    finally:
+        if writer is not None:
+            writer.close()
 
 
 def pct_poles_atteignables_par_carreau(land_use_data, ttm, domaine, cutoff):

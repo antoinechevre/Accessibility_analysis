@@ -22,6 +22,7 @@ from src.hf_cache import envoyer_vers_hf, fusionner_et_envoyer_csv, recuperer_de
 from src.pipeline_donnees import MEMORY_CSV_AGGLO_DIR, DOMAINES_BPE, chemins_reseau, construire_donnees_bpe
 from src.utilitaires_matrix import (
     calculer_index_benchmark,
+    calculer_ttm_par_lots,
     cost_to_closest,
     cumulative_cutoff,
     deciles_niveau_vie,
@@ -157,16 +158,22 @@ def _construire_pipeline(zip_path, nom_reseau_str, date_JOB):
 
             departure_datetime = datetime.datetime.strptime(date_JOB, "%Y%m%d").replace(hour=14, minute=0, second=0)
 
-            ttm = r5py.TravelTimeMatrix(
+            # Par lots d'origines plutôt qu'un seul appel origins=destinations=tous
+            # les carreaux : borne le pic mémoire (JVM + résultat Python) à la
+            # taille d'un lot au lieu de la matrice complète — nécessaire pour
+            # les grosses agglomérations (ex: Lyon/TCL, "Memory limit exceeded
+            # (32.0G)" observé même avec 16 Go dédiés à la JVM en un seul appel).
+            calculer_ttm_par_lots(
+                r5py,
                 transport_network,
-                origins=points,
-                destinations=points,
-                transport_modes=[r5py.TransportMode.WALK, r5py.TransportMode.TRANSIT],
+                points,
                 departure=departure_datetime,
+                transport_modes=[r5py.TransportMode.WALK, r5py.TransportMode.TRANSIT],
                 max_time_walking=datetime.timedelta(minutes=30),
                 max_time=datetime.timedelta(minutes=120),
+                ttm_path=ttm_path,
+                on_step=lambda message: st.write(message),
             )
-            ttm.to_parquet(ttm_path, index=False)
             st.write("✓ Matrice des temps de trajet prête")
             st.write("Envoi de la matrice des temps de trajet vers le cache Hugging Face...")
             nom_ttm_hf = f"memory_ttm/ttm_{nom_reseau_str}.parquet"
