@@ -205,12 +205,19 @@ def calculer_index_benchmark(
 
         # Temps pour atteindre chaque seuil : cumul croissant par temps de
         # trajet croissant, par carreau d'origine.
-        equipement_par_destination = land_use_data_d.loc[land_use_data_d[d] > 0, ["id", d]].rename(
-            columns={"id": "to_id"}
-        )
-        trajets_d = ttm.merge(equipement_par_destination, on="to_id", how="inner").sort_values(
-            ["from_id", "travel_time"]
-        )
+        #
+        # Filtre par isin()+map() plutôt qu'un merge (ttm.merge(..., on="to_id",
+        # how="inner")) : un merge construit une jointure sur ttm en entier (non
+        # borné par un cutoff, jusqu'à max_time=120 min — bien plus gros que les
+        # ttm_par_cutoff ci-dessus), refait 8 fois (une par domaine). isin()+map()
+        # ne scanne ttm qu'en O(n) sans construire de structure de jointure,
+        # nettement moins coûteux en mémoire sur une grosse agglomération (même
+        # cause que le fix ttm_par_cutoff plus haut : Toulouse dépassait encore
+        # les 32 Go du Space après ce premier fix, précisément sur ce bloc-ci).
+        equipement_par_destination = land_use_data_d.loc[land_use_data_d[d] > 0].set_index("id")[d]
+        trajets_d = ttm.loc[ttm["to_id"].isin(equipement_par_destination.index), ["from_id", "to_id", "travel_time"]]
+        trajets_d = trajets_d.assign(**{d: trajets_d["to_id"].map(equipement_par_destination)})
+        trajets_d = trajets_d.sort_values(["from_id", "travel_time"])
         trajets_d["cumule_pct"] = 100 * trajets_d.groupby("from_id")[d].cumsum() / total_equipement_d
 
         temps_par_carreau_seuil = {}
