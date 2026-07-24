@@ -73,8 +73,10 @@ def charger_gtfs(zip_path):
 # spec, mais le lecteur GTFS utilisé par r5py (Conveyal/OneBusAway) distingue
 # "fichier absent" de "fichier présent mais vide" et rejette le second cas
 # avec une EmptyTableError au lieu de l'ignorer. calendar.txt : vérifié sur
-# le GTFS Tisseo (Toulouse) ; transfers.txt : vérifié sur le GTFS Valence.
-TABLES_OPTIONNELLES_VIDABLES_R5PY = ["calendar.txt", "transfers.txt"]
+# le GTFS Tisseo (Toulouse) ; transfers.txt : vérifié sur le GTFS Valence ;
+# frequencies.txt et fare_rules.txt : vérifiés sur le GTFS du réseau de
+# Grenoble.
+TABLES_OPTIONNELLES_VIDABLES_R5PY = ["calendar.txt", "transfers.txt", "frequencies.txt", "fare_rules.txt"]
 
 
 def preparer_gtfs_pour_r5py(zip_path, output_path=None):
