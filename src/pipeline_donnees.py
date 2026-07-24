@@ -15,7 +15,12 @@ import geopandas as gpd
 import pandas as pd
 import requests
 
-from src.build_data_agglo import build_decoupage_agglo, decoupage_agglo_geojson, build_grid_agglo
+from src.build_data_agglo import (
+    build_decoupage_agglo,
+    decoupage_agglo_geojson,
+    build_grid_agglo,
+    fusionner_grille_resolution,
+)
 from src.BPE_traitement import filtre_BPE, filtre_BPE_actifs, land_use_data_domaine
 from src.hf_cache import HF_DATA_REPO_ID, envoyer_vers_hf, recuperer_depuis_hf
 from src.ponderation_bpe import GAMMES_POIDS_PAR_DOMAINE, SEUILS_DOMAINE
@@ -41,6 +46,21 @@ DOMAINES_BPE = {
     "F": "Sports, loisirs et culture",
     "G": "Tourisme",
 }
+
+# Réseaux dont la grille 200m est trop grosse pour tenir en mémoire une fois
+# la matrice des temps de trajet chargée (cf. src.utilitaires_matrix.charger_ttm) :
+# carreaux fusionnés en blocs de resolution mètres avant tout calcul (cf.
+# fusionner_grille_resolution), au prix d'une résolution spatiale plus
+# grossière sur ces réseaux.
+# - Lyon/TCL (400m) : 92 741 carreaux à 200m -> ttm de 1,22 milliard de
+#   lignes, qui fait planter le calcul (mémoire) même à 32 Go de RAM
+#   disponible une fois chargé en mémoire — observé à plusieurs reprises
+#   avant ce contournement.
+# - IDFM (800m) : Île-de-France, nettement plus grande que Lyon ; 400m ne
+#   suffirait probablement pas. Ce GTFS (Paris + petite couronne 75/92/93/94
+#   uniquement, pas la grande couronne) est aussi une exception au garde-fou
+#   "max 4 agences" de l'app — cf. GTFS_NOM_RESEAU_FORCE dans app.py.
+RESOLUTIONS_GRILLE_SPECIALES = {"TCL": 400, "IDFM": 800}
 
 def chemins_reseau(nom_reseau_str):
     """Chemins de cache disque (par réseau) utilisés par le pipeline."""
@@ -149,8 +169,28 @@ def construire_donnees_bpe(zip_path, nom_reseau_str, on_step=None):
         # défaut de build_grid_agglo) : un run concurrent pour un autre réseau
         # (app ou notebook tournant en parallèle sur la même machine) ne doit
         # jamais pouvoir écrire/renommer le même fichier partagé.
-        build_grid_agglo(chemins["decoupage_geojson"], output_path=chemins["gpkg"])
+        grille = build_grid_agglo(chemins["decoupage_geojson"], output_path=chemins["gpkg"])
         _step("✓ Carroyage population prêt")
+
+        resolution_speciale = RESOLUTIONS_GRILLE_SPECIALES.get(nom_reseau_str)
+        if resolution_speciale is not None:
+            # chemins["gpkg"] est déjà scopé par réseau (pas le chemin
+            # générique) : l'écraser ici par la version fusionnée ne risque
+            # aucune collision avec un autre run, et les prochains lancements
+            # pour ce réseau retrouveront directement la version fusionnée en
+            # cache (le test os.path.exists ci-dessus ne distingue pas la
+            # résolution, juste la présence du fichier).
+            grille = fusionner_grille_resolution(grille, resolution=resolution_speciale)
+            grille.to_file(chemins["gpkg"], driver="GPKG")
+
+    resolution_speciale = RESOLUTIONS_GRILLE_SPECIALES.get(nom_reseau_str)
+    if resolution_speciale is not None:
+        _step(
+            f"⚠ {nom_reseau_str} : réseau trop grand pour une analyse à 200m (matrice des "
+            "temps de trajet trop volumineuse pour tenir en mémoire) — carreaux fusionnés "
+            f"en blocs de {resolution_speciale}m, résolution spatiale plus grossière sur les "
+            "cartes et indicateurs de ce réseau."
+        )
 
     population_grid_agglo = gpd.read_file(chemins["gpkg"])
     land_use_data = population_grid_agglo[["id", "population"]].copy()

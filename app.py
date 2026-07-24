@@ -25,6 +25,23 @@ class TropAgencesError(Exception):
     """Levée quand le GTFS regroupe trop d'agences pour être traité par l'app."""
 
 
+# Exceptions au garde-fou "max 4 agences" (cf. TropAgencesError ci-dessous),
+# par nom de fichier GTFS : réseaux régionaux dont on sait qu'ils fonctionnent
+# malgré tout, avec un nom de réseau forcé plutôt que dérivé automatiquement
+# de agency.txt (nom_reseau_str() concatène tous les noms d'agence avec
+# " / " — pour l'IDFM, ça donne une chaîne de ~930 caractères, invalide comme
+# nom de fichier sur la plupart des OS). Ex. Île-de-France Mobilités : 51
+# agences dans agency.txt (RATP, Transilien, opérateurs de bus régionaux...),
+# mais ce fichier ne couvre en réalité que Paris + petite couronne (75/92/
+# 93/94) — cf. l'avertissement affiché dans l'onglet Accessibilité pour ce
+# réseau (RESOLUTIONS_GRILLE_SPECIALES, src/pipeline_donnees.py). Le GTFS
+# régional complet (IDFM-gtfs.zip, ~1,1 Go décompressé) est volontairement
+# exclu de cette exception : bien trop gros à traiter tel quel.
+GTFS_NOM_RESEAU_FORCE = {
+    "IDFM-gtfs_metro-rer-bus-tram_paris-petite-couronne.zip": "IDFM",
+}
+
+
 # Configuration de la page
 st.set_page_config(page_title="Analyse accessibilite aux différents équipements d'agglomération piéton / transport collectif (GTFS)", page_icon="🚌", layout="wide")
 
@@ -173,8 +190,14 @@ def charger_donnees_gtfs():
         # L'app ne sait traiter que des GTFS urbains (un GTFS national/régional
         # regroupant de nombreuses agences ferait exploser les temps de calcul
         # et n'a pas de sens pour les indicateurs arrêts/tronçons proposés ici)
+        # — sauf exception nommée explicitement (cf. GTFS_NOM_RESEAU_FORCE), et
+        # seulement pour un GTFS choisi dans le catalogue existant (uploaded_file
+        # is None), jamais pour un upload : l'exception est vérifiée pour CE
+        # fichier précis (extrait Paris + petite couronne connu), pas pour
+        # n'importe quel GTFS qui porterait le même nom.
         nb_agences = len(feed.agency)
-        if nb_agences > 4:
+        exception_valide = uploaded_file is None and nom_gtfs in GTFS_NOM_RESEAU_FORCE
+        if nb_agences > 4 and not exception_valide:
             raise TropAgencesError(nb_agences)
 
         # Plage de service fiable et jour ouvré de base (dernier mardi/jeudi,
@@ -187,7 +210,10 @@ def charger_donnees_gtfs():
         # seul joint les agences par " / ", qui casse la construction des chemins
         # pour un GTFS multi-agences (ex: Valenciennes, OSError "non-existent
         # directory" car chaque "/" est lu comme un séparateur de répertoire).
-        reseau_str = str(nom_reseau_str(feed))
+        # Forcé plutôt que dérivé pour les exceptions de GTFS_NOM_RESEAU_FORCE
+        # (cf. commentaire de sa définition : nom_reseau_str() y produirait un
+        # nom bien trop long, invalide comme composant de chemin de fichier).
+        reseau_str = GTFS_NOM_RESEAU_FORCE[nom_gtfs] if exception_valide else str(nom_reseau_str(feed))
 
         # Stocker dans session_state
         st.session_state.feed = feed

@@ -19,7 +19,13 @@ from src.BPE_traitement import land_use_data_domaine
 from src.build_data_agglo import osm_pbf_creator, ville_principale
 from src.cartographie import echelle_continue_html, script_reajuster_si_masque, titre_carte_html
 from src.hf_cache import envoyer_vers_hf, fusionner_et_envoyer_csv, recuperer_depuis_hf
-from src.pipeline_donnees import MEMORY_CSV_AGGLO_DIR, DOMAINES_BPE, chemins_reseau, construire_donnees_bpe
+from src.pipeline_donnees import (
+    MEMORY_CSV_AGGLO_DIR,
+    DOMAINES_BPE,
+    RESOLUTIONS_GRILLE_SPECIALES,
+    chemins_reseau,
+    construire_donnees_bpe,
+)
 from src.utilitaires_matrix import (
     calculer_index_benchmark,
     calculer_ttm_par_lots,
@@ -34,6 +40,16 @@ from src.utils import km_par_ligne_jour, longueur_lignes, preparer_gtfs_pour_r5p
 
 BASE_DIR = os.getcwd()
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
+
+# Précision supplémentaire à afficher pour certains réseaux de
+# RESOLUTIONS_GRILLE_SPECIALES, en plus de l'avertissement générique sur la
+# résolution de grille — ex. IDFM : le GTFS utilisé ne couvre que Paris +
+# petite couronne, malgré son nom d'agence "Île-de-France Mobilités" qui
+# pourrait laisser croire à une couverture régionale complète (cf.
+# app.py::GTFS_NOM_RESEAU_FORCE).
+PRECISIONS_RESEAU = {
+    "IDFM": "Ce GTFS ne couvre que Paris et la petite couronne (75/92/93/94), pas la grande couronne.",
+}
 
 FONDS_CARTE = {
     "OpenStreetMap": "OpenStreetMap",
@@ -480,6 +496,19 @@ def accessibilite_index_page():
         )
     else:
         st.info("✓ Résultats déjà en cache pour ce réseau : le calcul sera quasi instantané.")
+
+    resolution_speciale = RESOLUTIONS_GRILLE_SPECIALES.get(nom_reseau_str)
+    if resolution_speciale is not None:
+        message = (
+            f"⚠️ {nom_reseau_str} est un réseau trop grand pour être analysé à la résolution "
+            "standard (200m) : la matrice des temps de trajet correspondante ne tiendrait pas "
+            f"en mémoire. Les carreaux de population sont donc fusionnés en blocs de "
+            f"{resolution_speciale}m avant calcul — cartes et indicateurs de ce réseau ont une "
+            "résolution spatiale plus grossière que les autres réseaux."
+        )
+        if nom_reseau_str in PRECISIONS_RESEAU:
+            message += f" {PRECISIONS_RESEAU[nom_reseau_str]}"
+        st.warning(message)
 
     lancer = st.button("🚀 Lancer / recharger l'analyse d'accessibilité", use_container_width=True)
 
