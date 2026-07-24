@@ -505,4 +505,54 @@ def build_grid_agglo(path, output_path=None):
     print(f"ecrit dans: {output_path}")
 
 
+def fusionner_grille_resolution(population_grid_agglo, resolution=400):
+    """Fusionne les carreaux 200m de population_grid_agglo (sortie de
+    build_grid_agglo : id/geometry/population/ind/ind_snv/publie/centroid_x/
+    centroid_y) en carreaux de `resolution` mètres (multiple de 200), pour
+    réduire le nombre de carreaux — et donc la taille de la matrice des
+    temps de trajet (ttm), qui grandit en O(n²) avec le nombre de carreaux.
+
+    Nécessaire sur les très grosses agglomérations (ex. Lyon/TCL : 92 741
+    carreaux à 200m -> ttm de 1,22 milliard de lignes, qui dépasse la RAM
+    disponible même à 32 Go une fois chargé en mémoire, y compris avec les
+    dtypes compacts de charger_ttm). Passer à 400m réduit le nombre de
+    carreaux d'un facteur ~4 (2x2 en x et y), donc le ttm d'un facteur ~16.
+
+    Regroupement par bloc de `resolution` mètres à partir de centroid_x/
+    centroid_y (coordonnées EPSG:2154, calculées par build_grid_agglo après
+    reprojection — donc pas exactement alignées sur la grille native 200m en
+    EPSG:3035, mais suffisamment proches pour que le simple floor-division
+    regroupe correctement chaque bloc de carreaux 200m adjacents). ind
+    (population) et ind_snv (Filosofi : déjà une SOMME des niveaux de vie
+    winsorisés des individus du carreau, pas une moyenne) se somment
+    naturellement sur les sous-carreaux d'un même bloc.
+
+    Ne récupère PAS les données masquées par le secret statistique (les
+    carreaux 200m non publiés par l'INSEE restent à 0 dans la somme) :
+    réduit seulement le volume de calcul, ce n'est pas un redressement
+    statistique. `publie` du carreau fusionné est True si au moins un des
+    sous-carreaux 200m était publié.
+
+    geometry : union des sous-carreaux effectivement présents (pas une
+    reconstruction théorique du carré `resolution`x`resolution`) — gère
+    proprement les blocs incomplets en bord d'agglo (1 à 3 sous-carreaux
+    sur 4 au lieu de 4, la grille 200m étant déjà découpée à la frontière de
+    l'agglo par build_grid_agglo).
+    """
+    grille = population_grid_agglo.copy()
+    bloc_e = (grille["centroid_x"] // resolution * resolution).astype(int)
+    bloc_n = (grille["centroid_y"] // resolution * resolution).astype(int)
+    grille["id"] = "CRS3035RES" + str(resolution) + "mN" + bloc_n.astype(str) + "E" + bloc_e.astype(str)
+
+    fusionnee = grille.dissolve(by="id", aggfunc={"ind": "sum", "ind_snv": "sum", "publie": "any"}).reset_index()
+    fusionnee["population"] = fusionnee["ind"]
+
+    print(
+        f"grille fusionnée en carreaux de {resolution}m : {len(population_grid_agglo)} -> "
+        f"{len(fusionnee)} carreaux (facteur {len(population_grid_agglo) / len(fusionnee):.1f}x)"
+    )
+
+    return fusionnee[["id", "geometry", "population", "ind", "ind_snv", "publie"]]
+
+
 
