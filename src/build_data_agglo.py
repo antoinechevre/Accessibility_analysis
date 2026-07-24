@@ -504,6 +504,8 @@ def build_grid_agglo(path, output_path=None):
     print(f"population totale (ind): {population_grid_agglo['ind'].sum():.0f}")
     print(f"ecrit dans: {output_path}")
 
+    return population_grid_agglo
+
 
 def fusionner_grille_resolution(population_grid_agglo, resolution=400):
     """Fusionne les carreaux 200m de population_grid_agglo (sortie de
