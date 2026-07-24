@@ -57,12 +57,14 @@ def calculer_ttm_par_lots(
                 max_time_walking=max_time_walking,
                 max_time=max_time,
             )
-            # travel_time (minutes, plafonné à max_time) tient largement dans
-            # un int16 plutôt que le float64 par défaut — réduction directe,
-            # sans risque d'incohérence de schéma entre lots (contrairement à
-            # une colonne catégorielle, dont l'encodage pyarrow peut varier
-            # de largeur d'un lot à l'autre selon leur cardinalité).
-            ttm_lot["travel_time"] = ttm_lot["travel_time"].astype("int16")
+            # float32 plutôt que le float64 par défaut : réduit la mémoire de
+            # moitié sans changer le comportement NaN (r5py renvoie NaN pour
+            # les paires non atteignables dans max_time — tout le reste du
+            # pipeline compare ttm["travel_time"] <= cutoff en comptant sur
+            # NaN <= cutoff -> False). Un entier ("Int16" nullable) casserait
+            # ces comparaisons (NA <= cutoff lève une erreur au lieu de False)
+            # — testé, cf. IntCastingNaNError rencontrée avec un int16 simple.
+            ttm_lot["travel_time"] = ttm_lot["travel_time"].astype("float32")
 
             table = pa.Table.from_pandas(ttm_lot, preserve_index=False)
             if writer is None:
