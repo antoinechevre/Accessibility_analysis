@@ -101,7 +101,26 @@ def _construire_reseau_transport(osm_pbf_path, gtfs_r5py_path):
     évitant de reconstruire le réseau à chaque interaction pour l'analyse en
     cours."""
     _assurer_r5py_pret()
-    return r5py.TransportNetwork(osm_pbf=osm_pbf_path, gtfs=[gtfs_r5py_path])
+    try:
+        return r5py.TransportNetwork(osm_pbf=osm_pbf_path, gtfs=[gtfs_r5py_path])
+    except Exception as erreur:
+        # r5py met en cache le graphe OSM/GTFS déjà construit dans
+        # Config().CACHE_DIR (~/.cache/r5py), indexé par un hash du contenu
+        # des fichiers d'entrée — un run précédent interrompu en plein calcul
+        # (crash, kill mémoire...) peut y laisser un fichier .mapdb à moitié
+        # écrit. Tout run suivant avec le même GTFS retente alors de le
+        # relire et échoue systématiquement avec un java.io.IOError
+        # ("Wrong index checksum, store was not closed properly and could be
+        # corrupted"), sans jamais s'en remettre seul. On vide ce cache et on
+        # relance une fois avant d'abandonner pour de bon.
+        if "checksum" not in str(erreur).lower():
+            raise
+        import shutil
+
+        from r5py.util import Config
+
+        shutil.rmtree(Config().CACHE_DIR, ignore_errors=True)
+        return r5py.TransportNetwork(osm_pbf=osm_pbf_path, gtfs=[gtfs_r5py_path])
 
 
 def _construire_pipeline(zip_path, nom_reseau_str, date_JOB):
