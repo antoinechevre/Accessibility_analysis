@@ -55,6 +55,58 @@ def _retirer_table_vide_du_zip(zip_path, nom_fichier):
             zout.writestr(nom, data)
 
 
+def _nettoyer_espaces_dates_du_zip(zip_path, nom_fichier, colonnes_date):
+    """Retire les espaces en début/fin de valeur dans colonnes_date de
+    nom_fichier, dans le zip GTFS zip_path (réécrit en place si besoin).
+
+    Observé sur le GTFS du Mans : quelques lignes de calendar.txt ont un
+    end_date avec un espace en trop ("20260830 " au lieu de "20260830") —
+    valide en apparence, mais gtfs_kit (datetime.strptime via
+    gtfs_kit.helpers.datestr_to_date) échoue dessus avec "ValueError:
+    unconverted data remains: " avant même de charger le feed, plutôt que
+    d'ignorer l'espace.
+    """
+    zip_path = pathlib.Path(zip_path)
+    with zipfile.ZipFile(zip_path) as z:
+        if nom_fichier not in z.namelist():
+            return
+        with z.open(nom_fichier) as f:
+            texte = io.TextIOWrapper(f, "utf-8").read()
+
+    lignes = texte.splitlines()
+    if not lignes:
+        return
+    reader = csv.reader(lignes)
+    entete = next(reader)
+    indices = [entete.index(c) for c in colonnes_date if c in entete]
+    if not indices:
+        return
+
+    modifie = False
+    lignes_nettoyees = [entete]
+    for ligne in reader:
+        for idx in indices:
+            if idx < len(ligne) and ligne[idx] != ligne[idx].strip():
+                ligne[idx] = ligne[idx].strip()
+                modifie = True
+        lignes_nettoyees.append(ligne)
+
+    if not modifie:
+        return
+
+    print(f"{nom_fichier} : espaces en trop retirés des colonnes date dans {zip_path.name}")
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator="\n")
+    writer.writerows(lignes_nettoyees)
+
+    with zipfile.ZipFile(zip_path) as z:
+        contenu = {n: z.read(n) for n in z.namelist() if n != nom_fichier}
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zout:
+        for nom, data in contenu.items():
+            zout.writestr(nom, data)
+        zout.writestr(nom_fichier, buffer.getvalue())
+
+
 def charger_gtfs(zip_path):
     """
     Charge le fichier GTFS à l'aide de gtfs_kit.
@@ -62,6 +114,8 @@ def charger_gtfs(zip_path):
         feed: gtfs_kit Feed object
     """
     _retirer_table_vide_du_zip(zip_path, "calendar_dates.txt")
+    _nettoyer_espaces_dates_du_zip(zip_path, "calendar.txt", ["start_date", "end_date"])
+    _nettoyer_espaces_dates_du_zip(zip_path, "calendar_dates.txt", ["date"])
     print(f"Chargement du fichier GTFS : {zip_path}")
     feed = gk.read_feed(zip_path, dist_units='km')
     print(f"✓ GTFS chargé avec succès")
