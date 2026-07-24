@@ -125,6 +125,28 @@ def _construire_reseau_transport(osm_pbf_path, gtfs_r5py_path):
         return r5py.TransportNetwork(osm_pbf=osm_pbf_path, gtfs=[gtfs_r5py_path])
 
 
+def _recuperer_ou_extraire_osm_pbf(chemins, nom_reseau_str):
+    """Écrit l'extrait OSM du réseau dans chemins["osm_pbf"] : depuis le
+    cache Hugging Face si disponible, sinon en l'extrayant via Overpass (puis
+    envoi vers HF pour les prochains déploiements). L'appelant doit supprimer
+    un fichier local déjà présent avant d'appeler cette fonction s'il veut le
+    forcer à être régénéré — recuperer_depuis_hf est un no-op si la
+    destination existe déjà."""
+    osm_pbf_path = chemins["osm_pbf"]
+    nom_pbf_hf = f"memory_pbf/agglo_osm_pbf_{nom_reseau_str}.osm.pbf"
+    if recuperer_depuis_hf(nom_pbf_hf, osm_pbf_path):
+        st.write("✓ Extrait OSM récupéré depuis le cache Hugging Face")
+    else:
+        st.write("Extraction des données OSM (Overpass)... peut prendre plusieurs minutes")
+        osm_pbf_creator(chemins["decoupage_geojson"], output_pbf_path=osm_pbf_path)
+        st.write("✓ Extrait OSM prêt")
+        st.write("Envoi de l'extrait OSM vers le cache Hugging Face...")
+        if envoyer_vers_hf(osm_pbf_path, nom_pbf_hf):
+            st.write("✓ Extrait OSM envoyé vers Hugging Face (réutilisable aux prochains déploiements)")
+        else:
+            st.write("⚠ Envoi vers Hugging Face échoué (pas bloquant, disponible seulement sur ce Space)")
+
+
 def _construire_pipeline(zip_path, nom_reseau_str, date_JOB):
     """Reconstruit (ou recharge depuis le cache disque) toutes les données
     nécessaires : découpage communal, carroyage population, BPE pondérée
@@ -147,18 +169,7 @@ def _construire_pipeline(zip_path, nom_reseau_str, date_JOB):
         ttm_path = chemins["ttm"]
 
         if not os.path.exists(osm_pbf_path):
-            nom_pbf_hf = f"memory_pbf/agglo_osm_pbf_{nom_reseau_str}.osm.pbf"
-            if recuperer_depuis_hf(nom_pbf_hf, osm_pbf_path):
-                st.write("✓ Extrait OSM récupéré depuis le cache Hugging Face")
-            else:
-                st.write("Extraction des données OSM (Overpass)... peut prendre plusieurs minutes")
-                osm_pbf_creator(chemins["decoupage_geojson"], output_pbf_path=osm_pbf_path)
-                st.write("✓ Extrait OSM prêt")
-                st.write("Envoi de l'extrait OSM vers le cache Hugging Face...")
-                if envoyer_vers_hf(osm_pbf_path, nom_pbf_hf):
-                    st.write("✓ Extrait OSM envoyé vers Hugging Face (réutilisable aux prochains déploiements)")
-                else:
-                    st.write("⚠ Envoi vers Hugging Face échoué (pas bloquant, disponible seulement sur ce Space)")
+            _recuperer_ou_extraire_osm_pbf(chemins, nom_reseau_str)
 
         if not os.path.exists(ttm_path) and recuperer_depuis_hf(
             f"memory_ttm/ttm_{nom_reseau_str}.parquet", ttm_path
@@ -175,7 +186,22 @@ def _construire_pipeline(zip_path, nom_reseau_str, date_JOB):
             points["geometry"] = points.geometry.centroid
 
             gtfs_r5py = preparer_gtfs_pour_r5py(zip_path)
-            transport_network = _construire_reseau_transport(osm_pbf_path, gtfs_r5py)
+            try:
+                transport_network = _construire_reseau_transport(osm_pbf_path, gtfs_r5py)
+            except Exception:
+                # _construire_reseau_transport a déjà retenté une fois après avoir
+                # vidé le cache JVM de r5py (~/.cache/r5py) — si ça échoue encore,
+                # c'est potentiellement osm_pbf_path lui-même (sur le disque du
+                # Space) qui est corrompu, pas seulement sa copie de travail dans
+                # le cache JVM (observé sur T2C/Clermont-Ferrand : le fichier
+                # stocké sur HF était valide, donc le retéléchargement écrase la
+                # copie locale corrompue). On le supprime, on le regénère/
+                # retélécharge, et on retente une dernière fois avant d'abandonner
+                # pour de bon.
+                st.write("⚠ Échec avec l'extrait OSM local, retéléchargement depuis Hugging Face...")
+                os.remove(osm_pbf_path)
+                _recuperer_ou_extraire_osm_pbf(chemins, nom_reseau_str)
+                transport_network = _construire_reseau_transport(osm_pbf_path, gtfs_r5py)
 
             departure_datetime = datetime.datetime.strptime(date_JOB, "%Y%m%d").replace(hour=14, minute=0, second=0)
 
