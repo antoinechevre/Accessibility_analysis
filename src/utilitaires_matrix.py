@@ -4,6 +4,38 @@ import numpy as np
 import pandas as pd
 
 
+def charger_ttm(ttm_path):
+    """Charge une matrice de temps de trajet depuis un parquet (ttm_path)
+    avec des dtypes compacts : from_id/to_id (identifiants de carreau INSEE,
+    des chaînes comme "CRS3035RES200mN...") en category plutôt qu'en str, et
+    travel_time en float32. À utiliser partout où un ttm déjà calculé est
+    relu depuis le disque (cache local ou Hugging Face) — jamais via un
+    simple pd.read_parquet(ttm_path).
+
+    Sans ça : pd.read_parquet() décode par défaut les identifiants en objets
+    Python un par un (str) et travel_time en float64. Le fichier reste petit
+    sur disque (parquet compresse/dictionnarise déjà les identifiants
+    répétés), mais une fois décompressé ainsi en mémoire ça explose — mesuré
+    à 460 Mo sur disque -> 17,75 Go en mémoire pour Toulouse/Tisséo (211M
+    lignes), largement de quoi dépasser à lui seul la limite mémoire du
+    Space (32 Go), *avant* tout calcul d'indicateur ou rendu de carte. En
+    passant les colonnes id par pyarrow.Table.to_pandas(categories=...)
+    (qui les matérialise directement en category, sans jamais créer le
+    tableau de chaînes intermédiaire) et en castant travel_time en float32
+    avant la conversion pandas, le même fichier ne pèse plus que ~1,7 Go en
+    mémoire — vérifié identique numériquement aux calculs en aval
+    (cumulative_cutoff, calculer_index_benchmark, cost_to_closest...), qui
+    n'exigent pas de dtype particulier sur from_id/to_id (isin/merge/map/
+    groupby fonctionnent pareil en category qu'en str).
+    """
+    import pyarrow.parquet as pq
+
+    table = pq.read_table(ttm_path)
+    index_travel_time = table.column_names.index("travel_time")
+    table = table.set_column(index_travel_time, "travel_time", table.column("travel_time").cast("float32"))
+    return table.to_pandas(categories=["from_id", "to_id"])
+
+
 def calculer_ttm_par_lots(
     r5py_module,
     transport_network,
@@ -133,7 +165,15 @@ def deciles_niveau_vie(population_grid_agglo):
 
 
 def calculer_index_benchmark(
-    BPE_agglo, land_use_data, ttm, DOMAINES_BPE, niveau_vie, cutoffs=(30, 45, 60), seuils=(25, 50, 75), max_time=120
+    BPE_agglo,
+    land_use_data,
+    ttm,
+    DOMAINES_BPE,
+    niveau_vie,
+    cutoffs=(30, 45, 60),
+    seuils=(25, 50, 75),
+    max_time=120,
+    on_step=None,
 ):
     """Indicateurs de benchmark inter-réseaux, par domaine BPE et par
     groupe de carreaux ("Tous" + un par décile de niveau de vie) :
@@ -157,6 +197,11 @@ def calculer_index_benchmark(
     totale : à l'appelant de les ajouter avant sauvegarde, cf.
     src.hf_cache.fusionner_et_envoyer_csv). Pensé pour être appelé de la
     même façon depuis le notebook et depuis l'app Streamlit.
+
+    on_step: callback optionnel appelé avec un message de progression avant
+        chaque domaine (ex. print côté notebook, ou pour retrouver dans les
+        logs serveur — invisibles autrement — quel domaine était en cours
+        lors d'un crash mémoire côté app).
     """
     from src.BPE_traitement import land_use_data_domaine
 
@@ -181,6 +226,8 @@ def calculer_index_benchmark(
 
     lignes = []
     for d, nom_domaine in DOMAINES_BPE.items():
+        if on_step is not None:
+            on_step(f"Indicateurs de benchmark... domaine {d} ({nom_domaine})")
         land_use_data_d = land_use_data_domaine(BPE_agglo, land_use_data, d)
         total_equipement_d = land_use_data_d[d].sum()
         if total_equipement_d == 0:

@@ -23,6 +23,7 @@ from src.pipeline_donnees import MEMORY_CSV_AGGLO_DIR, DOMAINES_BPE, chemins_res
 from src.utilitaires_matrix import (
     calculer_index_benchmark,
     calculer_ttm_par_lots,
+    charger_ttm,
     cost_to_closest,
     cumulative_cutoff,
     deciles_niveau_vie,
@@ -39,6 +40,17 @@ FONDS_CARTE = {
     "CartoDB Positron": "CartoDB positron",
     "CartoDB Dark Matter": "CartoDB dark_matter",
 }
+
+
+def _log(message):
+    """Affiche message dans l'UI (comme st.write) ET dans les logs serveur
+    (print) : un crash mémoire brutal (OOM, SIGKILL — cf. runtime error
+    "Memory limit exceeded" sur le Space) ne laisse aucune trace de
+    progression si on ne compte que sur l'UI Streamlit, ce qui rend
+    impossible de savoir à quelle étape ça a planté à partir des seuls logs
+    du conteneur."""
+    st.write(message)
+    print(message, flush=True)
 
 # Durées utilisées pour les courbes "% moyen de pôles atteignables" (vue
 # d'ensemble par domaine + déclinaison par décile de niveau de vie).
@@ -135,16 +147,16 @@ def _recuperer_ou_extraire_osm_pbf(chemins, nom_reseau_str):
     osm_pbf_path = chemins["osm_pbf"]
     nom_pbf_hf = f"memory_pbf/agglo_osm_pbf_{nom_reseau_str}.osm.pbf"
     if recuperer_depuis_hf(nom_pbf_hf, osm_pbf_path):
-        st.write("✓ Extrait OSM récupéré depuis le cache Hugging Face")
+        _log("✓ Extrait OSM récupéré depuis le cache Hugging Face")
     else:
-        st.write("Extraction des données OSM (Overpass)... peut prendre plusieurs minutes")
+        _log("Extraction des données OSM (Overpass)... peut prendre plusieurs minutes")
         osm_pbf_creator(chemins["decoupage_geojson"], output_pbf_path=osm_pbf_path)
-        st.write("✓ Extrait OSM prêt")
-        st.write("Envoi de l'extrait OSM vers le cache Hugging Face...")
+        _log("✓ Extrait OSM prêt")
+        _log("Envoi de l'extrait OSM vers le cache Hugging Face...")
         if envoyer_vers_hf(osm_pbf_path, nom_pbf_hf):
-            st.write("✓ Extrait OSM envoyé vers Hugging Face (réutilisable aux prochains déploiements)")
+            _log("✓ Extrait OSM envoyé vers Hugging Face (réutilisable aux prochains déploiements)")
         else:
-            st.write("⚠ Envoi vers Hugging Face échoué (pas bloquant, disponible seulement sur ce Space)")
+            _log("⚠ Envoi vers Hugging Face échoué (pas bloquant, disponible seulement sur ce Space)")
 
 
 def _construire_pipeline(zip_path, nom_reseau_str, date_JOB):
@@ -161,7 +173,7 @@ def _construire_pipeline(zip_path, nom_reseau_str, date_JOB):
     """
     with st.status("Préparation des données d'accessibilité...", expanded=True) as status:
         population_grid_agglo, land_use_data, BPE_agglo = construire_donnees_bpe(
-            zip_path, nom_reseau_str, on_step=lambda message: st.write(message)
+            zip_path, nom_reseau_str, on_step=_log
         )
 
         chemins = chemins_reseau(nom_reseau_str)
@@ -174,10 +186,10 @@ def _construire_pipeline(zip_path, nom_reseau_str, date_JOB):
         if not os.path.exists(ttm_path) and recuperer_depuis_hf(
             f"memory_ttm/ttm_{nom_reseau_str}.parquet", ttm_path
         ):
-            st.write("✓ Matrice des temps de trajet récupérée depuis le cache Hugging Face")
+            _log("✓ Matrice des temps de trajet récupérée depuis le cache Hugging Face")
 
         if not os.path.exists(ttm_path):
-            st.write(
+            _log(
                 "Calcul de la matrice des temps de trajet (r5py)... "
                 "premier lancement pour ce réseau, peut prendre plusieurs minutes"
             )
@@ -198,7 +210,7 @@ def _construire_pipeline(zip_path, nom_reseau_str, date_JOB):
                 # copie locale corrompue). On le supprime, on le regénère/
                 # retélécharge, et on retente une dernière fois avant d'abandonner
                 # pour de bon.
-                st.write("⚠ Échec avec l'extrait OSM local, retéléchargement depuis Hugging Face...")
+                _log("⚠ Échec avec l'extrait OSM local, retéléchargement depuis Hugging Face...")
                 os.remove(osm_pbf_path)
                 _recuperer_ou_extraire_osm_pbf(chemins, nom_reseau_str)
                 transport_network = _construire_reseau_transport(osm_pbf_path, gtfs_r5py)
@@ -219,17 +231,19 @@ def _construire_pipeline(zip_path, nom_reseau_str, date_JOB):
                 max_time_walking=datetime.timedelta(minutes=30),
                 max_time=datetime.timedelta(minutes=120),
                 ttm_path=ttm_path,
-                on_step=lambda message: st.write(message),
+                on_step=_log,
             )
-            st.write("✓ Matrice des temps de trajet prête")
-            st.write("Envoi de la matrice des temps de trajet vers le cache Hugging Face...")
+            _log("✓ Matrice des temps de trajet prête")
+            _log("Envoi de la matrice des temps de trajet vers le cache Hugging Face...")
             nom_ttm_hf = f"memory_ttm/ttm_{nom_reseau_str}.parquet"
             if envoyer_vers_hf(ttm_path, nom_ttm_hf):
-                st.write("✓ Matrice envoyée vers Hugging Face (réutilisable aux prochains déploiements)")
+                _log("✓ Matrice envoyée vers Hugging Face (réutilisable aux prochains déploiements)")
             else:
-                st.write("⚠ Envoi vers Hugging Face échoué (pas bloquant, disponible seulement sur ce Space)")
+                _log("⚠ Envoi vers Hugging Face échoué (pas bloquant, disponible seulement sur ce Space)")
 
-        ttm = pd.read_parquet(ttm_path)
+        print("Chargement de la matrice des temps de trajet en mémoire...", flush=True)
+        ttm = charger_ttm(ttm_path)
+        print(f"✓ ttm chargé, {len(ttm)} lignes, {ttm.memory_usage(deep=True).sum() / 1e9:.2f} Go", flush=True)
         status.update(label="Données d'accessibilité prêtes", state="complete", expanded=False)
 
     return population_grid_agglo, land_use_data, BPE_agglo, ttm
@@ -250,6 +264,7 @@ def _carte_temps_acces_pole_domaine(
     si le filtre ne laisse aucun carreau.
     """
     nom_domaine = DOMAINES_BPE.get(domaine, domaine)
+    print(f"[carte_temps {domaine}] début, {len(population_grid_agglo)} carreaux dans la grille", flush=True)
 
     poles_domaine = land_use_data[["id", f"pole_equipements_{domaine}"]].rename(
         columns={f"pole_equipements_{domaine}": domaine}
@@ -265,6 +280,7 @@ def _carte_temps_acces_pole_domaine(
         travel_cost="travel_time",
         land_use_data=poles_domaine,
     )
+    print(f"[carte_temps {domaine}] cost_to_closest terminé", flush=True)
 
     carte_temps = population_grid_agglo[["id", "geometry"]].merge(min_time, on="id")
     if carreaux_filtre_ids is not None:
@@ -276,6 +292,7 @@ def _carte_temps_acces_pole_domaine(
     # lisibilité de la carte, au-delà seule l'idée de "trop loin" compte.
     carte_temps["travel_time_plafonne"] = carte_temps["travel_time"].clip(upper=60)
 
+    print(f"[carte_temps {domaine}] .explore() sur {len(carte_temps)} carreaux...", flush=True)
     carte = carte_temps.explore(
         column="travel_time_plafonne",
         cmap="cividis_r",
@@ -302,6 +319,7 @@ def _carte_temps_acces_pole_domaine(
         folium.Element(script_reajuster_si_masque(carte, [[miny, minx], [maxy, maxx]]))
     )
 
+    print(f"[carte_temps {domaine}] .explore() terminé", flush=True)
     return carte
 
 
@@ -318,6 +336,7 @@ def _carte_poles_accessibles_domaine(population_grid_agglo, land_use_data, ttm, 
     filtre ne laisse aucun carreau.
     """
     nom_domaine = DOMAINES_BPE.get(domaine, domaine)
+    print(f"[carte_poles {domaine}] début, {len(population_grid_agglo)} carreaux dans la grille", flush=True)
 
     poles_domaine = land_use_data[["id", f"pole_equipements_{domaine}"]].rename(
         columns={f"pole_equipements_{domaine}": domaine}
@@ -325,6 +344,7 @@ def _carte_poles_accessibles_domaine(population_grid_agglo, land_use_data, ttm, 
 
     cum_30 = cumulative_cutoff(ttm, land_use_data=poles_domaine, opportunity=domaine, travel_cost="travel_time", cutoff=30)
     cum_45 = cumulative_cutoff(ttm, land_use_data=poles_domaine, opportunity=domaine, travel_cost="travel_time", cutoff=45)
+    print(f"[carte_poles {domaine}] cumulative_cutoff (30/45) terminé", flush=True)
 
     limite_commune = max(cum_30[domaine].max(), cum_45[domaine].max())
 
@@ -336,6 +356,7 @@ def _carte_poles_accessibles_domaine(population_grid_agglo, land_use_data, ttm, 
     if carte_30.empty or carte_45.empty:
         return None
 
+    print(f"[carte_poles {domaine}] .explore() x2 sur {len(carte_30)}/{len(carte_45)} carreaux...", flush=True)
     dual_map = DualMap(tiles=FONDS_CARTE[fond_carte], layout="horizontal")
     # legend=False sur les deux : branca cible tous les colorbars de la page
     # via un sélecteur CSS non isolé par carte (d3.select(".legend.leaflet-control"),
@@ -382,6 +403,7 @@ def _carte_poles_accessibles_domaine(population_grid_agglo, land_use_data, ttm, 
     dual_map.get_root().html.add_child(folium.Element(script_reajuster_si_masque(dual_map.m1, bounds)))
     dual_map.get_root().html.add_child(folium.Element(script_reajuster_si_masque(dual_map.m2, bounds)))
 
+    print(f"[carte_poles {domaine}] .explore() terminé", flush=True)
     return dual_map
 
 
@@ -596,11 +618,14 @@ def accessibilite_index_page():
             if carte_poles is None:
                 st.info("Aucun carreau dans les déciles sélectionnés.")
             else:
+                print(f"[carte_poles {domaine}] render()...", flush=True)
                 st.components.v1.html(carte_poles.get_root().render(), height=520, scrolling=False)
+                print(f"[carte_poles {domaine}] render() terminé, save()...", flush=True)
 
                 html_path_poles = os.path.join(OUTPUT_DIR, f"accessibilite_poles_{domaine}_{nom_reseau_str}.html")
                 os.makedirs(OUTPUT_DIR, exist_ok=True)
                 carte_poles.save(html_path_poles)
+                print(f"[carte_poles {domaine}] save() terminé", flush=True)
                 with open(html_path_poles, "rb") as f:
                     st.download_button(
                         f"💾 Télécharger la carte pôles accessibles {domaine} (HTML)",
@@ -619,10 +644,13 @@ def accessibilite_index_page():
             if carte_temps is None:
                 st.info("Aucun carreau dans les déciles sélectionnés.")
             else:
+                print(f"[carte_temps {domaine}] render()...", flush=True)
                 st.components.v1.html(carte_temps.get_root().render(), height=520, scrolling=False)
+                print(f"[carte_temps {domaine}] render() terminé, save()...", flush=True)
 
                 html_path_temps = os.path.join(OUTPUT_DIR, f"accessibilite_temps_{domaine}_{nom_reseau_str}.html")
                 carte_temps.save(html_path_temps)
+                print(f"[carte_temps {domaine}] save() terminé", flush=True)
                 with open(html_path_temps, "rb") as f:
                     st.download_button(
                         f"💾 Télécharger la carte temps d'accès {domaine} (HTML)",
@@ -691,7 +719,9 @@ def accessibilite_index_page():
             )
         else:
             with st.spinner("Calcul des indicateurs de benchmark..."):
-                tableau_benchmark = calculer_index_benchmark(BPE_agglo, land_use_data, ttm, DOMAINES_BPE, niveau_vie)
+                tableau_benchmark = calculer_index_benchmark(
+                    BPE_agglo, land_use_data, ttm, DOMAINES_BPE, niveau_vie, on_step=print
+                )
 
                 chemin_decoupage = chemins_reseau(nom_reseau_str)["decoupage_csv"]
                 codes_insee_reseau = pd.read_csv(chemin_decoupage, dtype={"code_insee": str})["code_insee"]
