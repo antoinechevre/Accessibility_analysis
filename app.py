@@ -29,16 +29,21 @@ class TropAgencesError(Exception):
 # par nom de fichier GTFS : réseaux régionaux dont on sait qu'ils fonctionnent
 # malgré tout, avec un nom de réseau forcé plutôt que dérivé automatiquement
 # de agency.txt (nom_reseau_str() concatène tous les noms d'agence avec
-# " / " — pour l'IDFM, ça donne une chaîne de ~930 caractères, invalide comme
-# nom de fichier sur la plupart des OS). Ex. Île-de-France Mobilités : 51
-# agences dans agency.txt (RATP, Transilien, opérateurs de bus régionaux...),
-# mais ce fichier ne couvre en réalité que Paris + petite couronne (75/92/
-# 93/94) — cf. l'avertissement affiché dans l'onglet Accessibilité pour ce
-# réseau (RESOLUTIONS_GRILLE_SPECIALES, src/pipeline_donnees.py). Le GTFS
-# régional complet (IDFM-gtfs.zip, ~1,1 Go décompressé) est volontairement
-# exclu de cette exception : bien trop gros à traiter tel quel.
+# " / " — pour l'IDFM, ça donne une chaîne de plusieurs centaines de
+# caractères, invalide comme nom de fichier sur la plupart des OS). Île-de-
+# France Mobilités a deux GTFS distincts, tous deux forcés vers le même
+# nom_reseau_str "IDFM" (donc le même cache memory_ttm/memory_pbf sur le
+# dataset HF — un run écrase le cache de l'autre) :
+# - extrait Paris + petite couronne (75/92/93/94) — cf. l'avertissement
+#   affiché dans l'onglet Accessibilité (RESOLUTIONS_GRILLE_SPECIALES,
+#   src/pipeline_donnees.py) ;
+# - IDFM-gtfs.zip, régional complet (~1,1 Go décompressé, ~11M habitants) —
+#   déjà calculé une fois via le notebook (carreaux 800m) et son résultat
+#   téléversé sur le dataset HF, donc un run app sur ce fichier retrouve le
+#   cache plutôt que de tout recalculer.
 GTFS_NOM_RESEAU_FORCE = {
     "IDFM-gtfs_metro-rer-bus-tram_paris-petite-couronne.zip": "IDFM",
+    "IDFM-gtfs.zip": "IDFM",
 }
 
 
