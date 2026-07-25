@@ -22,6 +22,7 @@ from src.hf_cache import envoyer_vers_hf, fusionner_et_envoyer_csv, recuperer_de
 from src.pipeline_donnees import (
     MEMORY_CSV_AGGLO_DIR,
     DOMAINES_BPE,
+    RESEAUX_EXCLUS_BENCHMARK,
     RESOLUTIONS_GRILLE_SPECIALES,
     chemins_reseau,
     construire_donnees_bpe,
@@ -726,62 +727,71 @@ def accessibilite_index_page():
         declenche_auto = not reenregistrer_manuel
         st.session_state.benchmark_a_enregistrer = False
 
-        chemin_local_benchmark = os.path.join(OUTPUT_DIR, "index_benchmark_reseaux.csv")
-
-        # Le déclenchement automatique (fin de "Lancer l'analyse") ne recalcule
-        # pas si ce réseau, pour cette date_JOB, est déjà dans l'index — même
-        # GTFS, même run, recalculer calculer_index_benchmark (8 domaines x
-        # cumulative_cutoff + tri de ttm à chaque fois) ne changerait rien au
-        # résultat et coûte cher. Le bouton, lui, force toujours le recalcul
-        # (intention explicite de l'utilisateur).
-        deja_enregistre = False
-        if declenche_auto and os.path.exists(chemin_local_benchmark):
-            tableau_existant = pd.read_csv(chemin_local_benchmark, dtype={"date_JOB": str})
-            deja_enregistre = (
-                (tableau_existant["reseau"] == nom_reseau_str) & (tableau_existant["date_JOB"] == date_str)
-            ).any()
-
-        if deja_enregistre:
+        if nom_reseau_str in RESEAUX_EXCLUS_BENCHMARK:
+            # IDFM (~11 millions d'habitants) écraserait le nuage de points de
+            # l'onglet "Benchmark réseaux" (Lyon ~1M, Toulouse ~1M...) —
+            # cf. commentaire sur RESEAUX_EXCLUS_BENCHMARK dans pipeline_donnees.py.
             st.info(
-                f"Indicateurs déjà enregistrés pour {nom_reseau_str} (date JOB {date_str}) — "
-                "pas de recalcul. Utilise le bouton ci-dessus pour forcer un réenregistrement."
+                f"{nom_reseau_str} exclu du benchmark inter-réseaux (échelle de population non "
+                "comparable aux autres réseaux du fichier) — indicateurs non calculés, rien enregistré."
             )
         else:
-            with st.spinner("Calcul des indicateurs de benchmark..."):
-                tableau_benchmark = calculer_index_benchmark(
-                    BPE_agglo, land_use_data, ttm, DOMAINES_BPE, niveau_vie, on_step=print
+            chemin_local_benchmark = os.path.join(OUTPUT_DIR, "index_benchmark_reseaux.csv")
+
+            # Le déclenchement automatique (fin de "Lancer l'analyse") ne recalcule
+            # pas si ce réseau, pour cette date_JOB, est déjà dans l'index — même
+            # GTFS, même run, recalculer calculer_index_benchmark (8 domaines x
+            # cumulative_cutoff + tri de ttm à chaque fois) ne changerait rien au
+            # résultat et coûte cher. Le bouton, lui, force toujours le recalcul
+            # (intention explicite de l'utilisateur).
+            deja_enregistre = False
+            if declenche_auto and os.path.exists(chemin_local_benchmark):
+                tableau_existant = pd.read_csv(chemin_local_benchmark, dtype={"date_JOB": str})
+                deja_enregistre = (
+                    (tableau_existant["reseau"] == nom_reseau_str) & (tableau_existant["date_JOB"] == date_str)
+                ).any()
+
+            if deja_enregistre:
+                st.info(
+                    f"Indicateurs déjà enregistrés pour {nom_reseau_str} (date JOB {date_str}) — "
+                    "pas de recalcul. Utilise le bouton ci-dessus pour forcer un réenregistrement."
                 )
+            else:
+                with st.spinner("Calcul des indicateurs de benchmark..."):
+                    tableau_benchmark = calculer_index_benchmark(
+                        BPE_agglo, land_use_data, ttm, DOMAINES_BPE, niveau_vie, on_step=print
+                    )
 
-                chemin_decoupage = chemins_reseau(nom_reseau_str)["decoupage_csv"]
-                codes_insee_reseau = pd.read_csv(chemin_decoupage, dtype={"code_insee": str})["code_insee"]
-                ville_principale_reseau = ville_principale(codes_insee_reseau)
+                    chemin_decoupage = chemins_reseau(nom_reseau_str)["decoupage_csv"]
+                    codes_insee_reseau = pd.read_csv(chemin_decoupage, dtype={"code_insee": str})["code_insee"]
+                    ville_principale_reseau = ville_principale(codes_insee_reseau)
 
-                longueur_par_ligne = longueur_lignes(st.session_state.feed)
-                vkm_par_ligne_job = km_par_ligne_jour(st.session_state.feed, longueur_par_ligne, date_str)
-                total_vkm_job = vkm_par_ligne_job["total_km"].sum()
+                    longueur_par_ligne = longueur_lignes(st.session_state.feed)
+                    vkm_par_ligne_job = km_par_ligne_jour(st.session_state.feed, longueur_par_ligne, date_str)
+                    total_vkm_job = vkm_par_ligne_job["total_km"].sum()
 
-                population_totale_reseau = land_use_data["population"].sum()
+                    population_totale_reseau = land_use_data["population"].sum()
 
-                tableau_benchmark.insert(0, "population_totale", population_totale_reseau)
-                tableau_benchmark.insert(0, "vehicules_km_JOB", total_vkm_job)
-                tableau_benchmark.insert(0, "date_JOB", date_str)
-                tableau_benchmark.insert(0, "ville_principale", ville_principale_reseau)
-                tableau_benchmark.insert(0, "date_run", datetime.datetime.now().strftime("%Y-%m-%d %H:%M"))
-                tableau_benchmark.insert(0, "reseau", nom_reseau_str)
+                    tableau_benchmark.insert(0, "population_totale", population_totale_reseau)
+                    tableau_benchmark.insert(0, "vehicules_km_JOB", total_vkm_job)
+                    tableau_benchmark.insert(0, "date_JOB", date_str)
+                    tableau_benchmark.insert(0, "ville_principale", ville_principale_reseau)
+                    tableau_benchmark.insert(0, "date_run", datetime.datetime.now().strftime("%Y-%m-%d %H:%M"))
+                    tableau_benchmark.insert(0, "reseau", nom_reseau_str)
 
-                tableau_benchmark_complet = fusionner_et_envoyer_csv(
-                    tableau_benchmark,
-                    "benchmark/index_benchmark_reseaux.csv",
-                    chemin_local_benchmark,
-                    colonne_cle="reseau",
-                    valeur_cle=nom_reseau_str,
+                    tableau_benchmark_complet = fusionner_et_envoyer_csv(
+                        tableau_benchmark,
+                        "benchmark/index_benchmark_reseaux.csv",
+                        chemin_local_benchmark,
+                        colonne_cle="reseau",
+                        valeur_cle=nom_reseau_str,
+                    )
+
+                st.success(
+                    f"✓ {len(tableau_benchmark)} ligne(s) enregistrée(s) pour {nom_reseau_str} "
+                    f"(ville principale : {ville_principale_reseau}) — "
+                    f"{tableau_benchmark_complet['reseau'].nunique()} réseau(x) au total dans l'index."
                 )
-
-            st.success(
-                f"✓ {len(tableau_benchmark)} ligne(s) enregistrée(s) pour {nom_reseau_str} "
-                f"(ville principale : {ville_principale_reseau}) — "
-                f"{tableau_benchmark_complet['reseau'].nunique()} réseau(x) au total dans l'index."
-            )
 
     st.markdown("### % moyen de pôles d'équipements majeurs atteignables (pondéré par la population)")
     st.caption(

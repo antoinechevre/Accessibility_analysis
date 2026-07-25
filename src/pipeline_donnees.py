@@ -62,6 +62,13 @@ DOMAINES_BPE = {
 #   "max 4 agences" de l'app — cf. GTFS_NOM_RESEAU_FORCE dans app.py.
 RESOLUTIONS_GRILLE_SPECIALES = {"TCL": 400, "IDFM": 800}
 
+# Réseaux exclus du fichier CSV de benchmark inter-réseaux
+# (index_benchmark_reseaux.csv, cf. calculer_index_benchmark) : IDFM
+# (~11 millions d'habitants) est sur une échelle de population sans commune
+# mesure avec les autres réseaux du fichier (Lyon ~1M, Toulouse ~1M...) et
+# écraserait les nuages de points comparatifs de l'onglet "Benchmark réseaux".
+RESEAUX_EXCLUS_BENCHMARK = {"IDFM"}
+
 def chemins_reseau(nom_reseau_str):
     """Chemins de cache disque (par réseau) utilisés par le pipeline."""
     return {
