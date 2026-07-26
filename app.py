@@ -12,8 +12,9 @@ sys.path.append('..')
 import streamlit as st
 
 from src.utils import charger_gtfs
-from src.info_reseau import dates_service, nom_reseau_str
+from src.info_reseau import dates_service, nom_fichier_valide, nom_reseau_str
 from src.hf_cache import envoyer_vers_hf, lister_fichiers_hf, recuperer_depuis_hf
+from src.merge_gtfs import fusionner_gtfs
 from views.home import home_page
 from views.accessibilite_index import accessibilite_index_page
 from views.ponderation_equipements import ponderation_equipements_page
@@ -103,7 +104,17 @@ if "selected_page" not in st.session_state:
 
 # Barre latérale pour les paramètres uniquement
 st.sidebar.header("📁 Paramètres d'analyse")
-uploaded_file = st.sidebar.file_uploader("Uploader le fichier GTFS (zip)", type="zip")
+# accept_multiple_files : permet de charger plusieurs GTFS pour un même
+# réseau agglomérat non couvert par un seul GTFS (ex: Aix-Marseille, dont le
+# GTFS "Marseille" ne couvre que le RTM — pas le réseau d'Aix-en-Provence) —
+# fusionnés via src.merge_gtfs.fusionner_gtfs avant chargement (cf.
+# charger_donnees_gtfs ci-dessous). Un seul fichier reste géré exactement
+# comme avant (aucune fusion déclenchée).
+uploaded_files = st.sidebar.file_uploader(
+    "Uploader le(s) fichier(s) GTFS (zip) — plusieurs fichiers = réseaux fusionnés",
+    type="zip",
+    accept_multiple_files=True,
+)
 
 # Alternative à l'upload : choisir un GTFS déjà présent dans data/GTFS ou
 # dans le catalogue du dataset HF (mêmes fichiers, téléversés une fois pour
@@ -113,7 +124,6 @@ uploaded_file = st.sidebar.file_uploader("Uploader le fichier GTFS (zip)", type=
 # contenir 1-2 fichiers déjà téléchargés à la demande lors d'une sélection
 # précédente (cf. charger_donnees_gtfs ci-dessous) — s'arrêter au premier
 # non-vide masquerait alors silencieusement tout le reste du catalogue HF.
-AUCUN_GTFS_LOCAL = "— aucun —"
 GTFS_DATA_DIR = os.path.join(os.getcwd(), "data", "GTFS")
 gtfs_locaux_disque = sorted(
     f for f in os.listdir(GTFS_DATA_DIR) if f.lower().endswith(".zip")
@@ -121,10 +131,26 @@ gtfs_locaux_disque = sorted(
 gtfs_locaux_hf = sorted(f for f in lister_fichiers_hf("GTFS") if f.lower().endswith(".zip"))
 gtfs_locaux = sorted(set(gtfs_locaux_disque) | set(gtfs_locaux_hf))
 
-gtfs_local_choisi = st.sidebar.selectbox(
-    "...ou choisir un GTFS déjà présent",
-    options=[AUCUN_GTFS_LOCAL] + gtfs_locaux,
+gtfs_locaux_choisis = st.sidebar.multiselect(
+    "...ou choisir un/des GTFS déjà présent(s) — plusieurs = réseaux fusionnés",
+    options=gtfs_locaux,
 )
+
+nb_sources_gtfs = len(uploaded_files) + len(gtfs_locaux_choisis)
+
+# nom_reseau_str() concatène les noms de toutes les agences des GTFS
+# fusionnés (via " / ") : pour 2+ GTFS distincts, souvent long/peu lisible
+# comme nom de réseau — même problème que documenté pour IDFM dans
+# GTFS_NOM_RESEAU_FORCE ci-dessus, mais ici la combinaison de fichiers n'est
+# pas connue à l'avance (upload libre), donc pas figeable dans un dict :
+# champ optionnel plutôt qu'une nouvelle entrée GTFS_NOM_RESEAU_FORCE par
+# combinaison.
+nom_reseau_force_saisi = None
+if nb_sources_gtfs > 1:
+    nom_reseau_force_saisi = st.sidebar.text_input(
+        "Nom du réseau fusionné (optionnel — sinon dérivé des agences)",
+        placeholder="ex: Aix_Marseille",
+    ).strip() or None
 
 # Variables globales pour stocker les résultats. Uniquement celles
 # effectivement lues ailleurs (views/*.py, charger_donnees_gtfs ci-dessous) :
@@ -152,40 +178,62 @@ if "last_uploaded_name" not in st.session_state:
 # partir du GTFS (le dernier mardi ou jeudi de la plage de service fiable,
 # toujours le même pour un GTFS donné — voir src/info_reseau.dates_service).
 def charger_donnees_gtfs():
-    if uploaded_file is not None:
-        nom_gtfs = uploaded_file.name
-        lire_gtfs = uploaded_file.read
-    elif gtfs_local_choisi != AUCUN_GTFS_LOCAL:
-        nom_gtfs = gtfs_local_choisi
-        chemin_gtfs_local = os.path.join(GTFS_DATA_DIR, gtfs_local_choisi)
+    # Une "source" = (nom, fonction de lecture des octets du zip). uploaded_files
+    # (upload libre) et gtfs_locaux_choisis (catalogue disque/HF) sont combinables
+    # (ex: un GTFS uploadé + un GTFS du catalogue) : concaténés en une seule
+    # liste de sources plutôt que traités comme deux chemins exclusifs.
+    sources = [(f.name, f.read) for f in uploaded_files]
+    for nom in gtfs_locaux_choisis:
+        chemin_gtfs_local = os.path.join(GTFS_DATA_DIR, nom)
         # recuperer_depuis_hf() ne fait rien si déjà présent en local (cas
         # gtfs_locaux_disque) : pas besoin de distinguer les deux sources ici.
         if not os.path.exists(chemin_gtfs_local):
-            with st.spinner(f"Récupération de {gtfs_local_choisi} depuis Hugging Face..."):
-                if not recuperer_depuis_hf(f"GTFS/{gtfs_local_choisi}", chemin_gtfs_local):
-                    st.error(f"Impossible de récupérer {gtfs_local_choisi} depuis Hugging Face.")
+            with st.spinner(f"Récupération de {nom} depuis Hugging Face..."):
+                if not recuperer_depuis_hf(f"GTFS/{nom}", chemin_gtfs_local):
+                    st.error(f"Impossible de récupérer {nom} depuis Hugging Face.")
                     return False
-        lire_gtfs = lambda: open(chemin_gtfs_local, "rb").read()
-    else:
+        sources.append((nom, lambda chemin=chemin_gtfs_local: open(chemin, "rb").read()))
+
+    if not sources:
         return False
 
-    # Ne recharger le GTFS que si un nouveau fichier a été sélectionné,
-    # pas à chaque interaction
+    fusion = len(sources) > 1
+    # Nom stable et déterministe (ordre alphabétique, pas l'ordre de sélection
+    # dans l'UI) pour que nouveau_fichier ci-dessous ne redéclenche pas un
+    # rechargement à chaque rerun Streamlit juste parce que l'ordre affiché a
+    # changé.
+    noms_tries = sorted(nom for nom, _ in sources)
+    nom_gtfs = "+".join(noms_tries) if fusion else noms_tries[0]
+
+    # Ne recharger le GTFS que si la sélection a changé, pas à chaque interaction
     nouveau_fichier = nom_gtfs != st.session_state.last_uploaded_name
 
     if not nouveau_fichier and st.session_state.feed is not None:
         return True
 
-    # Copie dans un fichier temporaire (conservé pour toute la session :
-    # create_carte_arrets recharge le feed depuis ce chemin pour tracer les
-    # lignes) plutôt que d'opérer directement sur data/GTFS/<fichier> : entre
-    # autres, charger_gtfs() peut réécrire le zip en place si calendar_dates.txt
-    # est vide (cf. src/utils._retirer_table_vide_du_zip) — sur le fichier
-    # original de data/GTFS, ça modifierait silencieusement la source versionnée
-    # sur le dataset HF.
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp_file:
-        tmp_file.write(lire_gtfs())
-        GTFS_PATH = tmp_file.name
+    # Copie dans un/des fichier(s) temporaire(s) (le résultat final GTFS_PATH
+    # est conservé pour toute la session : create_carte_arrets recharge le feed
+    # depuis ce chemin pour tracer les lignes) plutôt que d'opérer directement
+    # sur data/GTFS/<fichier> : entre autres, charger_gtfs() peut réécrire le
+    # zip en place si calendar_dates.txt est vide (cf.
+    # src/utils._retirer_table_vide_du_zip) — sur le fichier original de
+    # data/GTFS, ça modifierait silencieusement la source versionnée sur le
+    # dataset HF.
+    chemins_temp = []
+    for nom, lire_gtfs in sources:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp_file:
+            tmp_file.write(lire_gtfs())
+            chemins_temp.append(tmp_file.name)
+
+    if fusion:
+        with st.spinner(f"Fusion de {len(sources)} GTFS ({', '.join(noms_tries)})..."):
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp_file:
+                GTFS_PATH = tmp_file.name
+            fusionner_gtfs(chemins_temp, GTFS_PATH)
+        for chemin in chemins_temp:
+            os.unlink(chemin)
+    else:
+        GTFS_PATH = chemins_temp[0]
 
     try:
         # Charger le GTFS
@@ -196,12 +244,14 @@ def charger_donnees_gtfs():
         # regroupant de nombreuses agences ferait exploser les temps de calcul
         # et n'a pas de sens pour les indicateurs arrêts/tronçons proposés ici)
         # — sauf exception nommée explicitement (cf. GTFS_NOM_RESEAU_FORCE), et
-        # seulement pour un GTFS choisi dans le catalogue existant (uploaded_file
-        # is None), jamais pour un upload : l'exception est vérifiée pour CE
-        # fichier précis (extrait Paris + petite couronne connu), pas pour
-        # n'importe quel GTFS qui porterait le même nom.
+        # seulement pour un unique GTFS choisi dans le catalogue existant (pas
+        # un upload, pas une fusion) : l'exception est vérifiée pour CE fichier
+        # précis (extrait Paris + petite couronne connu), pas pour n'importe
+        # quel GTFS qui porterait le même nom.
         nb_agences = len(feed.agency)
-        exception_valide = uploaded_file is None and nom_gtfs in GTFS_NOM_RESEAU_FORCE
+        exception_valide = (
+            not fusion and not uploaded_files and nom_gtfs in GTFS_NOM_RESEAU_FORCE
+        )
         if nb_agences > 4 and not exception_valide:
             raise TropAgencesError(nb_agences)
 
@@ -215,10 +265,16 @@ def charger_donnees_gtfs():
         # seul joint les agences par " / ", qui casse la construction des chemins
         # pour un GTFS multi-agences (ex: Valenciennes, OSError "non-existent
         # directory" car chaque "/" est lu comme un séparateur de répertoire).
-        # Forcé plutôt que dérivé pour les exceptions de GTFS_NOM_RESEAU_FORCE
-        # (cf. commentaire de sa définition : nom_reseau_str() y produirait un
-        # nom bien trop long, invalide comme composant de chemin de fichier).
-        reseau_str = GTFS_NOM_RESEAU_FORCE[nom_gtfs] if exception_valide else str(nom_reseau_str(feed))
+        # Priorité : nom saisi dans nom_reseau_force_saisi (fusion, cf. sa
+        # définition ci-dessus) > GTFS_NOM_RESEAU_FORCE (exceptions nommées,
+        # ex: IDFM, où nom_reseau_str() produirait aussi un nom bien trop
+        # long) > dérivé automatiquement des agences.
+        if nom_reseau_force_saisi:
+            reseau_str = nom_fichier_valide(nom_reseau_force_saisi)
+        elif exception_valide:
+            reseau_str = GTFS_NOM_RESEAU_FORCE[nom_gtfs]
+        else:
+            reseau_str = str(nom_reseau_str(feed))
 
         # Stocker dans session_state
         st.session_state.feed = feed
@@ -227,14 +283,16 @@ def charger_donnees_gtfs():
         st.session_state.nom_reseau_str = reseau_str
         st.session_state.last_uploaded_name = nom_gtfs
 
-        # GTFS uploadé (pas choisi dans le catalogue existant) et jamais vu :
-        # renvoyé vers le dataset HF pour que les prochains déploiements /
-        # visiteurs le retrouvent dans "...ou choisir un GTFS déjà présent"
-        # sans avoir à le réuploader — même principe que les caches dérivés
-        # (extrait OSM, matrice des temps de trajet, découpage communal, cf.
-        # src/hf_cache.py et src/pipeline_donnees.py). Best-effort, comme les
-        # autres appels à envoyer_vers_hf : n'empêche jamais le run en cours.
-        if uploaded_file is not None and nom_gtfs not in gtfs_locaux:
+        # GTFS uploadé (pas choisi dans le catalogue existant) et jamais vu,
+        # SEUL (pas une fusion — le zip fusionné n'a pas vocation à réapparaître
+        # tel quel dans le catalogue) : renvoyé vers le dataset HF pour que les
+        # prochains déploiements/visiteurs le retrouvent dans "...ou choisir un
+        # GTFS déjà présent" sans avoir à le réuploader — même principe que les
+        # caches dérivés (extrait OSM, matrice des temps de trajet, découpage
+        # communal, cf. src/hf_cache.py et src/pipeline_donnees.py). Best-effort,
+        # comme les autres appels à envoyer_vers_hf : n'empêche jamais le run
+        # en cours.
+        if not fusion and uploaded_files and nom_gtfs not in gtfs_locaux:
             if envoyer_vers_hf(GTFS_PATH, f"GTFS/{nom_gtfs}"):
                 st.toast(f"✓ {nom_gtfs} envoyé vers Hugging Face (réutilisable aux prochains déploiements)")
 
