@@ -37,6 +37,23 @@ def import_BPE(BPE_URL):
         print(f"BPE25 déjà présent en local, pas de téléchargement : {BPE_PATH}")
 
 
+# Paris/Lyon/Marseille (PLM) : ces 3 villes sont subdivisées en arrondissements
+# municipaux, chacun avec son propre code INSEE, EN PLUS du code de la ville
+# entière. Les géocodeurs utilisés pour construire decoupage_agglo.csv (cf.
+# src/build_data_agglo.codes_communes_via_api) renvoient le code de ville
+# entière (13055, 69123, 75056), mais le BPE (colonne DEPCOM) localise chaque
+# équipement au niveau de l'arrondissement (13201-13216, 69381-69389,
+# 75101-75120) — jamais au code de ville entière. Sans expansion, le filtre
+# DEPCOM ci-dessous exclut donc silencieusement TOUS les équipements de la
+# ville (observé sur Marseille : les 43 445 équipements de la ville, 100%,
+# disparaissent de la carte au profit des seules communes voisines).
+CODES_ARRONDISSEMENTS_PLM = {
+    "75056": [f"751{i:02d}" for i in range(1, 21)],  # Paris
+    "69123": [f"6938{i}" for i in range(1, 10)],  # Lyon
+    "13055": [f"132{i:02d}" for i in range(1, 17)],  # Marseille
+}
+
+
 def filtre_BPE (DECOUPAGE_COM_PATH_CSV,population_grid_agglo):
 
     # BPE25.parquet (INSEE) est un parquet tabulaire classique (colonnes LONGITUDE/
@@ -49,6 +66,10 @@ def filtre_BPE (DECOUPAGE_COM_PATH_CSV,population_grid_agglo):
     # reprojection). code_insee est un int (ex: 17300) ; DEPCOM dans le BPE est une
     # chaîne de 5 caractères (ex: "17300") : on caste et on zero-pad pour faire matcher.
     codes_insee_agglo = (pd.read_csv(DECOUPAGE_COM_PATH_CSV))["code_insee"].astype(str).str.zfill(5)
+    codes_insee_agglo = pd.concat(
+        [codes_insee_agglo]
+        + [pd.Series(CODES_ARRONDISSEMENTS_PLM[code]) for code in codes_insee_agglo if code in CODES_ARRONDISSEMENTS_PLM]
+    ).drop_duplicates()
 
     BPE_agglo = BPE_agglo[BPE_agglo["DEPCOM"].isin(codes_insee_agglo)].copy() # sélectionne BDD BPE seulement sur découpage agglo.csv 
 
