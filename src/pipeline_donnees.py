@@ -60,7 +60,12 @@ DOMAINES_BPE = {
 #   suffirait probablement pas. Ce GTFS (Paris + petite couronne 75/92/93/94
 #   uniquement, pas la grande couronne) est aussi une exception au garde-fou
 #   "max 4 agences" de l'app — cf. GTFS_NOM_RESEAU_FORCE dans app.py.
-RESOLUTIONS_GRILLE_SPECIALES = {"TCL": 400, "IDFM": 800}
+# - Aix_Marseille (800m) : GTFS agrégé "mamp" couvrant bien plus que la seule
+#   métropole Aix-Marseille-Provence (283 communes identifiées, de Nice à
+#   Nîmes à Briançon — vraisemblablement des lignes TER régionales incluses
+#   dans le GTFS), échelle comparable à IDFM. Également une exception au
+#   garde-fou "max 4 agences" — cf. GTFS_NOM_RESEAU_FORCE dans app.py.
+RESOLUTIONS_GRILLE_SPECIALES = {"TCL": 400, "IDFM": 800, "Aix_Marseille": 800}
 
 # Réseaux exclus du fichier CSV de benchmark inter-réseaux
 # (index_benchmark_reseaux.csv, cf. calculer_index_benchmark) : IDFM
