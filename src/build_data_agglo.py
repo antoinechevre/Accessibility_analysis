@@ -531,11 +531,19 @@ def fusionner_grille_resolution(population_grid_agglo, resolution=400):
     dtypes compacts de charger_ttm). Passer à 400m réduit le nombre de
     carreaux d'un facteur ~4 (2x2 en x et y), donc le ttm d'un facteur ~16.
 
-    Regroupement par bloc de `resolution` mètres à partir de centroid_x/
-    centroid_y (coordonnées EPSG:2154, calculées par build_grid_agglo après
-    reprojection — donc pas exactement alignées sur la grille native 200m en
-    EPSG:3035, mais suffisamment proches pour que le simple floor-division
-    regroupe correctement chaque bloc de carreaux 200m adjacents). ind
+    Regroupement par bloc de `resolution` mètres à partir des coordonnées N/E
+    natives EPSG:3035 encodées dans "id" (ex: "CRS3035RES200mN2607600E3467800"
+    -> N=2607600, E=3467800), pas des centroid_x/centroid_y (EPSG:2154,
+    calculées par build_grid_agglo après reprojection). Utiliser les
+    centroïdes reprojetés a été essayé puis abandonné : la reprojection
+    EPSG:3035 -> EPSG:2154 déforme légèrement les coordonnées (pas une simple
+    translation), donc quelques carreaux 200m proches d'une frontière de bloc
+    basculaient dans le bloc voisin selon la distorsion locale — observé sur
+    Lyon/TCL, carte "Tout équipements pondérés" avec des blocs 400m aux
+    contours en dents de scie / valeurs incohérentes d'un bloc à l'autre.
+    Les N/E natifs de "id", eux, sont des entiers exacts alignés sur la
+    grille par construction (cf. build_grid_agglo) : aucune dérive possible
+    quel que soit l'endroit du monde. ind
     (population) et ind_snv (Filosofi : déjà une SOMME des niveaux de vie
     winsorisés des individus du carreau, pas une moyenne) se somment
     naturellement sur les sous-carreaux d'un même bloc.
@@ -553,8 +561,9 @@ def fusionner_grille_resolution(population_grid_agglo, resolution=400):
     l'agglo par build_grid_agglo).
     """
     grille = population_grid_agglo.copy()
-    bloc_e = (grille["centroid_x"] // resolution * resolution).astype(int)
-    bloc_n = (grille["centroid_y"] // resolution * resolution).astype(int)
+    coords_natives = grille["id"].str.extract(r"N(\d+)E(\d+)").astype(int)
+    bloc_n = coords_natives[0] // resolution * resolution
+    bloc_e = coords_natives[1] // resolution * resolution
     grille["id"] = "CRS3035RES" + str(resolution) + "mN" + bloc_n.astype(str) + "E" + bloc_e.astype(str)
 
     fusionnee = grille.dissolve(by="id", aggfunc={"ind": "sum", "ind_snv": "sum", "publie": "any"}).reset_index()
