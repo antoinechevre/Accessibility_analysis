@@ -146,11 +146,27 @@ def _construire_reseau_transport(osm_pbf_path, gtfs_r5py_path):
         # source, lui, est valide). Dans les deux cas ça ne se répare jamais
         # tout seul. On vide ce cache et on relance une fois avant d'abandonner
         # pour de bon.
+        #
+        # On NE vide PAS Config().CACHE_DIR en bloc (shutil.rmtree) : r5py y
+        # stocke aussi, à plat, le .jar R5 téléchargé une fois pour toutes
+        # (ex: r5-v7.5.1-r5py-all.jar, ~200+ Mo) — le supprimer plante la
+        # suite immédiatement (NoSuchFileException) puisque la JVM, déjà
+        # démarrée dans ce process, ne peut pas être relancée pour le
+        # retélécharger avant la fin du process (observé sur le notebook
+        # IDF : plus aucune récupération possible sans redémarrer le
+        # kernel). On supprime donc tout SAUF les .jar.
         import shutil
 
         from r5py.util import Config
 
-        shutil.rmtree(Config().CACHE_DIR, ignore_errors=True)
+        cache_dir = Config().CACHE_DIR
+        for entree in cache_dir.iterdir():
+            if entree.suffix == ".jar":
+                continue
+            if entree.is_dir():
+                shutil.rmtree(entree, ignore_errors=True)
+            else:
+                entree.unlink(missing_ok=True)
         return r5py.TransportNetwork(osm_pbf=osm_pbf_path, gtfs=[gtfs_r5py_path])
 
 
