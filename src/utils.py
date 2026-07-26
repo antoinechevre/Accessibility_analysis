@@ -28,6 +28,53 @@ LIBELLES_MODE = {
 }
 
 
+def _aplatir_zip_gtfs(zip_path):
+    """Remet à la racine du zip les tables GTFS placées dans un sous-dossier,
+    et retire les résidus non-GTFS (dossier __MACOSX/, fichiers AppleDouble
+    "._*") avant chargement (réécrit le zip en place si besoin).
+
+    Observé sur le GTFS de Périgueux (CA Grand Périgueux) : toutes les
+    tables sont zippées sous "ca_grand_perigueux-aggregated-gtfs/" plutôt
+    qu'à la racine, avec en plus un dossier __MACOSX/ ajouté par macOS lors
+    de la compression. gtfs_kit tolère ce genre de zip (retrouve les
+    fichiers par nom quel que soit leur chemin), mais r5py (lecteur GTFS
+    Conveyal/OneBusAway, cf. preparer_gtfs_pour_r5py ci-dessous) le rejette
+    avec TableInSubdirectoryError — plus sûr de corriger une fois ici, en
+    amont de tous les lecteurs, que côté r5py seulement.
+    """
+    zip_path = pathlib.Path(zip_path)
+    with zipfile.ZipFile(zip_path) as z:
+        entrees = []
+        noms_vus = set()
+        modifie = False
+        for item in z.infolist():
+            if item.is_dir():
+                modifie = True
+                continue
+            nom = item.filename
+            base = nom.rsplit("/", 1)[-1]
+            if "__MACOSX" in nom.split("/") or base.startswith("._") or not base:
+                modifie = True
+                continue
+            if base != nom:
+                modifie = True
+            if base in noms_vus:
+                # collision improbable (même nom dans deux sous-dossiers) :
+                # on garde la première entrée rencontrée
+                continue
+            noms_vus.add(base)
+            entrees.append((base, z.read(item.filename)))
+
+        if not modifie:
+            return zip_path
+
+    print(f"GTFS aplati (sous-dossier / résidus __MACOSX retirés) dans {zip_path.name}")
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zout:
+        for nom, data in entrees:
+            zout.writestr(nom, data)
+    return zip_path
+
+
 def _retirer_table_vide_du_zip(zip_path, nom_fichier):
     """Retire nom_fichier du zip GTFS zip_path (réécrit en place) s'il est
     présent mais vide (en-tête seul, aucune ligne de données).
@@ -113,6 +160,7 @@ def charger_gtfs(zip_path):
     Returns:
         feed: gtfs_kit Feed object
     """
+    _aplatir_zip_gtfs(zip_path)
     _retirer_table_vide_du_zip(zip_path, "calendar_dates.txt")
     _nettoyer_espaces_dates_du_zip(zip_path, "calendar.txt", ["start_date", "end_date"])
     _nettoyer_espaces_dates_du_zip(zip_path, "calendar_dates.txt", ["date"])

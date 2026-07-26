@@ -154,16 +154,25 @@ def _construire_reseau_transport(osm_pbf_path, gtfs_r5py_path):
         return r5py.TransportNetwork(osm_pbf=osm_pbf_path, gtfs=[gtfs_r5py_path])
 
 
-def _recuperer_ou_extraire_osm_pbf(chemins, nom_reseau_str):
+def _recuperer_ou_extraire_osm_pbf(chemins, nom_reseau_str, forcer_extraction=False):
     """Écrit l'extrait OSM du réseau dans chemins["osm_pbf"] : depuis le
     cache Hugging Face si disponible, sinon en l'extrayant via Overpass (puis
     envoi vers HF pour les prochains déploiements). L'appelant doit supprimer
     un fichier local déjà présent avant d'appeler cette fonction s'il veut le
     forcer à être régénéré — recuperer_depuis_hf est un no-op si la
-    destination existe déjà."""
+    destination existe déjà.
+
+    forcer_extraction=True : saute le cache Hugging Face et réextrait
+    directement via Overpass. Nécessaire pour le retry de
+    _construire_pipeline : si l'extrait qui vient d'échouer au chargement
+    r5py a été récupéré depuis HF, cet extrait-là EST le cache HF — le
+    retélécharger renverrait les mêmes octets corrompus en boucle (observé
+    sur le GTFS de Périgueux : échec systématique malgré le retry). Une
+    réextraction réussie écrase ensuite ce cache HF via envoyer_vers_hf
+    ci-dessous, ce qui répare aussi les prochains déploiements."""
     osm_pbf_path = chemins["osm_pbf"]
     nom_pbf_hf = f"memory_pbf/agglo_osm_pbf_{nom_reseau_str}.osm.pbf"
-    if recuperer_depuis_hf(nom_pbf_hf, osm_pbf_path):
+    if not forcer_extraction and recuperer_depuis_hf(nom_pbf_hf, osm_pbf_path):
         _log("✓ Extrait OSM récupéré depuis le cache Hugging Face")
     else:
         _log("Extraction des données OSM (Overpass)... peut prendre plusieurs minutes")
@@ -224,12 +233,15 @@ def _construire_pipeline(zip_path, nom_reseau_str, date_JOB):
                 # Space) qui est corrompu, pas seulement sa copie de travail dans
                 # le cache JVM (observé sur T2C/Clermont-Ferrand : le fichier
                 # stocké sur HF était valide, donc le retéléchargement écrase la
-                # copie locale corrompue). On le supprime, on le regénère/
-                # retélécharge, et on retente une dernière fois avant d'abandonner
-                # pour de bon.
-                _log("⚠ Échec avec l'extrait OSM local, retéléchargement depuis Hugging Face...")
+                # copie locale corrompue). On le supprime et on le régénère —
+                # forcer_extraction=True : si osm_pbf_path venait déjà du cache
+                # HF, un simple retéléchargement renverrait le même fichier
+                # corrompu en boucle (observé sur le GTFS de Périgueux, échec
+                # systématique malgré ce retry) — on réextrait donc directement
+                # via Overpass, ce qui écrase aussi le cache HF une fois réussi.
+                _log("⚠ Échec avec l'extrait OSM local, réextraction depuis Overpass...")
                 os.remove(osm_pbf_path)
-                _recuperer_ou_extraire_osm_pbf(chemins, nom_reseau_str)
+                _recuperer_ou_extraire_osm_pbf(chemins, nom_reseau_str, forcer_extraction=True)
                 transport_network = _construire_reseau_transport(osm_pbf_path, gtfs_r5py)
 
             departure_datetime = datetime.datetime.strptime(date_JOB, "%Y%m%d").replace(hour=14, minute=0, second=0)
