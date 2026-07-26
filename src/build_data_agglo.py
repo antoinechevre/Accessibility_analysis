@@ -280,6 +280,17 @@ def _telecharger_tuile_overpass(bbox, output_path, session, overpass_url, timeou
         f"(node({min_lat},{min_lon},{max_lat},{max_lon});"
         f"way({min_lat},{min_lon},{max_lat},{max_lon});"
         f"relation({min_lat},{min_lon},{max_lat},{max_lon}););"
+        # (._;>;) : récupère aussi tous les nœuds référencés par les ways/relations
+        # ci-dessus, même hors de la bbox interrogée. Sans ça, un way qui ne fait que
+        # longer/traverser le bord de la bbox (route, rivière...) est renvoyé avec sa
+        # liste de nœuds, mais seuls les nœuds tombant dans la bbox sont eux-mêmes
+        # présents dans la réponse — les autres sont des références "dans le vide".
+        # osmium (merge/extract) ne valide pas cette cohérence et laisse passer un
+        # .osm.pbf avec des ways à la géométrie trouée, mais r5py, plus strict,
+        # échoue dessus ("Writer thread failed" / "Error occurred while parsing OSM
+        # file"). Vérifié sur une tuile réelle près de Périgueux : 3450 nœuds
+        # référencés sur 15794 manquaient sans cette clause, 0 avec.
+        "(._;>;);"
         "out body;"  # tags + géométrie seulement (pas d'historique d'édition : ~3-4x plus léger que "out meta")
     )
     headers = {"User-Agent": "Dossier_index_def/1.0 (build_data_agglo.py)"}
