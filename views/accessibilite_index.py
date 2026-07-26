@@ -328,6 +328,13 @@ def _carte_temps_acces_pole_domaine(
         tiles=FONDS_CARTE[fond_carte],
         legend=False,  # légende maison ci-dessous (cf. echelle_continue_html)
         style_kwds={"weight": 0, "opacity": 0},
+        # prefer_canvas : sans ça, Leaflet rend chaque carreau en SVG et laisse
+        # un fin liseré visible entre deux carreaux adjacents (antialiasing des
+        # bords, même à weight=0) — flagrant sur les grilles denses (ex: Lyon/
+        # TCL, carreaux 400m) où ça donne un effet de hachures sur toute la
+        # carte. Le rendu canvas rasterise les polygones plutôt que de
+        # composer des tracés vectoriels séparés, ce qui élimine ces liserés.
+        map_kwds={"prefer_canvas": True},
     )
 
     carte.get_root().html.add_child(
@@ -386,7 +393,14 @@ def _carte_poles_accessibles_domaine(population_grid_agglo, land_use_data, ttm, 
         return None
 
     print(f"[carte_poles {domaine}] .explore() x2 sur {len(carte_30)}/{len(carte_45)} carreaux...", flush=True)
-    dual_map = DualMap(tiles=FONDS_CARTE[fond_carte], layout="horizontal")
+    # prefer_canvas : sans ça, Leaflet rend chaque carreau en SVG et laisse un
+    # fin liseré visible entre deux carreaux adjacents (antialiasing des bords,
+    # même à weight=0 dans les .explore() ci-dessous) — flagrant sur les
+    # grilles denses (ex: Lyon/TCL, carreaux 400m) où ça donne un effet de
+    # hachures sur toute la carte. Le rendu canvas rasterise les polygones
+    # plutôt que de composer des tracés vectoriels séparés, ce qui élimine ces
+    # liserés. DualMap transmet ses kwargs à ses deux Map internes (m1/m2).
+    dual_map = DualMap(tiles=FONDS_CARTE[fond_carte], layout="horizontal", prefer_canvas=True)
     # legend=False sur les deux : branca cible tous les colorbars de la page
     # via un sélecteur CSS non isolé par carte (d3.select(".legend.leaflet-control"),
     # premier match seulement) — le second colorbar s'empile dans le premier
