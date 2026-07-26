@@ -1,0 +1,30 @@
+name: Sync to Hugging Face Space
+
+# Miroir automatique de main vers le Space Hugging Face
+# (https://huggingface.co/spaces/antoinechevre/accessibility), qui a son
+# propre dépôt git séparé de GitHub — un simple push ici ne le met pas à
+# jour tout seul. Nécessite un secret de dépôt HF_TOKEN (token Hugging Face
+# avec droit d'écriture sur le Space), à ajouter dans Settings > Secrets
+# and variables > Actions.
+#
+# --force : GitHub fait autorité. Toute modification faite directement sur
+# le Space (interface web HF) serait écrasée au prochain push ici.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push vers le Space Hugging Face
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git push --force "https://hf:${HF_TOKEN}@huggingface.co/spaces/antoinechevre/accessibility" HEAD:main
