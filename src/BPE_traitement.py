@@ -150,10 +150,10 @@ def carte_ponderation_domaine(DOMAINES_BPE,population_grid_agglo,BPE_agglo,land_
         legend=True,
         legend_kwds={"caption": f"{nom_domaine} (pondéré)"},
         style_kwds={"weight": 0, "opacity": 0},
-        # prefer_canvas : évite le liseré visible entre deux carreaux
-        # adjacents (antialiasing SVG des bords même à weight=0), flagrant
-        # sur les grilles denses — cf. même correctif dans accessibilite_index.py.
-        map_kwds={"prefer_canvas": True},
+        # prefer_canvas : argument direct de .explore() (pas dans map_kwds,
+        # que geopandas rejette explicitement pour ce paramètre) — cf. même
+        # correctif dans accessibilite_index.py.
+        prefer_canvas=True,
     )
 
     minx, miny, maxx, maxy = grille.to_crs(epsg=4326).total_bounds

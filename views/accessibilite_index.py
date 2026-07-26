@@ -328,13 +328,11 @@ def _carte_temps_acces_pole_domaine(
         tiles=FONDS_CARTE[fond_carte],
         legend=False,  # légende maison ci-dessous (cf. echelle_continue_html)
         style_kwds={"weight": 0, "opacity": 0},
-        # prefer_canvas : sans ça, Leaflet rend chaque carreau en SVG et laisse
-        # un fin liseré visible entre deux carreaux adjacents (antialiasing des
-        # bords, même à weight=0) — flagrant sur les grilles denses (ex: Lyon/
-        # TCL, carreaux 400m) où ça donne un effet de hachures sur toute la
-        # carte. Le rendu canvas rasterise les polygones plutôt que de
-        # composer des tracés vectoriels séparés, ce qui élimine ces liserés.
-        map_kwds={"prefer_canvas": True},
+        # prefer_canvas : argument direct de .explore() (pas dans map_kwds,
+        # que geopandas rejette explicitement pour ce paramètre — ValueError
+        # "cannot be specified in map_kwds"). Fait rasteriser les polygones
+        # par Leaflet plutôt que de composer des tracés vectoriels séparés.
+        prefer_canvas=True,
     )
 
     carte.get_root().html.add_child(

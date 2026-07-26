@@ -187,10 +187,10 @@ def carte_population_infracommunale(population_grid_agglo, tiles="CartoDB positr
                 "opacity": 0,
             }
         },
-        # prefer_canvas : évite le liseré visible entre deux carreaux
-        # adjacents (antialiasing SVG des bords même à weight=0), flagrant
-        # sur les grilles denses — cf. même correctif dans accessibilite_index.py.
-        map_kwds={"prefer_canvas": True},
+        # prefer_canvas : argument direct de .explore() (pas dans map_kwds,
+        # que geopandas rejette explicitement pour ce paramètre) — cf. même
+        # correctif dans accessibilite_index.py.
+        prefer_canvas=True,
     )
     carte.get_root().html.add_child(
         folium.Element(titre_carte_html("Population infracommunale INSEE 2019"))
