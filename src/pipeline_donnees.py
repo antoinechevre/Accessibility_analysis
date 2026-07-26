@@ -67,6 +67,13 @@ DOMAINES_BPE = {
 #   garde-fou "max 4 agences" — cf. GTFS_NOM_RESEAU_FORCE dans app.py.
 RESOLUTIONS_GRILLE_SPECIALES = {"TCL": 400, "IDFM": 800, "Aix_Marseille": 800}
 
+# Réseaux pour lesquels le lot par défaut de calculer_ttm_par_lots (1500
+# origines) fait encore dépasser la RAM du Space (32 Go) : IDFM, même à
+# 800m, reste nettement plus gros que Lyon (échelle régionale, ~11M hab.) —
+# lot réduit pour borner le pic mémoire par lot d'un facteur ~3, au prix
+# d'un calcul plus lent (plus de lots, plus d'allers-retours JVM<->Python).
+TAILLES_LOTS_SPECIALES = {"IDFM": 500}
+
 # Réseaux exclus du fichier CSV de benchmark inter-réseaux
 # (index_benchmark_reseaux.csv, cf. calculer_index_benchmark) : IDFM
 # (~11 millions d'habitants) est sur une échelle de population sans commune
