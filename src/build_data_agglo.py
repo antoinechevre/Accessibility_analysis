@@ -518,6 +518,62 @@ def build_grid_agglo(path, output_path=None):
     return population_grid_agglo
 
 
+def build_grid_agglo_1km(decoupage_geojson_path, source_gpkg_path, output_path=None):
+    """Alternative à build_grid_agglo() (200m) : construit population_grid_agglo
+    directement depuis le carroyage Filosofi 1km de l'INSEE
+    (Filosofi<année>_carreaux_1km_<zone>.gpkg, téléchargé manuellement depuis
+    insee.fr — pas de téléchargement automatique ici, contrairement au 200m
+    via assurer_carreaux_200m_local).
+
+    Pensé pour les très grandes agglomérations (ex: IDFM/Île-de-France) où
+    même le 200m fusionné à 800m/1600m via fusionner_grille_resolution reste
+    trop volumineux (carreaux, donc ttm en O(n²), en plus grand nombre qu'à
+    1km directement) — "Memory limit exceeded" observé sur le Space avec
+    l'approche 200m->fusion pour IDFM.
+
+    Contrairement au 200m (grille théorique reconstruite + carreaux non
+    publiés comblés à population=0, cf. build_grid_agglo), le fichier 1km de
+    l'INSEE ne contient déjà QUE les carreaux publiés : pas de reconstruction
+    théorique ni de colonne "publie" à combler ici, on filtre juste sur
+    l'emprise de l'agglo.
+
+    Retourne les mêmes colonnes que build_grid_agglo (id/geometry/population/
+    ind/ind_snv/publie/centroid_x/centroid_y), pour rester utilisable sans
+    changement par le reste du pipeline (filtre_BPE, cumulative_cutoff...).
+    """
+    agglo = gpd.read_file(decoupage_geojson_path)
+    agglo = agglo.set_crs("EPSG:4326") if agglo.crs is None else agglo
+    agglo.geometry = agglo.geometry.buffer(0)
+    agglo_boundary = gpd.GeoDataFrame(geometry=[agglo.union_all()], crs=agglo.crs).to_crs("EPSG:2154")
+
+    minx, miny, maxx, maxy = agglo_boundary.total_bounds
+    grille = gpd.read_file(
+        source_gpkg_path,
+        bbox=(minx, miny, maxx, maxy),
+        columns=["Idcar_1km", "Ind", "Ind_snv"],
+    )
+
+    within_mask = grille.geometry.centroid.within(agglo_boundary.geometry.iloc[0])
+    population_grid_agglo = grille.loc[within_mask].copy()
+    population_grid_agglo = population_grid_agglo.rename(
+        columns={"Idcar_1km": "id", "Ind": "ind", "Ind_snv": "ind_snv"}
+    )
+    population_grid_agglo["population"] = population_grid_agglo["ind"]
+    population_grid_agglo["publie"] = True
+    centroids = population_grid_agglo.geometry.centroid
+    population_grid_agglo["centroid_x"] = centroids.x
+    population_grid_agglo["centroid_y"] = centroids.y
+
+    output_path = output_path or f"{DATA_DIR}/population_grid_agglo_1km.gpkg"
+    population_grid_agglo.to_file(output_path, driver="GPKG")
+
+    print(f"carreaux 1km dans l'agglo: {len(population_grid_agglo)}")
+    print(f"population totale (ind): {population_grid_agglo['ind'].sum():.0f}")
+    print(f"ecrit dans: {output_path}")
+
+    return population_grid_agglo
+
+
 def fusionner_grille_resolution(population_grid_agglo, resolution=400):
     """Fusionne les carreaux 200m de population_grid_agglo (sortie de
     build_grid_agglo : id/geometry/population/ind/ind_snv/publie/centroid_x/
