@@ -24,7 +24,6 @@ from src.pipeline_donnees import (
     DOMAINES_BPE,
     RESEAUX_EXCLUS_BENCHMARK,
     RESOLUTIONS_GRILLE_SPECIALES,
-    TAILLES_LOTS_SPECIALES,
     chemins_reseau,
     construire_donnees_bpe,
 )
@@ -277,7 +276,6 @@ def _construire_pipeline(zip_path, nom_reseau_str, date_JOB):
                 max_time_walking=datetime.timedelta(minutes=30),
                 max_time=datetime.timedelta(minutes=120),
                 ttm_path=ttm_path,
-                taille_lot=TAILLES_LOTS_SPECIALES.get(nom_reseau_str, 1500),
                 on_step=_log,
             )
             _log("✓ Matrice des temps de trajet prête")

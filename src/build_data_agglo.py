@@ -23,6 +23,11 @@ DATA_DIR = os.path.join(BASE_DIR,"data")
 
 FILOSOFI_ZIP_URL = "https://www.insee.fr/fr/statistiques/fichier/7655475/Filosofi2019_carreaux_200m_gpkg.zip"
 
+# Contrairement au 200m (FILOSOFI_ZIP_URL, téléchargeable directement),
+# récupéré manuellement depuis insee.fr (pas d'URL directe stable identifiée) :
+# cf. assurer_carreaux_1km_local, repli sur le cache Hugging Face uniquement.
+CARREAUX_1KM_PATH = os.path.join(DATA_DIR, "Filosofi2017_carreaux_1km_met.gpkg")
+
 
 def assurer_carreaux_200m_local():
     """Télécharge et extrait le carroyage population INSEE Filosofi 200m
@@ -518,12 +523,34 @@ def build_grid_agglo(path, output_path=None):
     return population_grid_agglo
 
 
-def build_grid_agglo_1km(decoupage_geojson_path, source_gpkg_path, output_path=None):
+def assurer_carreaux_1km_local():
+    """Récupère le carroyage population INSEE Filosofi 1km (France
+    métropolitaine, CARREAUX_1KM_PATH) depuis le cache Hugging Face si absent
+    en local.
+
+    Contrairement au 200m (assurer_carreaux_200m_local), pas de téléchargement
+    automatique depuis insee.fr ici : aucune URL directe stable identifiée
+    pour ce produit (contrairement à FILOSOFI_ZIP_URL) — récupéré une
+    première fois manuellement depuis insee.fr, puis mis en cache sur HF pour
+    les déploiements suivants. Lève une erreur explicite si absent des deux
+    côtés, plutôt que de planter plus loin avec une erreur gpkg peu claire.
+    """
+    if os.path.exists(CARREAUX_1KM_PATH):
+        return
+    if recuperer_depuis_hf("Filosofi2017_carreaux_1km_met.gpkg", CARREAUX_1KM_PATH):
+        print(f"✓ Carroyage population 1km récupéré depuis le cache Hugging Face : {CARREAUX_1KM_PATH}")
+        return
+    raise FileNotFoundError(
+        f"{CARREAUX_1KM_PATH} introuvable en local et absent du cache Hugging Face. "
+        "À télécharger manuellement depuis insee.fr (carroyage Filosofi 1km, "
+        "France métropolitaine) et placer à ce chemin."
+    )
+
+
+def build_grid_agglo_1km(decoupage_geojson_path, output_path=None):
     """Alternative à build_grid_agglo() (200m) : construit population_grid_agglo
-    directement depuis le carroyage Filosofi 1km de l'INSEE
-    (Filosofi<année>_carreaux_1km_<zone>.gpkg, téléchargé manuellement depuis
-    insee.fr — pas de téléchargement automatique ici, contrairement au 200m
-    via assurer_carreaux_200m_local).
+    directement depuis le carroyage Filosofi 1km de l'INSEE (CARREAUX_1KM_PATH,
+    cf. assurer_carreaux_1km_local).
 
     Pensé pour les très grandes agglomérations (ex: IDFM/Île-de-France) où
     même le 200m fusionné à 800m/1600m via fusionner_grille_resolution reste
@@ -541,6 +568,8 @@ def build_grid_agglo_1km(decoupage_geojson_path, source_gpkg_path, output_path=N
     ind/ind_snv/publie/centroid_x/centroid_y), pour rester utilisable sans
     changement par le reste du pipeline (filtre_BPE, cumulative_cutoff...).
     """
+    assurer_carreaux_1km_local()
+
     agglo = gpd.read_file(decoupage_geojson_path)
     agglo = agglo.set_crs("EPSG:4326") if agglo.crs is None else agglo
     agglo.geometry = agglo.geometry.buffer(0)
@@ -548,7 +577,7 @@ def build_grid_agglo_1km(decoupage_geojson_path, source_gpkg_path, output_path=N
 
     minx, miny, maxx, maxy = agglo_boundary.total_bounds
     grille = gpd.read_file(
-        source_gpkg_path,
+        CARREAUX_1KM_PATH,
         bbox=(minx, miny, maxx, maxy),
         columns=["Idcar_1km", "Ind", "Ind_snv"],
     )

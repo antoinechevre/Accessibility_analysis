@@ -19,6 +19,7 @@ from src.build_data_agglo import (
     build_decoupage_agglo,
     decoupage_agglo_geojson,
     build_grid_agglo,
+    build_grid_agglo_1km,
     fusionner_grille_resolution,
 )
 from src.BPE_traitement import filtre_BPE, filtre_BPE_actifs, land_use_data_domaine
@@ -56,23 +57,28 @@ DOMAINES_BPE = {
 #   lignes, qui fait planter le calcul (mémoire) même à 32 Go de RAM
 #   disponible une fois chargé en mémoire — observé à plusieurs reprises
 #   avant ce contournement.
-# - IDFM (800m) : Île-de-France, nettement plus grande que Lyon ; 400m ne
-#   suffirait probablement pas. Ce GTFS (Paris + petite couronne 75/92/93/94
-#   uniquement, pas la grande couronne) est aussi une exception au garde-fou
-#   "max 4 agences" de l'app — cf. GTFS_NOM_RESEAU_FORCE dans app.py.
 # - Aix_Marseille (800m) : GTFS agrégé "mamp" couvrant bien plus que la seule
 #   métropole Aix-Marseille-Provence (283 communes identifiées, de Nice à
 #   Nîmes à Briançon — vraisemblablement des lignes TER régionales incluses
 #   dans le GTFS), échelle comparable à IDFM. Également une exception au
 #   garde-fou "max 4 agences" — cf. GTFS_NOM_RESEAU_FORCE dans app.py.
-RESOLUTIONS_GRILLE_SPECIALES = {"TCL": 400, "IDFM": 800, "Aix_Marseille": 800}
+# IDFM n'est plus ici : cf. RESEAUX_GRILLE_1KM ci-dessous, encore trop gros
+# même à 800m ("Memory limit exceeded" observé sur le Space).
+RESOLUTIONS_GRILLE_SPECIALES = {"TCL": 400, "Aix_Marseille": 800}
 
-# Réseaux pour lesquels le lot par défaut de calculer_ttm_par_lots (1500
-# origines) fait encore dépasser la RAM du Space (32 Go) : IDFM, même à
-# 800m, reste nettement plus gros que Lyon (échelle régionale, ~11M hab.) —
-# lot réduit pour borner le pic mémoire par lot d'un facteur ~3, au prix
-# d'un calcul plus lent (plus de lots, plus d'allers-retours JVM<->Python).
-TAILLES_LOTS_SPECIALES = {"IDFM": 500}
+# Réseaux dont même la grille 200m fusionnée à 800m/1600m (cf.
+# RESOLUTIONS_GRILLE_SPECIALES) reste trop volumineuse (ttm en O(n²)) :
+# carroyage Filosofi 1km de l'INSEE utilisé directement à la place (cf.
+# build_grid_agglo_1km) — déjà le grillage publié, pas de reconstruction
+# théorique ni de fusion à faire. Résolution spatiale fixe à 1km (pas de
+# palier intermédiaire), et millésime Filosofi 2017 (le 200m est peut-être
+# plus récent) : décalage temporel mineur avec le BPE 2025.
+# - IDFM : Île-de-France, nettement plus grande que Lyon ; même 800m ne
+#   suffisait pas ("Memory limit exceeded" à 32 Go malgré un lot réduit pour
+#   calculer_ttm_par_lots). Ce GTFS (Paris + petite couronne 75/92/93/94
+#   uniquement, pas la grande couronne) est aussi une exception au garde-fou
+#   "max 4 agences" de l'app — cf. GTFS_NOM_RESEAU_FORCE dans app.py.
+RESEAUX_GRILLE_1KM = {"IDFM"}
 
 # Réseaux exclus du fichier CSV de benchmark inter-réseaux
 # (index_benchmark_reseaux.csv, cf. calculer_index_benchmark) : IDFM
@@ -183,24 +189,32 @@ def construire_donnees_bpe(zip_path, nom_reseau_str, on_step=None):
         decoupage_agglo_geojson(csv_path=chemins["decoupage_csv"], output_path=chemins["decoupage_geojson"])
 
     if not os.path.exists(chemins["gpkg"]):
-        _step("Construction du carroyage population 200x200 (INSEE)...")
-        # Chemin de sortie par réseau explicite (pas le chemin générique par
-        # défaut de build_grid_agglo) : un run concurrent pour un autre réseau
-        # (app ou notebook tournant en parallèle sur la même machine) ne doit
-        # jamais pouvoir écrire/renommer le même fichier partagé.
-        grille = build_grid_agglo(chemins["decoupage_geojson"], output_path=chemins["gpkg"])
-        _step("✓ Carroyage population prêt")
+        if nom_reseau_str in RESEAUX_GRILLE_1KM:
+            _step("Construction du carroyage population 1x1km (INSEE Filosofi)...")
+            # Chemin de sortie par réseau explicite, comme pour build_grid_agglo
+            # ci-dessous : un run concurrent pour un autre réseau ne doit jamais
+            # pouvoir écrire/renommer le même fichier partagé.
+            build_grid_agglo_1km(chemins["decoupage_geojson"], output_path=chemins["gpkg"])
+            _step("✓ Carroyage population prêt")
+        else:
+            _step("Construction du carroyage population 200x200 (INSEE)...")
+            # Chemin de sortie par réseau explicite (pas le chemin générique par
+            # défaut de build_grid_agglo) : un run concurrent pour un autre réseau
+            # (app ou notebook tournant en parallèle sur la même machine) ne doit
+            # jamais pouvoir écrire/renommer le même fichier partagé.
+            grille = build_grid_agglo(chemins["decoupage_geojson"], output_path=chemins["gpkg"])
+            _step("✓ Carroyage population prêt")
 
-        resolution_speciale = RESOLUTIONS_GRILLE_SPECIALES.get(nom_reseau_str)
-        if resolution_speciale is not None:
-            # chemins["gpkg"] est déjà scopé par réseau (pas le chemin
-            # générique) : l'écraser ici par la version fusionnée ne risque
-            # aucune collision avec un autre run, et les prochains lancements
-            # pour ce réseau retrouveront directement la version fusionnée en
-            # cache (le test os.path.exists ci-dessus ne distingue pas la
-            # résolution, juste la présence du fichier).
-            grille = fusionner_grille_resolution(grille, resolution=resolution_speciale)
-            grille.to_file(chemins["gpkg"], driver="GPKG")
+            resolution_speciale = RESOLUTIONS_GRILLE_SPECIALES.get(nom_reseau_str)
+            if resolution_speciale is not None:
+                # chemins["gpkg"] est déjà scopé par réseau (pas le chemin
+                # générique) : l'écraser ici par la version fusionnée ne risque
+                # aucune collision avec un autre run, et les prochains lancements
+                # pour ce réseau retrouveront directement la version fusionnée en
+                # cache (le test os.path.exists ci-dessus ne distingue pas la
+                # résolution, juste la présence du fichier).
+                grille = fusionner_grille_resolution(grille, resolution=resolution_speciale)
+                grille.to_file(chemins["gpkg"], driver="GPKG")
 
     resolution_speciale = RESOLUTIONS_GRILLE_SPECIALES.get(nom_reseau_str)
     if resolution_speciale is not None:
@@ -209,6 +223,14 @@ def construire_donnees_bpe(zip_path, nom_reseau_str, on_step=None):
             "temps de trajet trop volumineuse pour tenir en mémoire) — carreaux fusionnés "
             f"en blocs de {resolution_speciale}m, résolution spatiale plus grossière sur les "
             "cartes et indicateurs de ce réseau."
+        )
+    elif nom_reseau_str in RESEAUX_GRILLE_1KM:
+        _step(
+            f"⚠ {nom_reseau_str} : réseau trop grand pour une fusion de carreaux 200m "
+            "(matrice des temps de trajet trop volumineuse même à 800m/1600m) — passage en "
+            "carreaux de 1km sur la base INSEE correspondante (carroyage Filosofi 1km, "
+            "millésime 2017), résolution spatiale nettement plus grossière sur les cartes et "
+            "indicateurs de ce réseau."
         )
 
     population_grid_agglo = gpd.read_file(chemins["gpkg"])
