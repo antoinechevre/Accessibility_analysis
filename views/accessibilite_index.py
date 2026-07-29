@@ -535,7 +535,24 @@ def accessibilite_index_page():
         gtfs_analyse_url = f"{GTFS_ANALYSE_URL}?{urllib.parse.urlencode({'gtfs': last_uploaded_name})}"
     else:
         gtfs_analyse_url = GTFS_ANALYSE_URL
-    st.link_button("Pour analyser le GTFS correspondant", gtfs_analyse_url)
+    # Couleur distincte (bleu clair) pour ce lien précis : st.link_button ne
+    # propose pas de paramètre de couleur, la clé du conteneur (classe CSS
+    # st-key-... générée par Streamlit) permet de cibler uniquement ce bouton
+    # sans affecter les autres boutons de l'app.
+    st.markdown(
+        """
+        <style>
+        .st-key-lien_gtfs_analyse a {
+            background-color: #ADD8E6 !important;
+            border-color: #ADD8E6 !important;
+            color: #000000 !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    with st.container(key="lien_gtfs_analyse"):
+        st.link_button("Pour analyser le GTFS correspondant", gtfs_analyse_url)
 
     # La matrice des temps de trajet (ttm) est mise en cache sur disque par
     # réseau (cf. _construire_pipeline) : si le fichier existe déjà, ce n'est
