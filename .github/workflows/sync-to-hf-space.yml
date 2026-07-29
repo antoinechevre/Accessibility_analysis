@@ -7,8 +7,13 @@ name: Sync to Hugging Face Space
 # avec droit d'écriture sur le Space), à ajouter dans Settings > Secrets
 # and variables > Actions.
 #
-# --force : GitHub fait autorité. Toute modification faite directement sur
-# le Space (interface web HF) serait écrasée au prochain push ici.
+# Ne pousse pas HEAD tel quel : HF refuse tout fichier de plus de 10 Mo hors
+# stockage Xet/LFS, et les notebooks du dépôt (sorties de cellules avec
+# cartes intégrées) dépassent régulièrement cette limite alors qu'ils ne
+# sont pas nécessaires à l'exécution de l'app Streamlit. Un commit sur
+# mesure (arborescence de HEAD moins EXCLUDE_PATHS) est donc construit et
+# empilé sur hf/main à chaque déploiement, plutôt qu'un force-push de HEAD
+# — même principe que scripts/deploy_hf.sh du dépôt gtfs_analysis_app.
 
 on:
   push:
@@ -27,4 +32,48 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          git push --force "https://hf:${HF_TOKEN}@huggingface.co/spaces/antoinechevre/accessibility" HEAD:main
+          set -euo pipefail
+
+          REMOTE_URL="https://hf:${HF_TOKEN}@huggingface.co/spaces/antoinechevre/accessibility"
+          MAX_SIZE=$((10 * 1024 * 1024))  # 10 MiB, limite HF hors Xet/LFS
+
+          # Notebooks de prototypage (cf. docstring des vues sous views/) : pas
+          # nécessaires au runtime de l'app, et régulièrement trop volumineux
+          # une fois leurs sorties de cellules exécutées.
+          EXCLUDE_PATHS=(
+            "index_accessibility_notebook_def.ipynb"
+            "index_accessibility_notebook_IDF.ipynb"
+          )
+
+          git fetch "$REMOTE_URL" main -q || true
+          PARENT=$(git rev-parse FETCH_HEAD 2>/dev/null || echo "")
+
+          INDEX_FILE=$(mktemp)
+          trap 'rm -f "$INDEX_FILE"' EXIT
+          export GIT_INDEX_FILE="$INDEX_FILE"
+
+          git read-tree HEAD
+          for path in "${EXCLUDE_PATHS[@]}"; do
+              git rm --cached -q --ignore-unmatch -- "$path"
+          done
+          TREE=$(git write-tree)
+          unset GIT_INDEX_FILE
+
+          TOO_BIG=$(git ls-tree -r -l "$TREE" | awk -v max="$MAX_SIZE" '$4 ~ /^[0-9]+$/ && $4+0 > max {print $4, $5}')
+          if [ -n "$TOO_BIG" ]; then
+              echo "Fichier(s) trop volumineux pour le Space (>10 Mo) — ajoute-les à EXCLUDE_PATHS :" >&2
+              echo "$TOO_BIG" >&2
+              exit 1
+          fi
+
+          MESSAGE=$(printf '%s\n\n%s' \
+            "Deploy snapshot of $(git rev-parse --short HEAD) — $(git log -1 --format=%s HEAD)" \
+            "Excludes: ${EXCLUDE_PATHS[*]}. See GitHub for full history.")
+
+          if [ -n "$PARENT" ]; then
+              COMMIT=$(git commit-tree "$TREE" -p "$PARENT" -m "$MESSAGE")
+          else
+              COMMIT=$(git commit-tree "$TREE" -m "$MESSAGE")
+          fi
+
+          git push "$REMOTE_URL" "${COMMIT}:refs/heads/main"
