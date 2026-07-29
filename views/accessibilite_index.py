@@ -8,6 +8,7 @@ avec les cartes HTML interactives par domaine BPE.
 
 import os
 import datetime
+import urllib.parse
 
 import folium
 import matplotlib.pyplot as plt
@@ -41,6 +42,8 @@ from src.utils import km_par_ligne_jour, longueur_lignes, preparer_gtfs_pour_r5p
 
 BASE_DIR = os.getcwd()
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
+
+GTFS_ANALYSE_URL = "https://huggingface.co/spaces/antoinechevre/GTFS_analyse_fr"
 
 # Précision supplémentaire à afficher pour certains réseaux de
 # RESOLUTIONS_GRILLE_SPECIALES, en plus de l'avertissement générique sur la
@@ -521,6 +524,18 @@ def accessibilite_index_page():
     date_affichage = datetime.datetime.strptime(date_str, "%Y%m%d").strftime("%d/%m/%Y")
     reseau_affichage = f"{nom_reseau_str} ({ville_reseau})" if ville_reseau else nom_reseau_str
     st.write(f"Réseau : **{reseau_affichage}** — jour de référence : {date_affichage}")
+
+    # last_uploaded_name est le nom de fichier GTFS exact (catalogue partagé
+    # sur le dataset HF antoinechevre/accessibility-data, cf. src/hf_cache.py) —
+    # sauf en cas de fusion de plusieurs GTFS, où il concatène leurs noms avec
+    # "+" et ne correspond donc à aucun fichier réel : dans ce cas on ne peut
+    # pas présélectionner de GTFS côté GTFS_analyse_fr.
+    last_uploaded_name = st.session_state.get("last_uploaded_name")
+    if last_uploaded_name and "+" not in last_uploaded_name:
+        gtfs_analyse_url = f"{GTFS_ANALYSE_URL}?{urllib.parse.urlencode({'gtfs': last_uploaded_name})}"
+    else:
+        gtfs_analyse_url = GTFS_ANALYSE_URL
+    st.link_button("Pour analyser le GTFS correspondant", gtfs_analyse_url)
 
     # La matrice des temps de trajet (ttm) est mise en cache sur disque par
     # réseau (cf. _construire_pipeline) : si le fichier existe déjà, ce n'est
