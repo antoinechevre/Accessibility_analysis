@@ -42,7 +42,8 @@ def recuperer_depuis_hf(nom_fichier_hf, destination_locale):
             filename=nom_fichier_hf,
             token=os.environ.get("HF_TOKEN"),
         )
-    except Exception:
+    except Exception as e:
+        print(f"[hf_cache] échec téléchargement {nom_fichier_hf} : {type(e).__name__}: {e}")
         return False
 
     os.makedirs(os.path.dirname(destination_locale), exist_ok=True)

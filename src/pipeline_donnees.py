@@ -53,10 +53,6 @@ DOMAINES_BPE = {
 # carreaux fusionnés en blocs de resolution mètres avant tout calcul (cf.
 # fusionner_grille_resolution), au prix d'une résolution spatiale plus
 # grossière sur ces réseaux.
-# - Lyon/TCL (400m) : 92 741 carreaux à 200m -> ttm de 1,22 milliard de
-#   lignes, qui fait planter le calcul (mémoire) même à 32 Go de RAM
-#   disponible une fois chargé en mémoire — observé à plusieurs reprises
-#   avant ce contournement.
 # - Aix_Marseille (800m) : GTFS agrégé "mamp" couvrant bien plus que la seule
 #   métropole Aix-Marseille-Provence (283 communes identifiées, de Nice à
 #   Nîmes à Briançon — vraisemblablement des lignes TER régionales incluses
@@ -64,7 +60,11 @@ DOMAINES_BPE = {
 #   garde-fou "max 4 agences" — cf. GTFS_NOM_RESEAU_FORCE dans app.py.
 # IDFM n'est plus ici : cf. RESEAUX_GRILLE_1KM ci-dessous, encore trop gros
 # même à 800m ("Memory limit exceeded" observé sur le Space).
-RESOLUTIONS_GRILLE_SPECIALES = {"TCL": 400, "Aix_Marseille": 800}
+# Lyon/TCL (92 741 carreaux à 200m -> ttm de 1,22 milliard de lignes) n'est
+# plus ici non plus : traité comme un réseau standard, au risque du même
+# plantage mémoire déjà observé par le passé à 32 Go de RAM (cf. historique
+# git de cette ligne pour revenir en arrière si besoin).
+RESOLUTIONS_GRILLE_SPECIALES = {"Aix_Marseille": 800}
 
 # Réseaux dont même la grille 200m fusionnée à 800m/1600m (cf.
 # RESOLUTIONS_GRILLE_SPECIALES) reste trop volumineuse (ttm en O(n²)) :
@@ -188,6 +188,10 @@ def construire_donnees_bpe(zip_path, nom_reseau_str, on_step=None):
     if not os.path.exists(chemins["decoupage_geojson"]):
         decoupage_agglo_geojson(csv_path=chemins["decoupage_csv"], output_path=chemins["decoupage_geojson"])
 
+    nom_gpkg_hf = f"memory_gpkg/population_grid_agglo_{nom_reseau_str}.gpkg"
+    if not os.path.exists(chemins["gpkg"]) and recuperer_depuis_hf(nom_gpkg_hf, chemins["gpkg"]):
+        _step("✓ Carroyage population récupéré depuis le cache Hugging Face")
+
     if not os.path.exists(chemins["gpkg"]):
         if nom_reseau_str in RESEAUX_GRILLE_1KM:
             _step("Construction du carroyage population 1x1km (INSEE Filosofi)...")
@@ -215,6 +219,11 @@ def construire_donnees_bpe(zip_path, nom_reseau_str, on_step=None):
                 # résolution, juste la présence du fichier).
                 grille = fusionner_grille_resolution(grille, resolution=resolution_speciale)
                 grille.to_file(chemins["gpkg"], driver="GPKG")
+
+        # Envoi vers le cache HF (mêmes garanties que envoyer_vers_hf ailleurs
+        # dans le pipeline : no-op silencieux si HF_TOKEN absent/sans droit
+        # d'écriture, pas bloquant si l'envoi échoue).
+        envoyer_vers_hf(chemins["gpkg"], nom_gpkg_hf)
 
     resolution_speciale = RESOLUTIONS_GRILLE_SPECIALES.get(nom_reseau_str)
     if resolution_speciale is not None:
