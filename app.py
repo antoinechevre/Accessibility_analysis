@@ -133,52 +133,66 @@ section[data-testid="stSidebar"] h3 {
 
 st.markdown("---")
 
-# 4 boutons de navigation à parts égales ("Accueil" a été sorti de cette
-# rangée et déplacé en tête de la sidebar, cf. plus bas) ; type="primary"
-# sur la page active donne l'accent plein (via le thème ci-dessus) plutôt
-# que le contour gris "secondary" partout — seule indication de la page
-# courante, absente en V1 (F1 dans l'audit).
-PAGES_NAV = [
-    ("📍 Accessibilité", "Accessibilité"),
-    ("📊 Benchmark Villes Françaises", "Benchmark Villes Françaises"),
-    ("⚖️ Localisation et pondération équipements", "Pondération équipements"),
-    ("🗺️ Carte population par déciles", "Cartographie INSEE"),
-]
-
-# Pages qui n'ont aucun sens sans GTFS chargé : boutons désactivés tant que
-# rien n'est sélectionné/téléversé, plutôt que de laisser l'utilisateur
-# cliquer pour atterrir sur un message "veuillez charger un GTFS".
-PAGES_NECESSITANT_GTFS = {"Accessibilité", "Pondération équipements", "Cartographie INSEE"}
-
-for col, (libelle, page) in zip(st.columns(len(PAGES_NAV)), PAGES_NAV):
-    with col:
-        est_active = st.session_state.get("selected_page") == page
-        desactive = page in PAGES_NECESSITANT_GTFS and st.session_state.get("feed") is None
-        if st.button(
-            libelle,
-            use_container_width=True,
-            type="primary" if est_active else "secondary",
-            disabled=desactive,
-        ):
-            st.session_state.selected_page = page
-
-
 # Initialiser la page sélectionnée si pas déjà fait
 if "selected_page" not in st.session_state:
     st.session_state.selected_page = "Accueil"
 
-# Bouton Accueil isolé en tête de sidebar (sorti de la rangée de nav
-# horizontale ci-dessus, cf. PAGES_NAV) : reste visible en premier quel que
-# soit le défilement des paramètres en dessous, comme le logo/lien
-# "accueil" d'une appli classique.
-st.sidebar.markdown("### 🚌 Accessibilité GTFS")
-if st.sidebar.button(
-    "🏠 Accueil",
-    use_container_width=True,
-    type="primary" if st.session_state.get("selected_page") == "Accueil" else "secondary",
-):
-    st.session_state.selected_page = "Accueil"
-st.sidebar.divider()
+# Navigation à deux niveaux plutôt que 4-5 boutons isolés à plat : les 3
+# pages qui forment un seul parcours (Accessibilité, Localisation et
+# pondération équipements, Carte population par déciles — toutes dérivées
+# du même GTFS/carroyage) sont regroupées sous "Analyse du réseau", à côté
+# d'Accueil et Benchmark qui n'ont pas de lien direct avec elles ni entre
+# eux. st.segmented_control (plutôt que des st.button) rend ce groupement
+# visuellement explicite : les options d'un même contrôle sont connectées
+# entre elles, celles de deux contrôles différents ne le sont pas.
+GROUPES_NAV = {
+    "Accueil": ["Accueil"],
+    "Analyse du réseau": ["Accessibilité", "Pondération équipements", "Cartographie INSEE"],
+    "Benchmark": ["Benchmark Villes Françaises"],
+}
+LIBELLES_GROUPE = {
+    "Accueil": "🏠 Accueil",
+    "Analyse du réseau": "📈 Analyse du réseau",
+    "Benchmark": "📊 Benchmark villes françaises",
+}
+LIBELLES_PAGE = {
+    "Accessibilité": "📍 Accessibilité",
+    "Pondération équipements": "⚖️ Localisation et pondération équipements",
+    "Cartographie INSEE": "🗺️ Carte population par déciles",
+}
+GROUPE_DE_LA_PAGE = {page: groupe for groupe, pages in GROUPES_NAV.items() for page in pages}
+
+groupe_choisi = st.segmented_control(
+    "Section",
+    options=list(GROUPES_NAV.keys()),
+    format_func=lambda g: LIBELLES_GROUPE[g],
+    default=GROUPE_DE_LA_PAGE.get(st.session_state.selected_page, "Accueil"),
+    required=True,
+    label_visibility="collapsed",
+    key="nav_groupe",
+)
+
+pages_du_groupe = GROUPES_NAV[groupe_choisi]
+if len(pages_du_groupe) == 1:
+    st.session_state.selected_page = pages_du_groupe[0]
+else:
+    # Sous-menu "Analyse du réseau" : désactivé tant qu'aucun GTFS n'est
+    # chargé (les 3 pages en dépendent toutes), plutôt que de laisser
+    # naviguer vers un message "veuillez charger un GTFS" sur chacune.
+    st.session_state.selected_page = st.segmented_control(
+        "Page",
+        options=pages_du_groupe,
+        format_func=lambda p: LIBELLES_PAGE[p],
+        default=(
+            st.session_state.selected_page
+            if st.session_state.selected_page in pages_du_groupe
+            else pages_du_groupe[0]
+        ),
+        required=True,
+        disabled=st.session_state.get("feed") is None,
+        label_visibility="collapsed",
+        key="nav_sous_page",
+    )
 
 # Barre latérale pour les paramètres uniquement
 st.sidebar.header("📁 Paramètres d'analyse")
