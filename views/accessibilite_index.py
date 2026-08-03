@@ -24,6 +24,7 @@ from src.pipeline_donnees import (
     MEMORY_CSV_AGGLO_DIR,
     DOMAINES_BPE,
     RESEAUX_EXCLUS_BENCHMARK,
+    RESEAUX_GRILLE_1KM,
     RESOLUTIONS_GRILLE_SPECIALES,
     chemins_reseau,
     construire_donnees_bpe,
@@ -578,6 +579,17 @@ def accessibilite_index_page():
             f"en mémoire. Les carreaux de population sont donc fusionnés en blocs de "
             f"{resolution_speciale}m avant calcul — cartes et indicateurs de ce réseau ont une "
             "résolution spatiale plus grossière que les autres réseaux."
+        )
+        if nom_reseau_str in PRECISIONS_RESEAU:
+            message += f" {PRECISIONS_RESEAU[nom_reseau_str]}"
+        st.warning(message)
+    elif nom_reseau_str in RESEAUX_GRILLE_1KM:
+        message = (
+            f"⚠️ {nom_reseau_str} est un réseau trop grand pour tenir en mémoire même avec une "
+            "fusion de carreaux 200m (800m/400m) : les carreaux de population utilisés sont "
+            "donc directement ceux du carroyage Filosofi 1km de l'INSEE (résolution fixe, pas "
+            "de fusion) — cartes et indicateurs de ce réseau ont une résolution spatiale "
+            "nettement plus grossière que les autres réseaux."
         )
         if nom_reseau_str in PRECISIONS_RESEAU:
             message += f" {PRECISIONS_RESEAU[nom_reseau_str]}"

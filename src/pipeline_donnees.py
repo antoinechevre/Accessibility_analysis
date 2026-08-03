@@ -58,33 +58,30 @@ DOMAINES_BPE = {
 #   Nîmes à Briançon — vraisemblablement des lignes TER régionales incluses
 #   dans le GTFS), échelle comparable à IDFM. Également une exception au
 #   garde-fou "max 4 agences" — cf. GTFS_NOM_RESEAU_FORCE dans app.py.
-# - IDFM (400m) : Paris + petite couronne (75/92/93/94), calculé et mis en
-#   cache HF via le notebook (fusionner_grille_resolution(..., resolution=400),
-#   cf. index_accessibility_notebook_IDF.ipynb) — 74 074 carreaux, ttm de 905M
-#   lignes, tient en mémoire. Le 1km testé auparavant (cf. RESEAUX_GRILLE_1KM
-#   ci-dessous) n'est plus utilisé pour ce réseau. Également une exception au
-#   garde-fou "max 4 agences" — cf. GTFS_NOM_RESEAU_FORCE dans app.py.
-# Lyon/TCL (92 741 carreaux à 200m -> ttm de 1,22 milliard de lignes) n'est
-# pas ici : traité comme un réseau standard (200m), le plantage mémoire
-# précédemment observé venait de enhanced_2sfca (matrice dupliquée en
-# mémoire) et d'une purge de cache r5py trop large, tous deux corrigés depuis
-# (cf. enhanced_2sfca_par_lots dans src/utilitaires_matrix.py, et le nettoyage
-# ciblé du cache r5py qui épargne le .jar) plutôt que par une résolution plus
-# grossière.
-RESOLUTIONS_GRILLE_SPECIALES = {"Aix_Marseille": 800, "IDFM": 400}
+# - TCL/Lyon (400m) : 92 741 carreaux à 200m -> ttm de 1,22 milliard de
+#   lignes, "Memory limit exceeded (32.0G)" sur le Space dès le chargement du
+#   ttm en mémoire (charger_ttm) — indépendamment des deux bugs mémoire déjà
+#   corrigés par ailleurs (enhanced_2sfca_par_lots, purge de cache r5py qui
+#   épargne le .jar). Passage à 400m (fusionner_grille_resolution(...,
+#   resolution=400), cf. index_accessibility_notebook_TCL2.ipynb) : ~23 000
+#   carreaux, ttm nettement plus petit.
+RESOLUTIONS_GRILLE_SPECIALES = {"Aix_Marseille": 800, "TCL": 400}
 
-# Réseaux dont même la grille 200m fusionnée à 800m/1600m (cf.
-# RESOLUTIONS_GRILLE_SPECIALES) resterait trop volumineuse (ttm en O(n²)) :
+# Réseaux dont même la grille 200m fusionnée à 800m/1600m/400m (cf.
+# RESOLUTIONS_GRILLE_SPECIALES) reste trop volumineuse (ttm en O(n²)) :
 # carroyage Filosofi 1km de l'INSEE utilisé directement à la place (cf.
 # build_grid_agglo_1km) — déjà le grillage publié, pas de reconstruction
 # théorique ni de fusion à faire. Résolution spatiale fixe à 1km (pas de
 # palier intermédiaire), et millésime Filosofi 2017 (le 200m est peut-être
 # plus récent) : décalage temporel mineur avec le BPE 2025.
-# Actuellement vide : IDFM (seul réseau qui en avait besoin) est passé à une
-# grille 400m via RESOLUTIONS_GRILLE_SPECIALES ci-dessus, qui tient en mémoire
-# sans avoir besoin de descendre jusqu'au grillage 1km. Conservé disponible
-# pour un futur réseau encore plus volumineux.
-RESEAUX_GRILLE_1KM = set()
+# - IDFM : testé à 400m (74 074 carreaux, ttm de 905M lignes) — plante
+#   encore avec "Memory limit exceeded (32.0G)" au chargement du ttm, comme
+#   à 200m. La marge par rapport à Lyon (26% de lignes en moins) ne suffit
+#   pas ; retour au grillage 1km INSEE (nettement moins de carreaux qu'une
+#   fusion 400m) pour rester dans la limite mémoire du Space. Également une
+#   exception au garde-fou "max 4 agences" — cf. GTFS_NOM_RESEAU_FORCE dans
+#   app.py.
+RESEAUX_GRILLE_1KM = {"IDFM"}
 
 # Réseaux exclus du fichier CSV de benchmark inter-réseaux
 # (index_benchmark_reseaux.csv, cf. calculer_index_benchmark) : IDFM
