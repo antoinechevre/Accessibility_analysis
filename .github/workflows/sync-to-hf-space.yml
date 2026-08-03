@@ -48,8 +48,8 @@ jobs:
           # une fois leurs sorties de cellules exécutées.
           EXCLUDE_PATHS=(
             "index_accessibility_notebook_def.ipynb"
-            "index_accessibility_notebook_IDF.ipynb"
-            "index_accessibility_notebook_IDF_old.ipynb"
+            "index_accessibility_notebook_IDF_1km.ipynb"
+            "index_accessibility_notebook_IDF_400x400.ipynb"
           )
 
           git fetch "$REMOTE_URL" main -q || true
