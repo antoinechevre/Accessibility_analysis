@@ -52,7 +52,11 @@ jobs:
             "index_accessibility_notebook_IDF_400x400.ipynb"
           )
 
-          git fetch "$REMOTE_URL" main -q || true
+          # -c protocol.version=0 : le protocole git v2 (par défaut depuis
+          # git >= 2.26) échoue contre le serveur git des Spaces HF avec
+          # "fatal: expected 'acknowledgments'" (reproduit aussi en local,
+          # donc pas spécifique au runner GitHub) — v0 fonctionne normalement.
+          git -c protocol.version=0 fetch "$REMOTE_URL" main -q || true
           PARENT=$(git rev-parse FETCH_HEAD 2>/dev/null || echo "")
 
           INDEX_FILE=$(mktemp)
@@ -83,4 +87,4 @@ jobs:
               COMMIT=$(git commit-tree "$TREE" -m "$MESSAGE")
           fi
 
-          git push "$REMOTE_URL" "${COMMIT}:refs/heads/main"
+          git -c protocol.version=0 push "$REMOTE_URL" "${COMMIT}:refs/heads/main"
