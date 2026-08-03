@@ -34,12 +34,13 @@ def ponderation_equipements_page():
 
     st.write(f"Réseau : **{nom_reseau_str}**")
 
-    lancer = st.button("🚀 Lancer / recharger le calcul de pondération", use_container_width=True)
-
     if "reseau_pondere" not in st.session_state:
         st.session_state.reseau_pondere = None
 
-    if lancer:
+    # Calcul automatique dès qu'un GTFS est chargé (comme charger_donnees_gtfs()
+    # dans app.py) : ne recalcule que si le réseau a changé, pas à chaque
+    # interaction/rerun Streamlit — plus de bouton à cliquer.
+    if st.session_state.reseau_pondere != nom_reseau_str:
         statut = st.empty()
         try:
             population_grid_agglo, land_use_data, BPE_agglo = construire_donnees_bpe(
@@ -52,10 +53,6 @@ def ponderation_equipements_page():
 
         st.session_state.reseau_pondere = nom_reseau_str
         st.session_state.ponderation_data = (population_grid_agglo, land_use_data, BPE_agglo)
-
-    if "ponderation_data" not in st.session_state or st.session_state.reseau_pondere != nom_reseau_str:
-        st.info("Cliquez sur le bouton ci-dessus pour lancer le calcul.")
-        return
 
     population_grid_agglo, land_use_data, BPE_agglo = st.session_state.ponderation_data
 
