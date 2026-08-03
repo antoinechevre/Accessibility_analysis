@@ -1,0 +1,25 @@
+# Thème V2 (cf. audit_ux_ui_accessibility.txt, section "Cohérence visuelle
+# générale" — priorité basse #19 : aucun config.toml ne fixait jusqu'ici de
+# thème de référence, l'app reposait entièrement sur le rouge par défaut de
+# Streamlit). Identité "signalétique transport" : sidebar sombre bleu-sarcelle
+# (rappelle un panneau de réseau de transport), contenu principal clair.
+#
+# Pour revenir à l'ancien rendu (thème Streamlit par défaut) : supprimer ou
+# renommer ce fichier, ou commenter les lignes ci-dessous.
+
+[theme]
+base = "light"
+primaryColor = "#0E7C7B"
+backgroundColor = "#FAFAF8"
+secondaryBackgroundColor = "#EDF2F0"
+textColor = "#182422"
+font = "sans serif"
+
+# Section sidebar : disponible depuis Streamlit >= 1.42. Si la version
+# installée ne la supporte pas, elle est simplement ignorée (la sidebar
+# retombe sur le thème principal ci-dessus, pas d'erreur).
+[theme.sidebar]
+backgroundColor = "#123335"
+secondaryBackgroundColor = "#1B4547"
+textColor = "#E8F2F0"
+primaryColor = "#4FD6C4"

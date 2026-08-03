@@ -8,7 +8,6 @@ avec les cartes HTML interactives par domaine BPE.
 
 import os
 import datetime
-import urllib.parse
 
 import folium
 import matplotlib.pyplot as plt
@@ -525,35 +524,6 @@ def accessibilite_index_page():
     date_affichage = datetime.datetime.strptime(date_str, "%Y%m%d").strftime("%d/%m/%Y")
     reseau_affichage = f"{nom_reseau_str} ({ville_reseau})" if ville_reseau else nom_reseau_str
     st.write(f"Réseau : **{reseau_affichage}** — jour de référence : {date_affichage}")
-
-    # last_uploaded_name est le nom de fichier GTFS exact (catalogue partagé
-    # sur le dataset HF antoinechevre/accessibility-data, cf. src/hf_cache.py) —
-    # sauf en cas de fusion de plusieurs GTFS, où il concatène leurs noms avec
-    # "+" et ne correspond donc à aucun fichier réel : dans ce cas on ne peut
-    # pas présélectionner de GTFS côté GTFS_analyse_fr.
-    last_uploaded_name = st.session_state.get("last_uploaded_name")
-    if last_uploaded_name and "+" not in last_uploaded_name:
-        gtfs_analyse_url = f"{GTFS_ANALYSE_URL}?{urllib.parse.urlencode({'gtfs': last_uploaded_name})}"
-    else:
-        gtfs_analyse_url = GTFS_ANALYSE_URL
-    # Couleur distincte (bleu clair) pour ce lien précis : st.link_button ne
-    # propose pas de paramètre de couleur, la clé du conteneur (classe CSS
-    # st-key-... générée par Streamlit) permet de cibler uniquement ce bouton
-    # sans affecter les autres boutons de l'app.
-    st.markdown(
-        """
-        <style>
-        .st-key-lien_gtfs_analyse a {
-            background-color: #ADD8E6 !important;
-            border-color: #ADD8E6 !important;
-            color: #000000 !important;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-    with st.container(key="lien_gtfs_analyse"):
-        st.link_button("Pour analyser le GTFS correspondant", gtfs_analyse_url)
 
     # La matrice des temps de trajet (ttm) est mise en cache sur disque par
     # réseau (cf. _construire_pipeline) : si le fichier existe déjà, ce n'est

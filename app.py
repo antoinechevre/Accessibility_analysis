@@ -6,6 +6,7 @@ Application d'analyse de l'accessibilité piétons / transports collectifs à 30
 import os
 import sys
 import tempfile
+import urllib.parse
 
 sys.path.append('..')
 
@@ -16,7 +17,7 @@ from src.info_reseau import dates_service, nom_fichier_valide, nom_reseau_str
 from src.hf_cache import envoyer_vers_hf, lister_fichiers_hf, recuperer_depuis_hf
 from src.merge_gtfs import fusionner_gtfs
 from views.home import home_page
-from views.accessibilite_index import accessibilite_index_page
+from views.accessibilite_index import GTFS_ANALYSE_URL, accessibilite_index_page
 from views.ponderation_equipements import ponderation_equipements_page
 from views.cartographie_insee import cartographie_insee_page
 from views.benchmark_reseaux import benchmark_reseaux_page
@@ -60,16 +61,70 @@ st.set_page_config(page_title="Analyse accessibilite aux différents équipement
 st.title("Application accessibilite équipements d'agglomération piéton / transport collectif ")
 
 
-# Navigation horizontale en haut
+# --- CSS V1 (ancien style, conservé pour pouvoir revenir en arrière) -------
+# Pour restaurer le rendu V1 : commenter le bloc "CSS V2" plus bas et
+# décommenter cet appel (et supprimer/renommer .streamlit/config.toml pour
+# retrouver le thème rouge par défaut de Streamlit).
+#
+# st.markdown(
+#     """
+# <style>
+# .stButton button {
+#     width: 100% !important;
+#     margin: 0 !important;
+# }
+# h1 {
+#     margin-bottom: 1.5rem !important;
+# }
+# </style>
+# """,
+#     unsafe_allow_html=True,
+# )
+
+# --- CSS V2 -----------------------------------------------------------------
+# Identité visuelle plus marquée (cf. audit_ux_ui_accessibility.txt) : la
+# palette elle-même vient de .streamlit/config.toml (thème natif Streamlit,
+# s'applique aussi aux widgets natifs — selectbox, file_uploader, etc. —
+# qu'une simple règle CSS ne pourrait pas cibler proprement). Ce bloc ne
+# couvre que ce que le thème ne fait pas : la barre de nav (boutons pleine
+# largeur, état actif) et l'espacement des titres.
 st.markdown(
     """
 <style>
 .stButton button {
     width: 100% !important;
     margin: 0 !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    transition: transform .08s ease, box-shadow .08s ease;
+}
+.stButton button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(14, 124, 123, 0.18);
+}
+/* Bouton de la page active (type="primary") : accent plein plutôt que la
+   simple bordure grise du bouton "secondary" par défaut — répond au
+   constat F1/A5 de l'audit (aucune indication visuelle de la page
+   courante dans la nav). */
+.stButton button[kind="primary"] {
+    box-shadow: 0 2px 10px rgba(14, 124, 123, 0.28);
 }
 h1 {
-    margin-bottom: 1.5rem !important;
+    margin-bottom: .3rem !important;
+    letter-spacing: -0.01em;
+}
+h1 + div hr {
+    margin-top: .6rem !important;
+    margin-bottom: 1.4rem !important;
+    border-top: 2px solid #0E7C7B33 !important;
+}
+h2, h3 {
+    letter-spacing: -0.01em;
+}
+section[data-testid="stSidebar"] h1,
+section[data-testid="stSidebar"] h2,
+section[data-testid="stSidebar"] h3 {
+    letter-spacing: -0.01em;
 }
 </style>
 """,
@@ -77,30 +132,25 @@ h1 {
 )
 
 st.markdown("---")
-col1, col2, col3, col4, col5, col6 = st.columns([1, 1, 1, 1, 1, 1])  # colonnes pour équilibrer l'espace
 
-with col1:
-    if st.button("🏠 Accueil", use_container_width=True):
-        st.session_state.selected_page = "Accueil"
+# 5 boutons de navigation à parts égales (l'ancienne version avait 6
+# colonnes pour 5 boutons, la 6e vide servant juste de cale — IA4 dans
+# l'audit) ; type="primary" sur la page active donne l'accent plein (via le
+# thème ci-dessus) plutôt que le contour gris "secondary" partout — seule
+# indication de la page courante, absente en V1 (F1 dans l'audit).
+PAGES_NAV = [
+    ("🏠 Accueil", "Accueil"),
+    ("📍 Accessibilité", "Accessibilité"),
+    ("⚖️ Pondération équipements", "Pondération équipements"),
+    ("🗺️ Cartographie INSEE", "Cartographie INSEE"),
+    ("📊 Benchmark Villes Françaises", "Benchmark Villes Françaises"),
+]
 
-with col2:
-    if st.button("📍 Accessibilité", use_container_width=True):
-        st.session_state.selected_page = "Accessibilité"
-
-with col3:
-    if st.button("⚖️ Pondération équipements", use_container_width=True):
-        st.session_state.selected_page = "Pondération équipements"
-
-with col4:
-    if st.button("🗺️ Cartographie INSEE", use_container_width=True):
-        st.session_state.selected_page = "Cartographie INSEE"
-
-with col5:
-    if st.button("📊 Benchmark Villes Françaises", use_container_width=True):
-        st.session_state.selected_page = "Benchmark Villes Françaises"
-
-with col6:
-    st.write("")  # Espace vide pour équilibrer
+for col, (libelle, page) in zip(st.columns(len(PAGES_NAV)), PAGES_NAV):
+    with col:
+        est_active = st.session_state.get("selected_page") == page
+        if st.button(libelle, use_container_width=True, type="primary" if est_active else "secondary"):
+            st.session_state.selected_page = page
 
 
 # Initialiser la page sélectionnée si pas déjà fait
@@ -316,6 +366,38 @@ def charger_donnees_gtfs():
 
 # Charger les données automatiquement si nécessaire
 charger_donnees_gtfs()
+
+# Bouton vers l'app GTFS_analyse_fr, une fois un GTFS chargé (sidebar, pas
+# l'onglet Accessibilité : ce lien est utile quelle que soit la page visitée).
+#
+# last_uploaded_name est le nom de fichier GTFS exact (catalogue partagé sur
+# le dataset HF antoinechevre/accessibility-data, cf. src/hf_cache.py) — sauf
+# en cas de fusion de plusieurs GTFS, où il concatène leurs noms avec "+" et
+# ne correspond donc à aucun fichier réel : dans ce cas on ne peut pas
+# présélectionner de GTFS côté GTFS_analyse_fr.
+if st.session_state.last_uploaded_name:
+    if "+" not in st.session_state.last_uploaded_name:
+        gtfs_analyse_url = f"{GTFS_ANALYSE_URL}?{urllib.parse.urlencode({'gtfs': st.session_state.last_uploaded_name})}"
+    else:
+        gtfs_analyse_url = GTFS_ANALYSE_URL
+    # Couleur distincte (bleu clair) pour ce lien précis : st.link_button ne
+    # propose pas de paramètre de couleur, la clé du conteneur (classe CSS
+    # st-key-... générée par Streamlit) permet de cibler uniquement ce bouton
+    # sans affecter les autres boutons de l'app.
+    st.sidebar.markdown(
+        """
+        <style>
+        .st-key-lien_gtfs_analyse a {
+            background-color: #ADD8E6 !important;
+            border-color: #ADD8E6 !important;
+            color: #000000 !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    with st.sidebar.container(key="lien_gtfs_analyse"):
+        st.link_button("Pour analyser le réseau à partir du GTFS", gtfs_analyse_url)
 
 # Navigation entre les pages
 if st.session_state.selected_page == "Accueil":
