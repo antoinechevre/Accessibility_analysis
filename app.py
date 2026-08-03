@@ -12,15 +12,17 @@ sys.path.append('..')
 
 import streamlit as st
 
-from src.utils import charger_gtfs
-from src.info_reseau import dates_service, nom_fichier_valide, nom_reseau_str
+from src.utils import charger_gtfs, obtenir_service_ids_pour_date
+from src.info_reseau import dates_service, nom_fichier_valide, nom_reseau_str, recuperer_logo_reseau
 from src.hf_cache import envoyer_vers_hf, lister_fichiers_hf, recuperer_depuis_hf
 from src.merge_gtfs import fusionner_gtfs
-from views.home import home_page
+from views.home import explications_analyse_gtfs, home_page
 from views.accessibilite_index import GTFS_ANALYSE_URL, accessibilite_index_page
 from views.ponderation_equipements import ponderation_equipements_page
 from views.cartographie_insee import cartographie_insee_page
 from views.benchmark_reseaux import benchmark_reseaux_page
+from views.arrets import arrets_page
+from views.troncons import troncons_page
 
 
 class TropAgencesError(Exception):
@@ -58,7 +60,10 @@ GTFS_NOM_RESEAU_FORCE = {
 st.set_page_config(page_title="Analyse accessibilite aux différents équipements d'agglomération piéton / transport collectif (GTFS)", page_icon="🚌", layout="wide")
 
 # Titre principal
-st.title("Application accessibilite équipements d'agglomération piéton / transport collectif ")
+st.title(
+    "Application analyse accessibilité urbaine transports collectifs/piétons "
+    "et analyse réseau transports collectifs"
+)
 
 
 # --- CSS V1 (ancien style, conservé pour pouvoir revenir en arrière) -------
@@ -199,19 +204,32 @@ if "selected_page" not in st.session_state:
 GROUPES_NAV = {
     "Accueil": ["Accueil"],
     "Analyse du réseau": ["Accessibilité", "Pondération équipements", "Cartographie INSEE"],
+    "Analyse réseau (GTFS)": ["Arrêts", "Tronçons", "Explications GTFS"],
     "Benchmark": ["Benchmark Villes Françaises"],
 }
 LIBELLES_GROUPE = {
     "Accueil": "🏠 Accueil",
-    "Analyse du réseau": "📈 Analyse du réseau",
+    "Analyse du réseau": "📈 Analyse accessibilité urbaine",
+    "Analyse réseau (GTFS)": "🚏 Analyse réseau",
     "Benchmark": "📊 Benchmark villes françaises",
 }
 LIBELLES_PAGE = {
     "Accessibilité": "📍 Accessibilité",
     "Pondération équipements": "⚖️ Localisation et pondération équipements",
     "Cartographie INSEE": "🗺️ Carte population par déciles",
+    "Arrêts": "📍 Arrêts",
+    "Tronçons": "🛤️ Tronçons",
+    "Explications GTFS": "📖 Explications",
 }
 GROUPE_DE_LA_PAGE = {page: groupe for groupe, pages in GROUPES_NAV.items() for page in pages}
+
+# Sous-menus désactivés en bloc tant qu'aucun GTFS n'est chargé : uniquement
+# "Analyse du réseau", dont les 3 pages en dépendent toutes sans repli
+# possible. "Analyse réseau (GTFS)" reste actif même sans GTFS : Arrêts/
+# Tronçons affichent déjà un message d'invite gracieux dans ce cas (cf.
+# views/arrets.py, views/troncons.py), et Explications GTFS est purement
+# informatif, utile à consulter avant même de charger un fichier.
+GROUPES_DESACTIVES_SANS_GTFS = {"Analyse du réseau"}
 
 # Conteneurs à clé stable (.st-key-nav_niveau1/2 générés par Streamlit à
 # partir du key=), pour différencier le style des deux niveaux sans dépendre
@@ -232,9 +250,6 @@ pages_du_groupe = GROUPES_NAV[groupe_choisi]
 if len(pages_du_groupe) == 1:
     st.session_state.selected_page = pages_du_groupe[0]
 else:
-    # Sous-menu "Analyse du réseau" : désactivé tant qu'aucun GTFS n'est
-    # chargé (les 3 pages en dépendent toutes), plutôt que de laisser
-    # naviguer vers un message "veuillez charger un GTFS" sur chacune.
     with st.container(key="nav_niveau2"):
         st.session_state.selected_page = st.segmented_control(
             "Page",
@@ -246,7 +261,7 @@ else:
                 else pages_du_groupe[0]
             ),
             required=True,
-            disabled=st.session_state.get("feed") is None,
+            disabled=groupe_choisi in GROUPES_DESACTIVES_SANS_GTFS and st.session_state.get("feed") is None,
             label_visibility="collapsed",
             key="nav_sous_page",
         )
@@ -301,15 +316,7 @@ if nb_sources_gtfs > 1:
         placeholder="ex: Aix_Marseille",
     ).strip() or None
 
-# Variables globales pour stocker les résultats. Uniquement celles
-# effectivement lues ailleurs (views/*.py, charger_donnees_gtfs ci-dessous) :
-# indicateurs_arrets/bus/tram/metro/trolley/ferry, total_vk_plage,
-# modes_disponibles, last_date_str, active_service_ids,
-# decoupage_reference_path_reseau, decoupage_agglo et chemin_logo étaient
-# initialisées (et pour certaines calculées) sans jamais être lues nulle
-# part — vestiges d'une fonctionnalité "indicateurs tronçons/arrêts" jamais
-# branchée à une page (cf. src/indicateurs_troncons.py, script autonome non
-# utilisé par l'app).
+# Variables globales pour stocker les résultats.
 if "feed" not in st.session_state:
     st.session_state.feed = None
 if "date_str" not in st.session_state:
@@ -320,6 +327,19 @@ if "zip_path" not in st.session_state:
     st.session_state.zip_path = None
 if "last_uploaded_name" not in st.session_state:
     st.session_state.last_uploaded_name = None
+# Ci-dessous : utilisées par l'onglet "Analyse réseau (GTFS)"
+# (views/arrets.py, views/troncons.py, importés du projet sœur
+# GTFS_analysis_fr — cf. src/indicateurs_troncons.py).
+if "active_service_ids" not in st.session_state:
+    st.session_state.active_service_ids = None
+if "chemin_logo" not in st.session_state:
+    st.session_state.chemin_logo = None
+if "indicateurs_arrets" not in st.session_state:
+    st.session_state.indicateurs_arrets = None
+if "indicateurs_par_mode" not in st.session_state:
+    st.session_state.indicateurs_par_mode = None
+if "total_vk_plage" not in st.session_state:
+    st.session_state.total_vk_plage = None
 
 
 # Fonction pour charger les données. La date d'analyse (date_JOB) n'est
@@ -409,6 +429,18 @@ def charger_donnees_gtfs():
         _, _, _, date_JOB = dates_service(feed)
         date_str = date_JOB
 
+        # Services actifs à cette date (utilisé par l'onglet "Analyse réseau
+        # (GTFS)" — views/arrets.py, views/troncons.py)
+        active_service_ids = obtenir_service_ids_pour_date(feed, date_str)
+
+        # Logo du réseau (best-effort : nécessite une requête réseau vers le
+        # site de l'agence, ne doit jamais bloquer le chargement en cas
+        # d'échec) — utilisé par les cartes de l'onglet "Analyse réseau (GTFS)".
+        try:
+            chemin_logo = recuperer_logo_reseau(feed, dossier_sortie=tempfile.gettempdir())
+        except Exception:
+            chemin_logo = None
+
         # nom_reseau_str() (pas nom_reseau()) : sanitize les noms d'agences pour
         # un usage sûr dans un chemin de fichier (cf. chemins_reseau) — nom_reseau()
         # seul joint les agences par " / ", qui casse la construction des chemins
@@ -431,6 +463,14 @@ def charger_donnees_gtfs():
         st.session_state.zip_path = GTFS_PATH
         st.session_state.nom_reseau_str = reseau_str
         st.session_state.last_uploaded_name = nom_gtfs
+        st.session_state.active_service_ids = active_service_ids
+        st.session_state.chemin_logo = chemin_logo
+        # Nouveau réseau : réinitialise les indicateurs Arrêts/Tronçons de
+        # l'ancien plutôt que de les laisser affichés à tort le temps du
+        # recalcul (cf. views/arrets.py, views/troncons.py).
+        st.session_state.indicateurs_arrets = None
+        st.session_state.indicateurs_par_mode = None
+        st.session_state.total_vk_plage = None
 
         # GTFS uploadé (pas choisi dans le catalogue existant) et jamais vu,
         # SEUL (pas une fusion — le zip fusionné n'a pas vocation à réapparaître
@@ -518,5 +558,12 @@ elif st.session_state.selected_page == "Pondération équipements":
     ponderation_equipements_page()
 elif st.session_state.selected_page == "Cartographie INSEE":
     cartographie_insee_page()
+elif st.session_state.selected_page == "Arrêts":
+    arrets_page()
+elif st.session_state.selected_page == "Tronçons":
+    troncons_page()
+elif st.session_state.selected_page == "Explications GTFS":
+    st.markdown("---")
+    explications_analyse_gtfs()
 elif st.session_state.selected_page == "Benchmark Villes Françaises":
     benchmark_reseaux_page()

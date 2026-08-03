@@ -376,7 +376,91 @@ def create_carte_arrets(df, nom_reseau_str,date_service_str, date_analyse, zip_p
 
     return m
 
-def creer_carte_troncons(gdf_bus, gdf_tram,gdf_metro, gdf_trolley, gdf_ferry, output_path,date_service_str, colonne_frequence="nombre_passages", nom_reseau_str=None, chemin_logo=None, lang="fr"):
+def _ajouter_couche_troncons_generique(
+    m, gdf, nom_couche, emoji, colors, colonne_frequence, lang,
+    legende_items_html, popup_id, popup_de, popup_a, popup_passages,
+    popup_vitesse, popup_distance, suffixe_passages,
+    popup_color=None, weight_base=2, weight_amplitude=6,
+):
+    """
+    Ajoute une couche de tronçons colorée par fréquence à une carte Folium
+    existante, avec le même rendu (popup, tooltip, légende) que les couches
+    bus/tram/metro/trolley/ferry/train ci-dessous.
+
+    Mécanisme générique sans connaissance d'un réseau particulier : permet
+    à un appelant (ex: gtfs_notebook_idf.ipynb, pour distinguer RER,
+    Transilien et TER) d'ajouter ses propres sous-catégories sur la carte
+    sans dupliquer tout le code de rendu, et sans que cartographie.py ait à
+    connaître ces sous-catégories.
+
+    Returns:
+    --------
+    str : legende_items_html mis à jour (avec cette couche ajoutée si non vide)
+    """
+    if len(gdf) == 0 or colonne_frequence not in gdf.columns:
+        return legende_items_html
+
+    gdf_actif = gdf[gdf[colonne_frequence] > 0].copy()
+    if len(gdf_actif) == 0:
+        return legende_items_html
+
+    vmin = gdf_actif[colonne_frequence].min()
+    vmax = gdf_actif[colonne_frequence].max()
+    popup_color = popup_color or colors[-1]
+
+    colormap = cm.LinearColormap(
+        colors=colors, vmin=vmin, vmax=vmax,
+        caption=t("carto.caption_passages_mode", lang, mode=nom_couche),
+    )
+
+    feature_group = folium.FeatureGroup(name=f"{emoji} {nom_couche}", show=True)
+
+    for idx, row in gdf_actif.iterrows():
+        freq = row[colonne_frequence]
+        color = colormap(freq)
+        coords = [(coord[1], coord[0]) for coord in row["geometry"].coords]
+
+        popup_html = f"""
+        <div style="font-family: Arial; font-size: 12px; width: 250px;">
+            <b style="color: {popup_color};">{emoji} {t("carto.popup_troncon_titre", lang, mode=nom_couche.upper())}</b><br>
+            <hr style="margin: 5px 0;">
+            <b>{popup_id}</b> {row.get('troncon_unique_id', 'N/A')}<br>
+            <b>{popup_de}</b> {row.get('stop_depart_name', 'N/A')}<br>
+            <b>{popup_a}</b> {row.get('stop_arrivee_name', 'N/A')}<br>
+            <hr style="margin: 5px 0;">
+            <b>{popup_passages}</b> {int(freq)}<br>
+            <b>{popup_vitesse}</b> {row.get('vitesse_moyenne_kmh', 0):.1f} km/h<br>
+            <b>{popup_distance}</b> {row.get('distance_km', 0):.2f} km
+        </div>
+        """
+
+        weight = weight_base + (freq - vmin) / (vmax - vmin) * weight_amplitude
+
+        folium.PolyLine(
+            coords,
+            color=color,
+            weight=weight,
+            opacity=0.8,
+            popup=folium.Popup(popup_html, max_width=300),
+            tooltip=f"{row.get('stop_depart_name', '')} → {row.get('stop_arrivee_name', '')}: {int(freq)} {suffixe_passages}",
+        ).add_to(feature_group)
+
+    feature_group.add_to(m)
+
+    gradient = ",".join(colors)
+    legende_items_html += f"""
+    <div style="margin-bottom:8px;">
+        <div style="font-size:11px;margin-bottom:2px;">{emoji} {t("carto.legende_passages_mode", lang, mode=nom_couche)}</div>
+        <div style="width:180px;height:10px;border-radius:3px;background:linear-gradient(to right,{gradient});"></div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:#555;">
+            <span>{int(vmin)}</span><span>{int(vmax)}</span>
+        </div>
+    </div>"""
+
+    return legende_items_html
+
+
+def creer_carte_troncons(gdf_bus, gdf_tram,gdf_metro, gdf_trolley, gdf_ferry, gdf_train, output_path,date_service_str, colonne_frequence="nombre_passages", nom_reseau_str=None, chemin_logo=None, lang="fr", couches_supplementaires=None):
     """
     Crée une carte Folium interactive avec les tronçons bus et tram.
     Les tronçons sont colorés selon la fréquence et peuvent être activés/désactivés.
@@ -393,6 +477,8 @@ def creer_carte_troncons(gdf_bus, gdf_tram,gdf_metro, gdf_trolley, gdf_ferry, ou
         GeoDataFrame des tronçons trolley avec indicateurs
     gdf_ferry : GeoDataFrame
         GeoDataFrame des tronçons ferry avec indicateurs
+    gdf_train : GeoDataFrame
+        GeoDataFrame des tronçons train (route_type=2 : RER, Transilien, TER...) avec indicateurs
     chemin output lien html
     date_service str
         colonne_frequence : str
@@ -402,6 +488,14 @@ def creer_carte_troncons(gdf_bus, gdf_tram,gdf_metro, gdf_trolley, gdf_ferry, ou
     chemin_logo : str, optional
         Chemin local du logo du réseau (voir recuperer_logo_reseau dans
         utils.py), affiché en haut à droite de la carte.
+    couches_supplementaires : list[tuple], optional
+        Couches additionnelles à superposer, chacune sous la forme
+        (gdf, nom_couche, emoji, colors, poids_trait) — même rendu que les
+        couches fixes ci-dessus, via _ajouter_couche_troncons_generique.
+        poids_trait multiplie l'épaisseur de trait par défaut (1 = normal,
+        2 = deux fois plus épais, ex. RER). Permet à un appelant de
+        distinguer de nouvelles sous-catégories (ex: RER pour IDFM, cf.
+        gtfs_notebook_idf.ipynb) sans que cette fonction ait à les connaître.
 
     Returns:
     --------
@@ -411,7 +505,7 @@ def creer_carte_troncons(gdf_bus, gdf_tram,gdf_metro, gdf_trolley, gdf_ferry, ou
 
     # Déterminer le centre de la carte (moyenne des coordonnées)
     all_coords = []
-    for gdf in [gdf_bus, gdf_tram, gdf_metro, gdf_trolley, gdf_ferry]:
+    for gdf in [gdf_bus, gdf_tram, gdf_metro, gdf_trolley, gdf_ferry, gdf_train]:
         if len(gdf) > 0:
             all_coords.extend(gdf["lat_depart_parent"].dropna().tolist())
             all_coords.extend(gdf["lat_arrivee_parent"].dropna().tolist())
@@ -421,7 +515,7 @@ def creer_carte_troncons(gdf_bus, gdf_tram,gdf_metro, gdf_trolley, gdf_ferry, ou
     else:
         center_lat = np.mean(all_coords)
         all_lons = []
-        for gdf in [gdf_bus, gdf_tram, gdf_metro, gdf_trolley, gdf_ferry]:
+        for gdf in [gdf_bus, gdf_tram, gdf_metro, gdf_trolley, gdf_ferry, gdf_train]:
             if len(gdf) > 0:
                 all_lons.extend(gdf["lon_depart_parent"].dropna().tolist())
                 all_lons.extend(gdf["lon_arrivee_parent"].dropna().tolist())
@@ -787,6 +881,83 @@ def creer_carte_troncons(gdf_bus, gdf_tram,gdf_metro, gdf_trolley, gdf_ferry, ou
                     <span>{int(vmin_ferry)}</span><span>{int(vmax_ferry)}</span>
                 </div>
             </div>"""
+
+    # ===== TRONÇONS TRAIN (RER, Transilien, TER...) =====
+    if len(gdf_train) > 0 and colonne_frequence in gdf_train.columns:
+        # Filtrer les tronçons avec passages
+        gdf_train_actif = gdf_train[gdf_train[colonne_frequence] > 0].copy()
+
+        if len(gdf_train_actif) > 0:
+            # Créer la palette de couleurs pour les trains
+            vmin_train = gdf_train_actif[colonne_frequence].min()
+            vmax_train = gdf_train_actif[colonne_frequence].max()
+
+            colormap_train = cm.LinearColormap(
+                colors=["#f2f0f7", "#cbc9e2", "#9e9ac8", "#756bb1", "#54278f"],
+                vmin=vmin_train,
+                vmax=vmax_train,
+                caption=t("carto.caption_passages_mode", lang, mode="Train"),
+            )
+
+            # Créer un groupe de features pour les trains
+            feature_group_train = folium.FeatureGroup(name="🚆 Train", show=True)
+
+            # Ajouter chaque tronçon train
+            for idx, row in gdf_train_actif.iterrows():
+                freq = row[colonne_frequence]
+                color = colormap_train(freq)
+
+                # Extraire les coordonnées de la géométrie
+                coords = [(coord[1], coord[0]) for coord in row["geometry"].coords]
+
+                # Créer le popup avec les informations
+                popup_html = f"""
+                <div style="font-family: Arial; font-size: 12px; width: 250px;">
+                    <b style="color: #54278f;">🚆 {t("carto.popup_troncon_titre", lang, mode="TRAIN")}</b><br>
+                    <hr style="margin: 5px 0;">
+                    <b>{popup_id}</b> {row.get('troncon_unique_id', 'N/A')}<br>
+                    <b>{popup_de}</b> {row.get('stop_depart_name', 'N/A')}<br>
+                    <b>{popup_a}</b> {row.get('stop_arrivee_name', 'N/A')}<br>
+                    <hr style="margin: 5px 0;">
+                    <b>{popup_passages}</b> {int(freq)}<br>
+                    <b>{popup_vitesse}</b> {row.get('vitesse_moyenne_kmh', 0):.1f} km/h<br>
+                    <b>{popup_distance}</b> {row.get('distance_km', 0):.2f} km
+                </div>
+                """
+
+                # Épaisseur proportionnelle à la fréquence
+                weight = 2 + (freq - vmin_train) / (vmax_train - vmin_train) * 6
+
+                folium.PolyLine(
+                    coords,
+                    color=color,
+                    weight=weight,
+                    opacity=0.8,
+                    popup=folium.Popup(popup_html, max_width=300),
+                    tooltip=f"{row.get('stop_depart_name', '')} → {row.get('stop_arrivee_name', '')}: {int(freq)} {suffixe_passages}",
+                ).add_to(feature_group_train)
+
+            feature_group_train.add_to(m)
+
+            legende_items_html += f"""
+            <div style="margin-bottom:8px;">
+                <div style="font-size:11px;margin-bottom:2px;">🚆 {t("carto.legende_passages_mode", lang, mode="Train")}</div>
+                <div style="width:180px;height:10px;border-radius:3px;background:linear-gradient(to right,#f2f0f7,#cbc9e2,#9e9ac8,#756bb1,#54278f);"></div>
+                <div style="display:flex;justify-content:space-between;font-size:10px;color:#555;">
+                    <span>{int(vmin_train)}</span><span>{int(vmax_train)}</span>
+                </div>
+            </div>"""
+
+    # ===== COUCHES SUPPLÉMENTAIRES (optionnelles, fournies par l'appelant) =====
+    # 5e élément du tuple : multiplicateur d'épaisseur de trait (1 par défaut),
+    # ex. 2 pour le RER afin de le distinguer visuellement sur la carte.
+    for gdf_extra, nom_couche, emoji_extra, colors_extra, poids_trait in (couches_supplementaires or []):
+        legende_items_html = _ajouter_couche_troncons_generique(
+            m, gdf_extra, nom_couche, emoji_extra, colors_extra, colonne_frequence, lang,
+            legende_items_html, popup_id, popup_de, popup_a, popup_passages,
+            popup_vitesse, popup_distance, suffixe_passages,
+            weight_base=2 * poids_trait, weight_amplitude=6 * poids_trait,
+        )
 
     # Ajouter le contrôle des couches (cases à cocher)
     folium.LayerControl(collapsed=False).add_to(m)

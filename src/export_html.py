@@ -244,7 +244,7 @@ def exporter_camembert_html(nom_reseau_str, date_service_str, lignes, output_pat
     print(f"✓ Camembert HTML exporté : {output_path}")
 
 
-def exporter_tableau_lignes_html(nom_reseau_str, date_service_str, feed, output_path, total_vk_plage=None, lang="fr"):
+def exporter_tableau_lignes_html(nom_reseau_str, date_service_str, feed, output_path, total_vk_plage=None, lang="fr", ordre_mode=None):
     """
     Génère un fichier HTML autonome présentant la liste des lignes et les vk par an, avec un style prédéfini.
 
@@ -258,6 +258,10 @@ def exporter_tableau_lignes_html(nom_reseau_str, date_service_str, feed, output_
         DataFrame avec les colonnes route_id et total_km_annee (voir
         calculer_total_km_plage  / Gtfs_notebook_3.ipynb). Si non fourni,
         il est recalculé à partir du feed.
+    ordre_mode : dict, optional
+        Mapping nom de mode -> rang de tri, pour remplacer l'ordre par
+        défaut (ex: ORDRE_MODE_IDFM dans views/troncons.py, qui place "RER"
+        en tête pour distinguer RER/Transilien/TER sur IDFM).
     """
     if total_vk_plage is None:
         total_vk_plage = km_par_ligne_plage(feed.get_dates(), feed)
@@ -269,7 +273,7 @@ def exporter_tableau_lignes_html(nom_reseau_str, date_service_str, feed, output_
     # Tri : d'abord par mode (Métro, puis Tram, puis Bus, puis les autres modes),
     # puis au sein d'un même mode par numéro de ligne (valeur numérique
     # d'abord, puis les lignes non-numériques par ordre alphabétique)
-    ORDRE_MODE = {"Métro": 0, "Tram": 1, "Trolley": 2, "Ferry": 3, "Bus": 4}
+    ORDRE_MODE = ordre_mode if ordre_mode is not None else {"Métro": 0, "Tram": 1, "Trolley": 2, "Ferry": 3, "Bus": 4}
 
     def cle_tri(row):
         nom = str(row["route_short_name"])

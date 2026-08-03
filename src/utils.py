@@ -1,11 +1,14 @@
 import csv
 import io
+import os
 import pathlib
 import zipfile
 
+import geopandas as gpd
 import gtfs_kit as gk
 import pandas as pd
 import numpy as np
+from shapely import wkt
 
 
 ########################################################################
@@ -458,6 +461,69 @@ def exporter_geojson(gdf, chemin_fichier):
     """
     gdf.to_file(chemin_fichier, driver='GeoJSON')
     print(f"✓ GeoJSON exporté : {chemin_fichier}")
+
+
+def charger_csv_avec_geometrie(chemin_fichier):
+    """
+    Charge un CSV et le retourne en GeoDataFrame s'il contient une colonne
+    'geometry' (en WKT), ou en DataFrame classique sinon — les indicateurs
+    par arrêt (cf. calculer_indicateurs_arrets, src/arrets.py) n'ont pas de
+    géométrie (juste stop_lat/stop_lon), donc mis en cache sans colonne
+    'geometry' : geopandas interdit d'assigner un crs à un GeoDataFrame
+    sans géométrie.
+
+    Parameters:
+    -----------
+    chemin_fichier : str
+        Chemin du fichier CSV
+
+    Returns:
+    --------
+    GeoDataFrame ou DataFrame
+    """
+    df = pd.read_csv(chemin_fichier)
+
+    if 'geometry' in df.columns:
+        df['geometry'] = df['geometry'].apply(wkt.loads)
+        return gpd.GeoDataFrame(df, geometry='geometry', crs='EPSG:4326')
+
+    return df
+
+
+def charger_ou_calculer_gdf(chemin_cache, fonction_calcul):
+    """
+    Cache disque pour une étape de calcul coûteuse (tronçons uniques,
+    indicateurs de fréquentation par tronçon...) : charge chemin_cache s'il
+    existe déjà, sinon appelle fonction_calcul() et sauvegarde le résultat
+    pour que les prochaines exécutions (notebook relancé, app redémarrée,
+    même réseau resélectionné) n'aient pas à tout recalculer.
+
+    Sûr à réutiliser d'une exécution à l'autre car date_JOB est désormais
+    déterministe pour un GTFS donné (cf. dates_service dans info_reseau.py) :
+    les indicateurs par tronçon ne varient donc pas d'un run à l'autre tant
+    que le GTFS ne change pas.
+
+    Parameters:
+    -----------
+    chemin_cache : str
+        Chemin du fichier CSV de cache (créé si absent).
+    fonction_calcul : callable
+        Fonction sans argument à appeler si le cache est absent ; doit
+        renvoyer un DataFrame ou GeoDataFrame.
+
+    Returns:
+    --------
+    DataFrame ou GeoDataFrame
+    """
+    if os.path.exists(chemin_cache):
+        print(f"✓ Chargé depuis le cache : {chemin_cache}")
+        return charger_csv_avec_geometrie(chemin_cache)
+
+    resultat = fonction_calcul()
+    os.makedirs(os.path.dirname(chemin_cache), exist_ok=True)
+    resultat.to_csv(chemin_cache, index=False)
+    print(f"✓ Calculé et mis en cache : {chemin_cache}")
+    return resultat
 
 
 # Construction du réseau de transport multimodal, équivalent de setup_r5(data_path).

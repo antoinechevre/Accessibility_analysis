@@ -72,6 +72,48 @@ def dates_service (feed):
     return dates_service, date_debut, date_fin, date_JOB
 
 
+def charger_ou_calculer_dates_service(feed, nom_reseau_str):
+    """
+    Cache à deux niveaux (disque local puis dataset Hugging Face, même
+    principe que charger_ou_calculer_avec_cache_hf dans hf_cache.py) pour
+    dates_service(), dont le calcul boucle sur feed.get_trips() une fois
+    par date du calendrier GTFS et peut prendre plusieurs minutes sur un
+    gros réseau (IDFM). Sûr à réutiliser d'une exécution à l'autre :
+    dates_service() est déterministe pour un GTFS donné.
+
+    Indispensable pour les pages Streamlit (troncons_page, arrets_page) qui
+    appellent dates_service() à chaque rerun : sans ce cache, la moindre
+    interaction utilisateur relancerait ce calcul coûteux.
+    """
+    import json
+    from src.hf_cache import recuperer_depuis_hf, envoyer_vers_hf
+
+    chemin_cache = os.path.join("data", "memory_troncons", nom_reseau_str, "dates_service.json")
+    nom_fichier_hf = f"memory_troncons/{nom_reseau_str}/dates_service.json"
+
+    if not os.path.exists(chemin_cache):
+        recuperer_depuis_hf(nom_fichier_hf, chemin_cache)
+
+    if os.path.exists(chemin_cache):
+        print(f"✓ dates_service chargé depuis le cache : {chemin_cache}")
+        with open(chemin_cache) as f:
+            donnees = json.load(f)
+        return donnees["dates_service"], donnees["date_debut"], donnees["date_fin"], donnees["date_JOB"]
+
+    dates_service_liste, date_debut, date_fin, date_JOB = dates_service(feed)
+    os.makedirs(os.path.dirname(chemin_cache), exist_ok=True)
+    with open(chemin_cache, "w") as f:
+        json.dump({
+            "dates_service": dates_service_liste,
+            "date_debut": date_debut,
+            "date_fin": date_fin,
+            "date_JOB": date_JOB,
+        }, f)
+    print(f"✓ dates_service calculé et mis en cache : {chemin_cache}")
+    envoyer_vers_hf(chemin_cache, nom_fichier_hf)
+    return dates_service_liste, date_debut, date_fin, date_JOB
+
+
 MOIS = {
     "fr": {
         1: "janvier", 2: "février", 3: "mars", 4: "avril", 5: "mai", 6: "juin",

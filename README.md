@@ -8,13 +8,18 @@ app_port: 7860
 pinned: false
 ---
 
-# Accessibility Analysis
+# Application analyse accessibilité urbaine transports collectifs/piétons et analyse réseau transports collectifs
 
-Analyse de l'accessibilité piétonne / transports collectifs (< 30 min) aux équipements d'une agglomération française, à partir d'un GTFS quelconque.
+Cette application regroupe deux analyses indépendantes basées sur le même jeu de données GTFS :
+
+1. **Analyse d'accessibilité urbaine** aux équipements en transport collectif / piéton (< 30 min), à partir d'un GTFS et d'un découpage communal français quelconque.
+2. **Analyse réseau** (arrêts / tronçons) : indicateurs de fréquentation par arrêt et par tronçon, indépendants de l'analyse d'accessibilité — fonctionne avec n'importe quel GTFS, français ou non.
 
 Le projet s'inspire des travaux du livre *Introduction to urban accessibility* (Rafael H. M. Pereira et Daniel Herszenhut, Ipea - Institute for Applied Economic Research), notamment le chapitre [Calculating accessibility estimates in R](https://ipeagit.github.io/intro_access_book/3_calculando_acesso.en.html), réadaptés ici en Python pour un contexte français (carroyage INSEE, Base Permanente des Équipements).
 
 **Concepteur :** Antoine Chèvre (avec Claude.ai)
+
+## Analyse d'accessibilité urbaine
 
 ## Ce que fait le projet
 
@@ -51,24 +56,40 @@ Le projet s'inspire des travaux du livre *Introduction to urban accessibility* (
   7.2 % opportunités/équipements pour un temps de trajet moyen de 30 min, 45 min, 60 min, 75 min  
 
 
+## Analyse réseau (arrêts / tronçons)
+
+Deuxième analyse proposée par l'application, indépendante de l'analyse d'accessibilité ci-dessus (pas besoin de découpage communal, de carroyage INSEE ni de BPE — seul le GTFS est nécessaire, ce qui la rend utilisable pour un réseau hors de France). Développée lors du [Hackathon TSNI 2025 du Cerema](https://colab.research.google.com/github/CEREMA/hackathon-gtfs/blob/main/gtfs_notebook.ipynb) (équipe Cerema : Patrick Gendre, Hugo De Luca et Maxence Liogier), reprise et adaptée ici par Antoine Chèvre (et Claude.ai). Application dédiée de référence : [GTFS_analyse_fr](https://huggingface.co/spaces/antoinechevre/GTFS_analyse_fr).
+
+Détermine la plage de service fiable du GTFS et un jour ouvré de base (JOB, mardi ou jeudi tiré au hasard dans cette plage), puis calcule :
+
+- **Par arrêts** : nombre de passages par arrêt, carte interactive, statistiques détaillées (fiche exportable en HTML), export CSV.
+- **Par tronçons** (bus / tram / métro / trolley / ferry, et train pour les réseaux avec agences dédiées comme IDFM — RER/Transilien/TER) : nombre de passages par tronçon, vitesse moyenne, carte interactive par mode avec couches superposables, export CSV par mode.
+
+Dans l'app, ces deux pages vivent sous l'onglet "Analyse réseau" (sous-pages "Arrêts" et "Tronçons"), avec une troisième sous-page "Explications" reprenant ce même texte.
+
 ## Structure du dépôt
 
 ```
 index_accessibility_notebook_def.ipynb   # notebook principal : pipeline d'analyse complet
 app.py                                    # application Streamlit (en cours de développement)
 views/                                    # pages de l'app Streamlit
+  accessibilite_index.py, ponderation_equipements.py, cartographie_insee.py, benchmark_reseaux.py
+  home.py                                 # page Accueil (accessibilité + analyse réseau)
+  arrets.py, troncons.py                  # analyse réseau (arrêts / tronçons), cf. section dédiée
 src/
   build_data_agglo.py                     # découpage communal, grille, extraction OSM
   BPE_traitement.py                       # filtrage/pondération BPE, cartes par domaine
   utilitaires_matrix.py                   # cumulative_cutoff, cost_to_closest, gravity, 2SFCA
   utils.py                                # chargement GTFS, exports CSV/GeoJSON, dir_tree
   info_reseau.py, i18n.py, ...            # utilitaires réseau / traductions app
+  arrets.py, create_troncons_uniques.py, indicateurs_troncons.py   # calculs analyse réseau
+  cartographie.py, export_html.py         # cartes Folium et fiches HTML (arrêts, accessibilité et réseau)
 data/                                      # GTFS, carroyage INSEE, BPE, fichiers générés (non versionné)
 output/                                    # cartes et images exportées (non versionné)
 requirements.txt
 ```
 
-> ⚠️ `app.py` est fonctionnel : `views/accessibilite_index.py` (pipeline complet + r5py) et `views/ponderation_equipements.py` (cartes de pondération BPE, sans r5py) sont toutes deux implémentées. Le notebook reste la référence de calcul en cas de doute.
+> ⚠️ `app.py` est fonctionnel : `views/accessibilite_index.py` (pipeline complet + r5py) et `views/ponderation_equipements.py` (cartes de pondération BPE, sans r5py) sont toutes deux implémentées, de même que `views/arrets.py` et `views/troncons.py` (analyse réseau). Le notebook reste la référence de calcul en cas de doute pour l'analyse d'accessibilité.
 
 ## Déploiement
 
@@ -114,4 +135,4 @@ pip install -r requirements.txt
 
 ## Statut
 
-Projet personnel en développement actif (2026). Le notebook constitue la référence fonctionnelle ; l'application Streamlit (`app.py`) est une interface en construction pour rendre l'analyse accessible sans passer par le notebook.
+Projet personnel en développement actif (2026). Le notebook constitue la référence fonctionnelle pour l'analyse d'accessibilité ; l'application Streamlit (`app.py`) rend les deux analyses (accessibilité urbaine et analyse réseau) accessibles sans passer par le notebook.

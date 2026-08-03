@@ -172,3 +172,48 @@ def lister_fichiers_hf(sous_dossier):
 
     prefixe = f"{sous_dossier}/"
     return sorted(f[len(prefixe):] for f in fichiers if f.startswith(prefixe) and f != prefixe)
+
+
+def charger_ou_calculer_avec_cache_hf(chemin_cache_local, nom_fichier_hf, fonction_calcul):
+    """
+    Cache à deux niveaux pour une étape de calcul coûteuse (tronçons
+    uniques, indicateurs de fréquentation par tronçon...), sous
+    memory_troncons/<réseau>/ dans le dataset HF :
+    1. cache disque local (chemin_cache_local) si déjà présent ;
+    2. sinon, tente de le récupérer depuis le dataset HF (nom_fichier_hf) —
+       utile sur un déploiement Spaces fraîchement démarré, sans stockage
+       persistant, mais où un run précédent (le sien ou celui d'un autre
+       visiteur) a déjà calculé et renvoyé ce résultat ;
+    3. sinon, calcule via fonction_calcul(), sauvegarde en local et renvoie
+       vers HF (best-effort) pour que les prochains runs en profitent.
+
+    Parameters:
+    -----------
+    chemin_cache_local : str
+        Chemin du fichier CSV de cache local (créé si absent).
+    nom_fichier_hf : str
+        Chemin relatif dans le dataset HF (ex: "memory_troncons/IDFM/troncons_bus.csv").
+    fonction_calcul : callable
+        Fonction sans argument à appeler si aucun cache n'est disponible ;
+        doit renvoyer un DataFrame ou GeoDataFrame.
+
+    Returns:
+    --------
+    DataFrame ou GeoDataFrame
+    """
+    from src.utils import charger_csv_avec_geometrie
+
+    if os.path.exists(chemin_cache_local):
+        print(f"✓ Chargé depuis le cache local : {chemin_cache_local}")
+        return charger_csv_avec_geometrie(chemin_cache_local)
+
+    if recuperer_depuis_hf(nom_fichier_hf, chemin_cache_local):
+        print(f"✓ Chargé depuis le cache Hugging Face : {nom_fichier_hf}")
+        return charger_csv_avec_geometrie(chemin_cache_local)
+
+    resultat = fonction_calcul()
+    os.makedirs(os.path.dirname(chemin_cache_local), exist_ok=True)
+    resultat.to_csv(chemin_cache_local, index=False)
+    print(f"✓ Calculé et mis en cache localement : {chemin_cache_local}")
+    envoyer_vers_hf(chemin_cache_local, nom_fichier_hf)
+    return resultat

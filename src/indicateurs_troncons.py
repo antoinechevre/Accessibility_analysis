@@ -3,9 +3,13 @@ Calcul de la fréquentation et vitesse moyenne par tronçon unique
 Basé sur stop_parent_id, tous sens confondus
 """
 
+import os
+
 import pandas as pd
 import numpy as np
 import geopandas as gpd
+
+from src.utils import charger_ou_calculer_gdf
 
 
 def calculer_distance_haversine(lat1, lon1, lat2, lon2):
@@ -63,7 +67,7 @@ def preparer_mapping_parent_stops(feed):
     )
 
 
-def calculer_frequentation_troncons(feed, df_troncons_uniques, service_ids, route_type):
+def calculer_frequentation_troncons(feed, df_troncons_uniques, service_ids, route_type, agency_ids=None):
     """
     Calcule la fréquentation et la vitesse moyenne pour chaque tronçon unique
 
@@ -78,6 +82,10 @@ def calculer_frequentation_troncons(feed, df_troncons_uniques, service_ids, rout
         Liste des service_id actifs pour la date analysée
     route_type: int
         Le type de route (0=tram, 3=bus, etc.)
+    agency_ids : list[str], optional
+        Restreint en plus aux routes de ces agency_id (ex : distinguer RER,
+        Transilien et TER, qui partagent tous route_type=2 dans le GTFS
+        IDFM mais ont des agency_id différents — cf. gtfs_notebook_idf.ipynb).
 
     Returns:
     --------
@@ -113,8 +121,10 @@ def calculer_frequentation_troncons(feed, df_troncons_uniques, service_ids, rout
     # Filtrer les trips actifs
     trips_actifs = feed.trips[feed.trips["service_id"].isin(service_ids)].copy()
 
-    # Restriction au bon route_type
+    # Restriction au bon route_type (et, si fourni, aux bonnes agences)
     routes_filtrees = feed.routes[feed.routes["route_type"] == route_type]
+    if agency_ids is not None:
+        routes_filtrees = routes_filtrees[routes_filtrees["agency_id"].isin(agency_ids)]
     trips_actifs = trips_actifs[
         trips_actifs["route_id"].isin(routes_filtrees["route_id"])
     ]
@@ -269,7 +279,9 @@ def compute_indicateurs_troncons(
     reference_troncons_uniques_tram: pd.DataFrame,
     reference_troncons_uniques_metro: pd.DataFrame,
     reference_troncons_uniques_trolley: pd.DataFrame,
-    reference_troncons_uniques_ferry: pd.DataFrame
+    reference_troncons_uniques_ferry: pd.DataFrame,
+    reference_troncons_uniques_train: pd.DataFrame,
+    nom_reseau_str: str = None,
 ):
     """
     Réalise le calcul des indicateurs par tronçon pour une date d'analyse donnée
@@ -284,34 +296,40 @@ def compute_indicateurs_troncons(
         reference_troncons_uniques_metro (pd.DataFrame):
             Table des tronçons uniques metro
         reference_troncons_uniques_trolley (pd.DataFrame):
-            Table des tronçons uniques trolley 
+            Table des tronçons uniques trolley
         reference_troncons_uniques_ferry (pd.DataFrame):
-            Table des tronçons uniques ferry   
+            Table des tronçons uniques ferry
+        reference_troncons_uniques_train (pd.DataFrame):
+            Table des tronçons uniques train (route_type=2 : RER, Transilien, TER...)
+        nom_reseau_str : str, optional
+            Si fourni, active un cache disque par mode sous
+            data/memory_troncons/<nom_reseau_str>/indicateurs_<mode>.csv
+            (cf. charger_ou_calculer_gdf dans utils.py) — sûr d'une exécution
+            à l'autre car date_JOB est déterministe pour un GTFS donné.
+            Si omis, comportement inchangé : toujours recalculé.
 
     Returns:
-        Tuple de GeoDataFrame : (indicateurs_bus, indicateurs_tram, indicateurs_metro, indicateurs_trolley, indicateurs_ferry)
+        Tuple de GeoDataFrame : (indicateurs_bus, indicateurs_tram, indicateurs_metro, indicateurs_trolley, indicateurs_ferry, indicateurs_train)
     """
 
-    # Calculer la fréquentation
-    indicateurs_bus = calculer_frequentation_troncons(
-        feed, reference_troncons_uniques_bus, active_service_ids, route_type=3  # Bus
-    )
+    def _calculer(nom_mode, reference_troncons_uniques, route_type):
+        fonction_calcul = lambda: calculer_frequentation_troncons(
+            feed, reference_troncons_uniques, active_service_ids, route_type=route_type
+        )
+        if nom_reseau_str is None:
+            return fonction_calcul()
+        chemin_cache = os.path.join(
+            "data", "memory_troncons", nom_reseau_str, f"indicateurs_{nom_mode}.csv"
+        )
+        return charger_ou_calculer_gdf(chemin_cache, fonction_calcul)
 
-    indicateurs_tram = calculer_frequentation_troncons(
-        feed, reference_troncons_uniques_tram, active_service_ids, route_type=0  # Tram
-    )
-    
-    indicateurs_metro = calculer_frequentation_troncons( 
-        feed, reference_troncons_uniques_metro, active_service_ids, route_type=1 #Metro
-        ) 
-    
-    indicateurs_trolley = calculer_frequentation_troncons(
-        feed, reference_troncons_uniques_trolley, active_service_ids, route_type=11 #Trolley
-    )
-    
-    indicateurs_ferry = calculer_frequentation_troncons(
-        feed, reference_troncons_uniques_ferry, active_service_ids, route_type=4 #Ferry
-    )
+    # Calculer la fréquentation (ou la charger depuis le cache si nom_reseau_str fourni)
+    indicateurs_bus = _calculer("bus", reference_troncons_uniques_bus, 3)
+    indicateurs_tram = _calculer("tram", reference_troncons_uniques_tram, 0)
+    indicateurs_metro = _calculer("metro", reference_troncons_uniques_metro, 1)
+    indicateurs_trolley = _calculer("trolley", reference_troncons_uniques_trolley, 11)
+    indicateurs_ferry = _calculer("ferry", reference_troncons_uniques_ferry, 4)
+    indicateurs_train = _calculer("train", reference_troncons_uniques_train, 2)
 
     # Convertir en GeoDataFrame
     indicateurs_bus_gdf = gpd.GeoDataFrame(
@@ -331,8 +349,11 @@ def compute_indicateurs_troncons(
     indicateurs_ferry_gdf = gpd.GeoDataFrame(
         indicateurs_ferry, geometry="geometry", crs="EPSG:4326"
     )
-    
-    return indicateurs_bus_gdf, indicateurs_tram_gdf, indicateurs_metro_gdf, indicateurs_trolley_gdf, indicateurs_ferry_gdf
+    indicateurs_train_gdf = gpd.GeoDataFrame(
+        indicateurs_train, geometry="geometry", crs="EPSG:4326"
+    )
+
+    return indicateurs_bus_gdf, indicateurs_tram_gdf, indicateurs_metro_gdf, indicateurs_trolley_gdf, indicateurs_ferry_gdf, indicateurs_train_gdf
  
  
 """

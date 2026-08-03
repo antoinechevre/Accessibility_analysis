@@ -1,5 +1,6 @@
 """
 Page d'accueil - Application d'analyse de l'accessibilité piétons / transports collectifs à 30 min des équipements
++ analyse réseau GTFS (arrêts / tronçons)
 """
 
 import streamlit as st
@@ -11,11 +12,18 @@ def home_page():
     ## Projet personnel 2026
 
     Ce projet a été développé pour un contexte français par Antoine Chevre (et claude.ai...) en s'inspirant des travaux -Introduction to urban accessibility- et plus spécifiquement -3 Calculating accessibility estimates in R
-    de Rafael H. M. Pereira et Daniel Herszenhut de Ipea - Institute for Applied Economic Research. Il complète le projet d'analyse GTFS (cf lien ci-dessous).
+    de Rafael H. M. Pereira et Daniel Herszenhut de Ipea - Institute for Applied Economic Research.
 
     **Concepteur :** Antoine Chèvre 🐐 (et claude.ai....)
+
+    Cette application regroupe deux types d'analyses se basant sur le même jeu de données GTFS :
+    l'analyse d'accessibilité urbaine aux équipements en transport collectif / piéton, et l'analyse
+    du réseau de transport collectif en lui-même.
     """
     )
+
+    st.markdown("---")
+    st.markdown("## 📍 Analyse accessibilité")
 
     onglet_presentation, onglet_fonctionnalites, onglet_liens = st.tabs(
         ["🎯 Objectifs", "⚙️ Fonctionnalités", "🔗 Liens & Instructions"]
@@ -114,12 +122,7 @@ def home_page():
     - **📓 Ouvrage de référence** : [Introduction to urban accessibility](https://ipeagit.github.io/intro_access_book/3_calculando_acesso.en.html) — chapitre adapté : [3. Calculating accessibility estimates in R](https://ipeagit.github.io/intro_access_book/s2_calculo.en.html)
     - **📓 Ce projet** : [Git analyse accessibilité](https://github.com/antoinechevre/Accessibility_analysis)
 
-    Pour analyser les GTFS :
-    - **📓 Cerema** : [Notebook Google Colab](https://colab.research.google.com/github/CEREMA/hackathon-gtfs/blob/main/gtfs_notebook.ipynb) — prendre en main le code, exécuter les cellules et regarder les cartographies dynamiques
-    - **📓 Antoine Chèvre** : [Git analyse GTFS](https://github.com/antoinechevre/gtfs_analysis_app) et l'[application associée](https://gtfsanalysisme3zaa.streamlit.app/)
-
     Sources de données :
-    - **📓 GTFS** : à récupérer sur le [point d'accès national](https://transport.data.gouv.fr/)
     - **📓 Équipements** : issus de la [base de données BPE INSEE 2025](https://www.insee.fr/fr/statistiques/8217525), déjà exposée par la [cartographie interactive infracommunale](https://www.insee.fr/fr/outil-interactif/7737357/map.html)
 
     ### Instructions
@@ -133,9 +136,63 @@ def home_page():
         )
 
     st.markdown("---")
+    explications_analyse_gtfs()
+
+    st.markdown("---")
     st.markdown(
         """
     Contributeur Antoine Chèvre [@antoine.chevre](https://github.com/antoinechevre) 🐐
     In we goat we trust
     """
     )
+
+
+def explications_analyse_gtfs():
+    """Présentation de l'analyse réseau GTFS (arrêts/tronçons) : reprise à
+    l'identique sur la page Accueil (section "Analyse GTFS") et sous
+    l'onglet "Analyse réseau" (sous-page "Explications") — un seul texte à
+    maintenir plutôt qu'une copie dupliquée à chaque endroit."""
+    st.markdown("## 🚏 Analyse GTFS")
+    st.markdown(
+        """
+    L'analyse GTFS a été développée lors du Hackathon TSNI 2025 du Cerema et reprise par Antoine Chèvre (et claude.ai...).
+
+    **Équipe Cerema :** Patrick Gendre, Hugo De Luca et Maxence Liogier
+    """
+    )
+
+    onglet_fonctionnalites_gtfs, onglet_liens_gtfs = st.tabs(["⚙️ Fonctionnalités", "🔗 Liens"])
+
+    with onglet_fonctionnalites_gtfs:
+        st.markdown(
+            """
+    Analyse des données GTFS (General Transit Feed Specification) pour extraire des indicateurs clés
+    sur les transports en commun — indépendamment de l'analyse d'accessibilité aux équipements ci-dessus.
+    Détermine la plage temporelle sur laquelle le GTFS est actif et identifie un JOB (jour ouvré de base,
+    mardi ou jeudi tiré au hasard dans cette plage).
+
+    #### 📍 Analyse par arrêts
+    - Nombre de passages par arrêt
+    - Carte interactive des arrêts
+    - Statistiques détaillées
+
+    Fonctionne avec n'importe quel GTFS.
+
+    #### 🛤️ Analyse par tronçons
+    - Nombre de passages par tronçon (bus, tram, métro, trolley, ferry...)
+    - Calcul des vitesses moyennes
+    - Carte interactive des tronçons
+    """
+        )
+
+    with onglet_liens_gtfs:
+        st.markdown(
+            """
+    - **📓 Hackathon Cerema** : [Notebook Google Colab](https://colab.research.google.com/github/CEREMA/hackathon-gtfs/blob/main/gtfs_notebook.ipynb) — prendre en main le code, exécuter les cellules et regarder les cartographies dynamiques
+    - **📓 Application dédiée** : [GTFS_analyse_fr](https://huggingface.co/spaces/antoinechevre/GTFS_analyse_fr)
+
+    Où trouver un GTFS :
+    - En France : [point d'accès national](https://transport.data.gouv.fr/)
+    - À l'international : [transit.land](https://www.transit.land/)
+    """
+        )
