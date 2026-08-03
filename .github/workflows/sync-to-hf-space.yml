@@ -37,12 +37,19 @@ jobs:
           REMOTE_URL="https://hf:${HF_TOKEN}@huggingface.co/spaces/antoinechevre/accessibility"
           MAX_SIZE=$((10 * 1024 * 1024))  # 10 MiB, limite HF hors Xet/LFS
 
+          # git commit-tree exige une identité committer ; le runner n'en a pas
+          # par défaut ("fatal: empty ident name ... not allowed") — pas besoin
+          # d'une identité réelle, ce commit n'existe que sur hf/main.
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+
           # Notebooks de prototypage (cf. docstring des vues sous views/) : pas
           # nécessaires au runtime de l'app, et régulièrement trop volumineux
           # une fois leurs sorties de cellules exécutées.
           EXCLUDE_PATHS=(
             "index_accessibility_notebook_def.ipynb"
             "index_accessibility_notebook_IDF.ipynb"
+            "index_accessibility_notebook_IDF_old.ipynb"
           )
 
           git fetch "$REMOTE_URL" main -q || true
