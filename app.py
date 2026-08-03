@@ -126,6 +126,57 @@ section[data-testid="stSidebar"] h2,
 section[data-testid="stSidebar"] h3 {
     letter-spacing: -0.01em;
 }
+
+/* Nav à deux niveaux (cf. plus bas, conteneurs st.container(key=...)) :
+   niveau 1 (section) plus affirmé, niveau 2 (sous-page) plus discret et
+   légèrement en retrait pour se lire comme un sous-menu, pas un pair. */
+.st-key-nav_niveau1 [data-testid="stButtonGroup"] button {
+    font-size: 1rem;
+    font-weight: 700;
+    padding: .6rem 1.3rem;
+}
+.st-key-nav_niveau2 {
+    background: rgba(14, 124, 123, 0.07);
+    border-radius: 10px;
+    padding: .5rem .6rem .35rem;
+    margin-top: -.3rem;
+}
+.st-key-nav_niveau2 [data-testid="stButtonGroup"] button {
+    font-size: .8rem;
+    font-weight: 500;
+    padding: .3rem .8rem;
+}
+
+/* Overlay de chargement GTFS (cf. st.container(key="overlay_chargement_gtfs")
+   autour de charger_donnees_gtfs()) : transforme le rendu par défaut de
+   st.spinner (petite icône + texte en ligne) en un écran de chargement
+   plein écran, le temps de récupérer/fusionner/parser le GTFS. */
+.st-key-overlay_chargement_gtfs [data-testid="stSpinner"] {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(18, 51, 53, 0.55);
+    backdrop-filter: blur(2px);
+}
+.st-key-overlay_chargement_gtfs [data-testid="stSpinner"] > div {
+    display: inline-flex !important;
+    width: auto !important;
+    max-width: min(90vw, 26rem);
+    align-items: center;
+    background: #FAFAF8;
+    font-weight: 600;
+    font-size: 1.05rem;
+    padding: 1.5rem 2.2rem;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+.st-key-overlay_chargement_gtfs [data-testid="stSpinner"] p {
+    color: #182422 !important;
+    margin: 0 !important;
+}
 </style>
 """,
     unsafe_allow_html=True,
@@ -162,15 +213,20 @@ LIBELLES_PAGE = {
 }
 GROUPE_DE_LA_PAGE = {page: groupe for groupe, pages in GROUPES_NAV.items() for page in pages}
 
-groupe_choisi = st.segmented_control(
-    "Section",
-    options=list(GROUPES_NAV.keys()),
-    format_func=lambda g: LIBELLES_GROUPE[g],
-    default=GROUPE_DE_LA_PAGE.get(st.session_state.selected_page, "Accueil"),
-    required=True,
-    label_visibility="collapsed",
-    key="nav_groupe",
-)
+# Conteneurs à clé stable (.st-key-nav_niveau1/2 générés par Streamlit à
+# partir du key=), pour différencier le style des deux niveaux sans dépendre
+# des classes st-emotion-cache-* (générées aléatoirement, changent d'une
+# session/version à l'autre — cf. règles CSS plus haut).
+with st.container(key="nav_niveau1"):
+    groupe_choisi = st.segmented_control(
+        "Section",
+        options=list(GROUPES_NAV.keys()),
+        format_func=lambda g: LIBELLES_GROUPE[g],
+        default=GROUPE_DE_LA_PAGE.get(st.session_state.selected_page, "Accueil"),
+        required=True,
+        label_visibility="collapsed",
+        key="nav_groupe",
+    )
 
 pages_du_groupe = GROUPES_NAV[groupe_choisi]
 if len(pages_du_groupe) == 1:
@@ -179,20 +235,21 @@ else:
     # Sous-menu "Analyse du réseau" : désactivé tant qu'aucun GTFS n'est
     # chargé (les 3 pages en dépendent toutes), plutôt que de laisser
     # naviguer vers un message "veuillez charger un GTFS" sur chacune.
-    st.session_state.selected_page = st.segmented_control(
-        "Page",
-        options=pages_du_groupe,
-        format_func=lambda p: LIBELLES_PAGE[p],
-        default=(
-            st.session_state.selected_page
-            if st.session_state.selected_page in pages_du_groupe
-            else pages_du_groupe[0]
-        ),
-        required=True,
-        disabled=st.session_state.get("feed") is None,
-        label_visibility="collapsed",
-        key="nav_sous_page",
-    )
+    with st.container(key="nav_niveau2"):
+        st.session_state.selected_page = st.segmented_control(
+            "Page",
+            options=pages_du_groupe,
+            format_func=lambda p: LIBELLES_PAGE[p],
+            default=(
+                st.session_state.selected_page
+                if st.session_state.selected_page in pages_du_groupe
+                else pages_du_groupe[0]
+            ),
+            required=True,
+            disabled=st.session_state.get("feed") is None,
+            label_visibility="collapsed",
+            key="nav_sous_page",
+        )
 
 # Barre latérale pour les paramètres uniquement
 st.sidebar.header("📁 Paramètres d'analyse")
@@ -401,8 +458,15 @@ def charger_donnees_gtfs():
         return False
 
 
-# Charger les données automatiquement si nécessaire
-charger_donnees_gtfs()
+# Charger les données automatiquement si nécessaire. Conteneur à clé stable
+# (.st-key-overlay_chargement_gtfs, cf. CSS plus haut) : les st.spinner()
+# appelés à l'intérieur de charger_donnees_gtfs() (récupération HF, fusion,
+# parsing GTFS) héritent de ce conteneur comme point d'insertion — la règle
+# CSS transforme leur rendu par défaut (petit texte + icône) en overlay
+# plein écran le temps du chargement, sans toucher aux spinners du reste de
+# l'app (calcul BPE, cartes...).
+with st.container(key="overlay_chargement_gtfs"):
+    charger_donnees_gtfs()
 
 # Bouton vers l'app GTFS_analyse_fr, une fois un GTFS chargé (sidebar, pas
 # l'onglet Accessibilité : ce lien est utile quelle que soit la page visitée).
