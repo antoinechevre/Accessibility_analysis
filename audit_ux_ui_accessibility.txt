@@ -1,0 +1,621 @@
+AUDIT UX/UI — Space antoinechevre/accessibility
+Date : 2026-08-02
+Portée : app.py, views/*.py, src/cartographie.py, src/utilitaires_matrix.py,
+src/nuage_points_benchmark.py, src/hf_cache.py, Dockerfile
+Méthode : lecture exhaustive du code + tentative d'inspection en ligne
+Changements appliqués : AUCUN (audit uniquement)
+
+
+LIMITES DE L'OBSERVATION DIRECTE
+--------------------------------
+Le Space est RUNNING (hardware cpu-upgrade, gcTimeout 48h, SDK Docker,
+dernière modif 2026-07-29 — vérifié via l'API HF). En revanche :
+
+- WebFetch sur la page HF du Space ne renvoie que la coque HF (avatar,
+  onglets App/Files/Community, "Fetching metadata…") — aucun contenu
+  applicatif.
+- WebFetch sur l'URL directe du Space ne renvoie que le mot "Streamlit" :
+  c'est une SPA rendue côté client via WebSocket, il n'y a aucun HTML
+  serveur à récupérer.
+- Je n'ai donc pas pu manipuler l'interface (uploader un GTFS, cliquer,
+  mesurer des temps réels). Tout ce qui suit est dérivé de la lecture
+  exhaustive de app.py, views/*.py (1277 lignes — c'est là que se trouve
+  la vraie UI, pas dans app.py), src/cartographie.py,
+  src/nuage_points_benchmark.py, src/pipeline_donnees.py,
+  src/ponderation_bpe.py, src/utilitaires_matrix.py, src/hf_cache.py et du
+  Dockerfile. Les constats sont donc structurels et vérifiables dans le
+  code, pas perceptuels (je ne peux pas juger un rendu de police ou un
+  alignement à l'œil).
+
+Note annexe : index.html à la racine est le template "Welcome to your
+static Space" par défaut de HF, jamais nettoyé (index.html:9-17), avec
+style.css associé. Sans effet sur l'app (SDK = docker), mais visible dans
+l'onglet Files et donne une impression de chantier non terminé.
+
+
+1. RÉSUMÉ EXÉCUTIF
+-------------------
+1. Recalcul intégral à chaque interaction. st.tabs
+   (views/accessibilite_index.py:707) rend les 8 onglets de domaine côté
+   serveur à CHAQUE rerun, et aucune des deux fonctions de carte n'est
+   mise en cache (_carte_temps_acces_pole_domaine:300,
+   _carte_poles_accessibles_domaine:379, pas de @st.cache_data). Changer
+   le fond de carte ou décocher un décile relance donc 16 cartes + 24
+   cumulative_cutoff/cost_to_closest. C'est le problème n°1 : le produit
+   devient inutilisable en mode "analyse détaillée".
+
+2. Faux avertissement anxiogène "premier lancement". Le code
+   (views/accessibilite_index.py:561) teste os.path.exists(ttm) en local
+   uniquement, alors que le pipeline sait récupérer la matrice depuis le
+   cache HF (:231-234). Comme le Space n'a pas de stockage persistant,
+   data/ est vide après chaque réveil : l'utilisateur voit
+   systématiquement "potentiellement long (plusieurs minutes) et gourmand
+   en mémoire" même quand le calcul prendra 10 secondes. L'avertissement
+   dissuade au moment précis où il faudrait rassurer.
+
+3. Piège d'interprétation méthodologique majeur. Les "déciles de niveau
+   de vie" sont calculés à l'intérieur de l'agglomération analysée
+   (pd.qcut sur la grille locale, src/utilitaires_matrix.py:163), pas au
+   niveau national. Le libellé "D1 = plus modeste, D10 = plus aisé"
+   (views/accessibilite_index.py:680-681) laisse croire l'inverse à un
+   urbaniste. Un D1 lyonnais et un D1 d'une ville moyenne ne sont pas
+   comparables — or le benchmark inter-réseaux les compare.
+
+4. L'outil sur l'accessibilité est lui-même inaccessible sur son cœur de
+   valeur. Les cartes sont rendues en <canvas> (prefer_canvas=True) dans
+   des iframes non titrées, sans aucune alternative textuelle ; les menus
+   déroulants du benchmark sont des <ul><li> avec handlers click
+   seulement, au-dessus d'un <select hidden> retiré de l'arbre
+   d'accessibilité (src/nuage_points_benchmark.py:379-421) — zéro
+   navigation clavier, zéro lecteur d'écran sur les filtres du graphique
+   comparatif.
+
+
+2. PARCOURS UTILISATEUR
+------------------------
+
+Le flux réel :
+
+[toutes pages] barre latérale : upload zip GTFS OU multiselect catalogue
+      -> charger_donnees_gtfs() appelée à CHAQUE rerun (app.py:318)
+Accueil (3 onglets doc) -> Accessibilité -> Pondération -> Carto INSEE -> Benchmark
+                            -> bouton "Lancer / recharger"
+                            -> st.status expanded (pipeline 6-8 étapes)
+                            vue rapide (domaine "O" seul)
+                            -> bouton "Voulez-vous analyser avec…"
+                            analyse détaillée (8 domaines x 2 cartes + courbes déciles)
+
+Points de friction :
+
+F1 — Aucune indication de page active.
+La navigation est faite de 5 st.button (app.py:82-101). Un bouton
+Streamlit n'a pas d'état "pressé" : après un clic, rien ne distingue
+visuellement la page courante. L'utilisateur doit déduire où il est du
+titre de section. st.tabs ou st.navigation existent précisément pour ça.
+
+F2 — L'entrée principale est cachée dans la sidebar.
+Le seul input obligatoire (app.py:118) est dans la barre latérale, qui
+sur mobile est repliée par défaut. Les pages disent "Veuillez charger un
+fichier GTFS dans la barre latérale" (views/accessibilite_index.py:491,
+views/ponderation_equipements.py:29) — l'émoji pointe vers le haut alors
+que la sidebar est à gauche, et rien ne l'ouvre programmatiquement (pas
+d'initial_sidebar_state="expanded" dans st.set_page_config, app.py:57).
+
+F3 — Onboarding inexistant pour l'input.
+Rien dans l'UI n'explique où trouver un GTFS au moment où on le demande.
+Le lien vers transport.data.gouv.fr est enterré dans le 3e onglet de
+l'Accueil (views/home.py:122), pas à côté du file_uploader. Un
+utilisateur collectivité qui arrive directement sur "Accessibilité" est
+bloqué sans piste.
+
+F4 — Double clic obligatoire, non annoncé.
+Charger un GTFS ne lance rien. Il faut ensuite cliquer "Lancer /
+recharger l'analyse" (:586), puis encore un bouton pour l'analyse
+détaillée (:669). Ce dernier est libellé comme une question de 118
+caractères — "Voulez-vous analyser avec les déciles de niveau de revenu
+et les différents domaines d'équipement avec la sortie actuelle ?" — un
+bouton doit porter un verbe d'action ("Analyser les 8 domaines par
+décile"), pas une interrogation.
+
+F5 — Le feedback long est correct… puis disparaît.
+Bon point : st.status(expanded=True) (:219) reste dépliable après coup,
+et calculer_ttm_par_lots émet un "lot i/N" par lot
+(src/utilitaires_matrix.py:81). Mais : pas de st.progress ni d'ETA, et le
+nombre de lots n'est jamais annoncé avant de commencer. Sur Lyon (92 741
+carreaux / 1500) cela fait 62 lignes de texte empilées sans barre de
+progression. Pire, views/ponderation_equipements.py:43-51 utilise un
+st.empty() dont chaque message écrase le précédent, puis statut.empty()
+efface tout l'historique en fin de run — incohérence directe avec la
+page Accessibilité.
+
+F6 — Effets de bord silencieux et non consentis.
+Tout GTFS uploadé est automatiquement renvoyé vers le dataset HF partagé
+(app.py:300-302), signalé par un simple st.toast qui disparaît en ~4s. De
+même, chaque run écrit automatiquement les indicateurs du réseau dans un
+CSV partagé (views/accessibilite_index.py:612 -> :798), sans case à
+cocher ni confirmation. Pour une collectivité testant un GTFS non encore
+publié, c'est un problème de confiance, pas seulement d'UX.
+
+F7 — Latence réseau injectée dans chaque interaction.
+lister_fichiers_hf("GTFS") est appelé au niveau module (app.py:136) sans
+aucun cache : un appel HTTP à l'API HF avant chaque rendu, donc à chaque
+clic sur n'importe quel bouton. Idem lire_csv_partage avec
+force_download=True (src/hf_cache.py:106, appelé
+views/benchmark_reseaux.py:39) qui retélécharge le CSV à chaque rerun.
+
+F8 — Dépendance inter-pages non évidente.
+"Cartographie INSEE" n'affiche sa carte que si une autre page a déjà
+tourné (views/cartographie_insee.py:22-26). Le message (:35-38)
+l'explique, mais l'utilisateur qui clique dans l'ordre des onglets tombe
+sur une page à moitié vide sans savoir que c'est normal.
+
+
+3. INFORMATION ARCHITECTURE / STRUCTURE DE PAGE
+------------------------------------------------
+
+IA1 — Deux pages font presque la même chose sans que le lien soit clair.
+"Pondération équipements" (offre brute par carreau) et "Accessibilité"
+(temps de trajet) partagent le même construire_donnees_bpe et les mêmes 8
+onglets de domaine. Les captions renvoient l'une à l'autre en texte non
+cliquable : "cf onglet pondérations équipements pour comprendre l'analyse
+des équipements" (views/accessibilite_index.py:712-713 et :872). Un
+renvoi répété deux fois vers une page qu'on ne peut pas atteindre d'un
+clic est un signal fort qu'il manque un lien — ou que la pondération
+devrait être une section dépliable de la page Accessibilité.
+
+IA2 — Ordre de lecture cassé sur la page principale.
+L'ordre réel de views/accessibilite_index.py est :
+  705-786 : Cartes par domaine (8 onglets)
+  788-866 : "Indicateurs de benchmark" — action de maintenance : écrit
+            dans un CSV partagé
+  868-878 : Graphique de synthèse "% moyen de pôles atteignables"
+Le graphique de synthèse — pourtant calculé dès :645 et le seul résultat
+lisible d'un coup d'œil — est relégué tout en bas, après un bloc
+technique d'export. La synthèse devrait ouvrir la page, pas la clore ;
+l'export CSV devrait être dans un st.expander ou la sidebar.
+
+IA3 — Densité : 8 onglets x 2 cartes + 1 courbe = 24 blocs visuels.
+En mode détaillé, chaque onglet contient 2 cartes de 520px + 2 boutons de
+téléchargement + 1 figure matplotlib. Aucune hiérarchisation ne dit
+lequel regarder en premier, ni de vue "comparaison entre domaines" autre
+que la courbe finale.
+
+IA4 — 6e colonne fantôme.
+app.py:80 déclare 6 colonnes égales pour 5 boutons, la 6e contenant
+st.write("") (:102-103). Les libellés sont très inégaux ("Accueil" vs
+"Benchmark Villes Françaises") : dans 1/6 de largeur, le dernier passe
+sur 2-3 lignes et les boutons n'ont plus la même hauteur. Un st.columns
+avec des poids proportionnels aux libellés, ou st.tabs, résout ça.
+
+IA5 — Titres à nettoyer.
+st.set_page_config(page_title=…) (app.py:57) contient 95 caractères —
+l'onglet navigateur n'en montre que ~20, illisibles. st.title (app.py:60)
+: "Application accessibilite équipements d'agglomération piéton /
+transport collectif" — accent manquant sur "accessibilité", syntaxe
+télégraphique et espace en fin de chaîne.
+
+
+4. TERMINOLOGIE ET PÉDAGOGIE
+-----------------------------
+
+Le public visé (collectivités, urbanistes) connaît la BPE et l'INSEE,
+mais pas la méthodologie d'accessibilité ni les conventions internes du
+projet. Le bilan est mitigé : l'Accueil fait un vrai effort
+(views/home.py:52-107, expanders détaillant domaines/gammes/indicateurs),
+mais cette pédagogie ne suit pas l'utilisateur dans les pages où les
+termes apparaissent.
+
+Terme                          | Où il apparaît                         | Expliqué ?
+--------------------------------|-----------------------------------------|------------
+JOB                             | home.py:28,41,78 ; accessibilite_       | NON — jamais développé en "jour ouvré de
+                                 | index.py:828 ; axe "Date JOB" benchmark | base" nulle part dans l'UI. L'acronyme
+                                 |                                          | n'existe que dans un commentaire de
+                                 |                                          | src/info_reseau.py:60.
+Décile de niveau de vie         | :680, cartographie_insee.py:45          | PARTIEL — libellé "D1 = plus modeste"
+                                 |                                          | présent, mais le fait qu'il soit local et
+                                 |                                          | non national n'est jamais dit
+                                 |                                          | (utilitaires_matrix.py:163).
+Pôle d'équipements              | Titres de cartes, :710, :868            | PARTIEL — défini uniquement sur la page
+                                 |                                          | Pondération, donc invisible depuis
+                                 |                                          | Accessibilité. Seuil (>moyenne x 1 ou 1,5)
+                                 |                                          | présenté sans justification.
+2SFCA / gravité / opportunités  | home.py:85-88                           | PARTIEL — listés dans un expander de
+cumulées                        |                                          | l'Accueil… mais aucun n'est en fait exposé
+                                 |                                          | dans l'app (seuls cost_to_closest et
+                                 |                                          | cumulative_cutoff sont utilisés). La doc
+                                 |                                          | promet plus que le produit ne livre.
+Gamme (proximité/intermédiaire/ | Tableau ponderation_equipements.py:     | OUI — correct, avec les poids. Mais "Hors
+supérieure/hors gamme)          | 104-107                                 | Gamme" qui pèse plus que "supérieure" (8
+                                 |                                          | vs 6, ponderation_bpe.py:15-20) est
+                                 |                                          | contre-intuitif et non justifié dans l'UI.
+ind_snv, Filosofi, carroyage    | cartographie_insee.py:40                | PARTIEL — millésimes mélangés (BPE 2025,
+200x200                         |                                          | Filosofi 2019, voire 2017 pour IDFM en
+                                 |                                          | grille 1km, pipeline_donnees.py:80).
+Carreaux exclus                 | —                                        | NON — les carreaux sous secret statistique
+                                 |                                          | (ind_snv <= 0) sont silencieusement retirés
+                                 |                                          | des déciles. Aucun message ne dit combien.
+
+Lien mort pour le public visé : views/home.py:55 renvoie la "liste
+complète des équipements BPE" vers https://vscode.dev/github/... — un
+éditeur de code en ligne nécessitant une authentification GitHub.
+Inutilisable pour un agent de collectivité.
+
+Ton inadapté au public. home.py:16 ("Antoine Chèvre (et claude.ai….)"),
+:11 ("Projet personnel 2026") et surtout :139 ("In we goat we trust") —
+pour un outil qu'on propose à des collectivités pour objectiver de la
+politique publique, ce registre sape la crédibilité perçue sur la page
+d'accueil, qui est justement la page de réassurance.
+
+Message d'erreur non rédigé : app.py:307 — "Ce GTFS regroupe N agences :
+ce que l'app ne peut pas gérer. Charger un GTFS urbain uniquement."
+Phrase agrammaticale, ne dit pas quelle est la limite (4), ni pourquoi,
+ni quoi faire concrètement.
+
+
+5. VISUALISATIONS
+------------------
+
+V1 — Légendes à deux valeurs seulement.
+echelle_continue_html (src/cartographie.py:85-138) n'affiche que vmin et
+vmax (:135), en police 10px (:134). Sur une carte "pôles accessibles"
+allant de 0 à 47, impossible de lire une valeur intermédiaire — le
+dégradé devient qualitatif alors qu'il porte une quantité.
+
+V2 — La légende ment sur la borne haute.
+views/accessibilite_index.py:341 plafonne les temps à 60 min
+(clip(upper=60)), puis :361-368 passe le max de la colonne plafonnée à
+la légende. Elle affiche donc "60" là où la donnée réelle signifie "60 ou
+plus". Il manque un "≥" ou "60+", et une mention que 60 min est un
+plafond d'affichage, pas une mesure.
+
+V3 — Titres de carte tronqués.
+titre_carte_html (src/cartographie.py:14-36) combine position:fixed,
+left:50%, transform:translateX(-50%) et white-space:nowrap (:32). Un
+titre long en 16px gras dépasse largement la largeur d'un panneau de
+DualMap (moitié d'iframe) : il est rogné des deux côtés sans possibilité
+de retour à la ligne, et se superpose à la carte.
+
+V4 — 10 courbes distinguées uniquement par une rampe continue.
+_courbe_pct_moyen_poles (:470-483) trace les déciles avec cmap="viridis"
+(:786) et le même marqueur "o" pour tous (:476). Sur 10 séries, D4/D5/D6
+sont visuellement indiscernables. Il faudrait varier marqueur et style de
+trait, ou n'afficher que D1/D5/D10 par défaut.
+
+V5 — Trois systèmes de couleurs cohabitent sans logique commune.
+"inferno" pour les pôles accessibles (:428,437) et pour la pondération
+(BPE_traitement.py:146), "cividis_r" pour le temps d'accès (:345),
+"Reds" pour la population (cartographie.py:181), "viridis" pour les
+déciles (:786), bleu/rouge pour le benchmark
+(nuage_points_benchmark.py:135-136). Bon point : cividis et viridis sont
+sûrs pour les daltoniens. Problème : "inferno" sert à la fois à "offre
+d'équipements" et à "nombre de pôles atteignables", deux grandeurs
+différentes, tandis que deux grandeurs de temps utilisent des rampes
+distinctes. Sur cividis_r, plus le temps est court, plus c'est clair,
+alors que sur inferno plus la valeur est haute, plus c'est clair. Les
+deux cartes côte à côte dans le même onglet ont donc des conventions
+inversées.
+
+V6 — Échelles non comparables entre onglets.
+limite_commune (:402) est calculée par domaine : chaque onglet a sa
+propre échelle 0->max. Comparer visuellement "Santé" et "Commerces" en
+changeant d'onglet est trompeur, sans avertissement.
+
+V7 — Encarts blancs sur fond sombre.
+Titres et légendes sont en background:white en dur (cartographie.py:
+27,123). Avec l'option "CartoDB Dark Matter" (:61) ou en thème Streamlit
+sombre, ces blocs blancs jurent violemment.
+
+V8 — Bon point à conserver.
+Le nuage de points de benchmark est de loin la meilleure visualisation du
+lot : thème clair/sombre géré (nuage_points_benchmark.py:124-152),
+axes/domaine/décile paramétrables, agrégation intelligente quand
+plusieurs déciles sont cochés (:476-488), et surtout un tableau de
+données en alternative au graphique (:312) — exactement ce qui manque
+partout ailleurs.
+
+V9 — Dépendance CDN sans repli.
+Plotly est chargé depuis cdn.plot.ly (:122). Réseau d'administration
+filtré ou hors-ligne -> iframe vide sans message d'erreur.
+
+
+6. ACCESSIBILITÉ NUMÉRIQUE DE L'APP (catégorie dédiée)
+--------------------------------------------------------
+
+C'est le point où l'ironie est la plus forte : un outil de mesure
+d'accessibilité aux équipements dont l'interface exclut plusieurs
+catégories d'utilisateurs.
+
+A1 — Filtres du benchmark inutilisables au clavier et au lecteur
+d'écran.
+src/nuage_points_benchmark.py:379-421 remplace les <select> natifs par un
+<button> + <ul>/<li> :
+- le <select> d'origine est hidden (:290,293,297) -> retiré de l'arbre
+  d'accessibilité ;
+- les <li> n'ont que addEventListener("click") (:404) : pas de tabindex,
+  pas de keydown, non focusables ;
+- aucun role="listbox"/role="option", aucun aria-expanded, aucun
+  aria-haspopup sur le bouton ;
+- fermeture uniquement au clic document (:418), pas d'Escape.
+Le commentaire (:371-378) explique la raison (l'iframe sandboxée de
+Streamlit bloque le popup natif) — c'est un vrai contournement technique,
+mais il a été fait sans réimplémenter le contrat d'accessibilité que
+<select> fournissait gratuitement. Les 3 filtres principaux du graphique
+comparatif sont donc inatteignables au clavier. (Les cases à cocher des
+déciles, elles, restent natives et fonctionnelles — :441.)
+
+A2 — Contraste insuffisant en thème clair.
+--text-muted: #898781 sur --surface-1: #fcfcfb donne ≈3,5:1 — sous le
+seuil WCAG AA de 4,5:1 pour du texte normal. Appliqué aux libellés de
+filtres (11px capitales, :183-190) et aux en-têtes de tableau (10px
+capitales, :277). En thème sombre le même token passe à ≈4,8:1
+(conforme) : seul le mode clair échoue.
+
+A3 — Le cœur du produit n'a aucune alternative textuelle.
+Toutes les cartes utilisent prefer_canvas=True
+(accessibilite_index.py:354,420 ; cartographie.py:193 ;
+BPE_traitement.py:156) — rendu <canvas>, opaque à toute technologie
+d'assistance. Injectées via st.components.v1.html (:724,750), qui
+produit une iframe sans attribut title. Un lecteur d'écran annonce une
+iframe anonyme contenant un canvas vide. Aucun résumé textuel
+n'accompagne aucune carte.
+
+A4 — Figures matplotlib sans alt.
+st.pyplot(fig) (:482) produit une image sans texte alternatif ni tableau
+équivalent, alors que les données sources (tableau_pct_moyen_poles,
+tableau_decile_poles) sont déjà des DataFrames : un st.dataframe en
+st.expander sous chaque figure coûterait deux lignes.
+
+A5 — Navigation sans état exposé.
+Les 5 st.button de navigation (app.py:82-101) n'exposent ni
+aria-current, ni état pressé, ni landmark <nav>. Un utilisateur de
+lecteur d'écran ne peut pas savoir sur quelle page il se trouve.
+
+A6 — Langue du document non déclarée.
+Streamlit sert <html lang="en"> par défaut ; toute l'interface est en
+français. Un lecteur d'écran appliquera la prononciation anglaise au
+français. (Le HTML du benchmark, lui, déclare correctement
+<html lang="fr"> — nuage_points_benchmark.py:118.)
+
+A7 — Emojis porteurs d'information dans les libellés interactifs.
+"Lancer", "Télécharger", "Accueil", "Pondération" — chaque emoji est
+vocalisé. Tolérable ici car le texte reste autosuffisant, mais
+accessibilite_index.py:488 ("Bus · Tramway · Métro · Ferry · Piétons")
+enchaîne 5 pictogrammes vocalisés d'affilée.
+
+A8 — Cibles et zoom.
+Les légendes en 10px (cartographie.py:134) et les <li> du menu maison
+n'ont pas de hauteur minimale garantie. Les iframes à hauteur fixe
+height=520 (:724,750) ne s'adaptent pas au zoom navigateur à 200%
+(exigence WCAG 1.4.4) : le contenu se retrouve rogné, scrolling=False
+empêchant même de faire défiler.
+
+
+7. GESTION DES ERREURS ET CAS LIMITES
+---------------------------------------
+
+E1 — Exception brute affichée à l'utilisateur.
+app.py:312 : st.error(f"Erreur lors du chargement : {e}"), et
+views/accessibilite_index.py:603 / views/ponderation_equipements.py:49 :
+f"Erreur pendant le calcul : {type(e).__name__}: {e}". Un GTFS sans
+stops.txt produira un message pandas/gtfs_kit incompréhensible. Aucun cas
+n'est traduit en langage métier, aucune piste de résolution, aucun lien
+vers un validateur GTFS.
+
+E2 — Le cas d'échec le plus probable est le moins bien traité.
+Le code lui-même documente des MemoryError/OOM récurrents
+(accessibilite_index.py:70,128-133,271 ; pipeline_donnees.py:70-88). Or
+un SIGKILL du conteneur ne déclenche aucun except : l'utilisateur voit la
+page se figer puis l'erreur générique HF "Runtime error", après
+potentiellement plusieurs minutes d'attente. Rien dans l'UI ne prévient
+en amont qu'un réseau de la taille de Lyon risque de faire tomber le
+Space, ni ne propose une résolution dégradée.
+
+E3 — Défaillances HF totalement silencieuses.
+Le dataset antoinechevre/accessibility-data est privé
+(hf_cache.py:26-28). Sans HF_TOKEN valide :
+- lister_fichiers_hf retourne [] (:170-171) -> le multiselect "choisir un
+  GTFS déjà présent" (app.py:139) apparaît vide, sans explication ;
+- recuperer_depuis_hf échoue -> seulement un print serveur (:46),
+  invisible côté UI ;
+- envoyer_vers_hf échoue en silence (:82-83).
+Résultat : le mode dégradé (tout recalculer, très long) s'enclenche sans
+que l'utilisateur sache pourquoi c'est soudainement lent.
+
+E4 — Garde-fou "max 4 agences" arbitraire et bloquant.
+app.py:260 lève TropAgencesError et appelle st.stop() (:309). Un GTFS
+d'agglomération légitime à 5 agences est refusé net, sans option
+"continuer quand même", sans indication du seuil, et avec un message mal
+rédigé (cf section 4).
+
+E5 — Nettoyage de fichier temporaire fragile.
+os.unlink(GTFS_PATH) (app.py:308,313) : en cas de fusion, les
+chemins_temp intermédiaires sont bien supprimés (:238-239), mais si
+fusionner_gtfs (:237) lève, aucun des temporaires n'est nettoyé — pas de
+try/finally. Fuite disque sur un Space sans stockage persistant.
+
+E6 — Cas limite "aucun décile sélectionné" traité par un return.
+views/accessibilite_index.py:687-689 : décocher tous les déciles fait
+disparaître toute la page (y compris le graphique de synthèse en bas) au
+lieu de griser les cartes. Le warning est correct, la conséquence est
+brutale.
+
+E7 — Écrasement de cache entre GTFS.
+Les deux GTFS IDFM distincts sont forcés vers le même nom_reseau_str
+"IDFM" (app.py:45-53), donc le même fichier de cache — "un run écrase le
+cache de l'autre", comme le note le commentaire :37. Un utilisateur
+analysant l'un puis l'autre obtiendra des résultats issus du mauvais
+périmètre, sans aucun avertissement à l'écran.
+
+
+8. COHÉRENCE VISUELLE GÉNÉRALE
+---------------------------------
+
+- Trois mécanismes de feedback pour la même chose : st.status persistant
+  (Accessibilité, :219), st.empty() effacé (Pondération, :43-51),
+  st.spinner (:196,234,245). L'utilisateur ne peut pas construire de
+  modèle mental du "quand ça travaille".
+- Injection CSS ad hoc. app.py:64-77 force width:100% sur tous les
+  .stButton button ; accessibilite_index.py:542-553 colore un seul
+  bouton en #ADD8E6 via un sélecteur .st-key-lien_gtfs_analyse. Résultat
+  : un bouton bleu clair unique au milieu de boutons Streamlit standards,
+  sans qu'aucune sémantique n'explique pourquoi celui-là. Le libellé "Pour
+  analyser le GTFS correspondant" (:555) ne dit d'ailleurs pas que ça
+  ouvre une autre application.
+- Thème sombre non propagé. Le benchmark suit prefers-color-scheme
+  (nuage_points_benchmark.py:139), pas le thème Streamlit. Un utilisateur
+  en OS clair + thème Streamlit sombre obtient un graphique clair dans
+  une app sombre. Les cartes, elles, sont toujours claires (cf V7). Aucun
+  .streamlit/config.toml n'existe pour fixer un thème de référence.
+- Responsive : non traité. layout="wide" (app.py:57), 6 colonnes de
+  navigation, iframes en height=520 fixe avec scrolling=False, DualMap en
+  layout="horizontal" (:420) — deux cartes côte à côte dans ~350px de
+  large sur mobile sont illisibles.
+- Reliquats visibles : index.html/style.css du template HF par défaut ;
+  src/i18n.py (375 lignes, système FR/EN) branché uniquement sur des
+  fonctions de src/cartographie.py (create_carte_arrets,
+  creer_troncons_uniques) que l'app n'appelle jamais — cf le commentaire
+  app.py:160-168 sur une fonctionnalité "jamais branchée à une page".
+  L'app est donc mono-langue alors qu'une infrastructure i18n dort dans
+  le repo.
+
+
+9. QUICK WINS VS CHANTIERS PLUS LOURDS
+------------------------------------------
+
+QUICK WINS (moins d'1h chacun, aucune refonte) :
+1.  Tester le cache HF en plus du disque local avant d'afficher "premier
+    lancement" — accessibilite_index.py:561
+2.  @st.cache_data(ttl=300) autour de lister_fichiers_hf — app.py:136
+3.  Corriger "accessibilite" -> "accessibilité", raccourcir le
+    page_title, supprimer l'espace final — app.py:57,60
+4.  Réécrire le message "trop d'agences" (seuil, raison, action) —
+    app.py:307
+5.  Ajouter initial_sidebar_state="expanded" et remplacer l'émoji "haut"
+    par un émoji "gauche" — app.py:57 ; :491 ; ponderation:29
+6.  Développer "JOB" en "jour ouvré de base (JOB)" à sa première
+    occurrence de chaque page — home.py:28 ; accessibilite_index.py:526
+7.  Ajouter "(déciles calculés au sein de l'agglomération, pas au niveau
+    national)" aux libellés de filtre — :680 ; cartographie_insee.py:45
+8.  Afficher "60+" / "≥ 60" sur la légende du temps d'accès —
+    cartographie.py:135 + accessibilite_index.py:341
+9.  Passer --text-muted de #898781 à ~#6b6a66 en thème clair (>=4,5:1) —
+    nuage_points_benchmark.py:130
+10. Reformuler le bouton-question en verbe d'action — :669-673
+11. Remplacer le lien vscode.dev par le lien INSEE de la BPE —
+    home.py:55
+12. Retirer "In we goat we trust" / "Projet personnel 2026" de l'Accueil
+    (les garder en pied de page) — home.py:11,16,139
+13. Supprimer index.html et style.css (template HF résiduel) — racine
+14. Passer white-space:nowrap -> normal + max-width:90% sur les titres
+    de carte — cartographie.py:32
+15. Ajouter st.dataframe en st.expander sous chaque st.pyplot — :482
+16. Différencier marqueurs/traits des 10 courbes de décile — :476
+17. Fournir title explicite aux iframes et un résumé chiffré textuel
+    sous chaque carte — :724,750
+
+CHANTIERS INTERMÉDIAIRES (1-3 jours) :
+- Mémoriser les cartes : @st.cache_data(hash_funcs=…) sur les fonctions
+  _carte_*_domaine, clé = (réseau, domaine, fond de carte, filtre
+  déciles) — supprime le recalcul sur changement de fond de carte.
+- Rendre les onglets paresseux : remplacer st.tabs par un
+  st.selectbox/st.radio de domaine, ne calculer que le domaine visible.
+  C'est le correctif structurel du problème n°1.
+- Rendre le menu maison accessible : role="listbox"/"option",
+  aria-expanded, tabindex, gestion ArrowUp/Down/Enter/Escape,
+  aria-activedescendant — nuage_points_benchmark.py:379-421.
+- Traduire les erreurs en messages métier : mapper 4-5 exceptions
+  fréquentes (zip non-GTFS, calendar.txt absent, MemoryError, échec
+  Overpass) vers des messages actionnables, l'exception brute reléguée
+  dans un st.expander("Détail technique").
+- Rendre visibles les échecs HF : un st.warning unique en sidebar
+  ("catalogue partagé indisponible — les calculs seront recommencés
+  depuis zéro") quand lister_fichiers_hf renvoie [].
+- Consentement explicite : cases à cocher "Partager ce GTFS dans le
+  catalogue commun" et "Ajouter ce réseau au benchmark public", non
+  cochées par défaut — app.py:300 et accessibilite_index.py:612.
+- Unifier le feedback : st.status partout, et st.progress(i/nb_lots)
+  pour la matrice.
+
+CHANTIERS LOURDS (refonte) :
+- Refondre la navigation en st.navigation/st.Page (Streamlit >= 1.36) :
+  état actif natif, URLs par page (partageables — impossible
+  aujourd'hui), sémantique <nav> correcte. Rend caducs les points F1, A5,
+  IA4 et le hack CSS app.py:64-77.
+- Découpler le calcul de l'affichage : passer le pipeline r5py en tâche
+  de fond (file d'attente + polling) plutôt qu'inline dans le rerun
+  Streamlit. C'est la seule vraie réponse aux calculs de plusieurs
+  minutes, aux OOM et au fait qu'un rafraîchissement d'onglet perd tout.
+- Charte de dataviz unique : une rampe par grandeur (temps / quantité /
+  offre / population), une convention de sens constante, une échelle
+  partagée entre domaines avec option "échelle locale", légendes à 5
+  crans. Touche cartographie.py, BPE_traitement.py,
+  accessibilite_index.py.
+- Couche pédagogique intégrée : glossaire déroulant réutilisable (JOB,
+  pôle, décile, gamme, carreau) + help= sur chaque widget, plutôt que la
+  documentation isolée sur l'Accueil.
+- Fusionner "Pondération" et "Accessibilité" en une page "offre ->
+  accessibilité" à deux étapes, avec les hypothèses de pondération et
+  l'export benchmark en panneau latéral.
+- Alternative non graphique systématique : chaque carte accompagnée d'un
+  tableau agrégé téléchargeable (le benchmark montre déjà le bon patron).
+
+
+10. RECOMMANDATIONS PRIORISÉES
+---------------------------------
+
+PRIORITÉ HAUTE
+1. Supprimer le recalcul des 8 domaines à chaque interaction — onglets
+   paresseux + cache sur les fonctions de carte
+   (accessibilite_index.py:707,300,379). Bloquant pour l'usage réel.
+2. Corriger le faux "premier lancement" en interrogeant aussi le cache HF
+   (:561).
+3. Clarifier que les déciles sont locaux, pas nationaux
+   (utilitaires_matrix.py:163 -> libellés :680, cartographie_insee.py:45).
+   Risque d'erreur d'interprétation dans un livrable de politique
+   publique.
+4. Rendre les filtres du benchmark utilisables au clavier
+   (nuage_points_benchmark.py:379-421) — non-conformité RGAA/WCAG
+   frontale sur un outil d'accessibilité.
+5. Traduire les erreurs en messages actionnables et couvrir
+   explicitement l'échec mémoire (app.py:312 ; accessibilite_index.py:603
+   ; ponderation_equipements.py:49).
+6. Rendre visible l'indisponibilité du cache HF (hf_cache.py:170 ->
+   app.py:136).
+7. Demander le consentement avant tout envoi vers le dataset partagé
+   (app.py:300-302 ; accessibilite_index.py:612).
+
+PRIORITÉ MOYENNE
+8.  Navigation avec état actif (st.navigation ou st.tabs) — app.py:80-103.
+9.  Alternatives textuelles : titres d'iframe, résumés chiffrés sous les
+    cartes, tableaux sous les figures (:724,750,482).
+10. Corriger le contraste --text-muted en thème clair
+    (nuage_points_benchmark.py:130).
+11. Légendes à 5 crans + notation "≥ 60" (cartographie.py:85-138).
+12. Unifier le feedback de progression et ajouter une barre de
+    progression sur la matrice (ponderation_equipements.py:43-51 ;
+    utilitaires_matrix.py:81).
+13. Développer les acronymes en contexte (JOB, pôle, gamme) et lier les
+    renvois "cf onglet pondérations" (:712,872).
+14. Réécrire le bouton-question et le message "trop d'agences" (:669 ;
+    app.py:307).
+15. Réordonner la page Accessibilité : synthèse en haut, export
+    benchmark en expander (:788-878).
+
+PRIORITÉ BASSE
+16. Différencier les 10 courbes de décile autrement que par la couleur
+    (:476).
+17. Titres de carte multi-lignes (cartographie.py:32).
+18. Harmoniser les rampes de couleur entre les vues et documenter le sens
+    de lecture.
+19. Aligner le thème du benchmark sur le thème Streamlit plutôt que sur
+    l'OS (:139) et fixer un .streamlit/config.toml.
+20. Repli local pour Plotly si le CDN est inaccessible (:122).
+21. Nettoyer index.html/style.css, ajuster le ton de l'Accueil, corriger
+    le lien vscode.dev (home.py:55).
+22. Décider du sort de src/i18n.py : brancher ou retirer.
+23. try/finally sur les fichiers temporaires GTFS (app.py:227-241).
+24. Avertir de la collision de cache entre les deux GTFS IDFM
+    (app.py:45-53).
+
+
+Aucune modification de code n'a été effectuée.

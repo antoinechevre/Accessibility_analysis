@@ -296,15 +296,22 @@ def cumulative_cutoff(travel_time_matrix, land_use_data, opportunity, travel_cos
     """Équivalent minimal de accessibility::cumulative_cutoff()."""
     reachable = travel_time_matrix[travel_time_matrix[travel_cost] <= cutoff]
 
-    merged = reachable.merge(
-        land_use_data[["id", opportunity]],
-        left_on="to_id",
-        right_on="id",
-        how="left",
-    )
+    # map() plutôt qu'un merge (même correctif que gravity() plus bas et
+    # calculer_index_benchmark plus haut, pour la même raison) : reachable
+    # reste filtré par cutoff, mais peut malgré tout représenter une grande
+    # partie de la matrice complète sur une grosse agglomération (ex.
+    # Lyon/TCL, ttm de 1,22 milliard de lignes) — un merge construit une
+    # structure de jointure sur ce sous-ensemble, tandis que map() (sur to_id
+    # en category) ne recalcule que sur les valeurs uniques de destination.
+    opportunity_par_destination = land_use_data.set_index("id")[opportunity]
+    # astype(float) explicite : .map() sur une Series category (to_id) reste
+    # catégoriel en sortie sinon (nouvelles "catégories" = valeurs mappées),
+    # ce que .groupby().sum() refuse ("category type does not support sum
+    # operations") — même piège que le cast float32 dans gravity() ci-dessous.
+    opportunites = reachable["to_id"].map(opportunity_par_destination).fillna(0).astype(float)
 
-    result = merged.groupby("from_id")[opportunity].sum().reset_index()
-    result = result.rename(columns={"from_id": "id"})
+    result = opportunites.groupby(reachable["from_id"], observed=True).sum().reset_index()
+    result.columns = ["id", opportunity]
 
     # les origines sans aucune destination atteignable ont une accessibilité de 0
     result = land_use_data[["id"]].merge(result, on="id", how="left")
@@ -351,16 +358,27 @@ def decay_exponential(decay_value):
 
 def gravity(travel_time_matrix, land_use_data, opportunity, travel_cost, decay_function):
     """Équivalent minimal de accessibility::gravity()."""
-    merged = travel_time_matrix.merge(
-        land_use_data[["id", opportunity]],
-        left_on="to_id",
-        right_on="id",
-        how="left",
-    )
-    merged["weighted_opportunity"] = decay_function(merged[travel_cost]) * merged[opportunity]
+    # map() plutôt qu'un merge (même correctif que calculer_index_benchmark
+    # plus haut, et pour la même raison) : contrairement à cumulative_cutoff
+    # (filtrée par cutoff avant jointure), gravity pondère TOUTES les paires
+    # par la fonction de décroissance, donc un merge construirait une
+    # jointure sur la matrice complète, non filtrée — sur une grosse
+    # agglomération (ex. Lyon/TCL, ttm de 1,22 milliard de lignes), ça fait
+    # exploser la mémoire (observé : swap presque plein, kernel au bord du
+    # crash). map() sur to_id (category) ne recalcule que sur les valeurs
+    # uniques, sans dupliquer travel_time_matrix.
+    opportunity_par_destination = land_use_data.set_index("id")[opportunity]
 
-    result = merged.groupby("from_id")["weighted_opportunity"].sum().reset_index()
-    result = result.rename(columns={"from_id": "id", "weighted_opportunity": opportunity})
+    # astype("float32") explicite : decay_function (ex. decay_exponential)
+    # multiplie par un float Python, ce qui upcaste sinon silencieusement en
+    # float64 même si travel_cost est déjà en float32 (cf. charger_ttm),
+    # doublant la mémoire de ce tableau à l'échelle de la matrice complète.
+    poids = decay_function(travel_time_matrix[travel_cost]).astype("float32")
+    opportunites = travel_time_matrix["to_id"].map(opportunity_par_destination).fillna(0).astype("float32")
+    weighted_opportunity = poids * opportunites
+
+    result = weighted_opportunity.groupby(travel_time_matrix["from_id"], observed=True).sum().reset_index()
+    result.columns = ["id", opportunity]
 
     result = land_use_data[["id"]].merge(result, on="id", how="left")
     result[opportunity] = result[opportunity].fillna(0.0)
@@ -393,6 +411,69 @@ def enhanced_2sfca(travel_time_matrix, land_use_data, opportunity, travel_cost, 
     result = result.rename(columns={"from_id": "id", "accessibilite_ponderee": opportunity})
 
     result = land_use_data[["id"]].merge(result, on="id", how="left")
+    result[opportunity] = result[opportunity].fillna(0.0)
+
+    return result
+
+
+def enhanced_2sfca_par_lots(ttm_path, land_use_data, opportunity, travel_cost, demand, decay_function, on_step=None):
+    """Version par lots de enhanced_2sfca (cf. calculer_ttm_par_lots) : lit
+    ttm_path par row group (pyarrow) plutôt que de prendre un DataFrame ttm
+    déjà chargé en mémoire. enhanced_2sfca() fait deux .merge() sur la
+    matrice entière, ce qui en duplique la taille en mémoire en plus du ttm
+    déjà chargé par ailleurs dans le notebook — sur un gros réseau (Lyon/TCL,
+    1,2 milliard de lignes), ça a fait mourir le kernel en cellule 3.2.4.
+    Inutile ici : l'algorithme ne fait que deux groupby (par to_id puis par
+    from_id), accumulables lot par lot sans jamais garder la matrice
+    complète en mémoire. Le résultat est identique à enhanced_2sfca (mêmes
+    deux passes, juste étalées sur des row groups au lieu d'un seul DataFrame).
+    """
+    import pyarrow.parquet as pq
+
+    demand_serie = land_use_data.set_index("id")[demand]
+    supply_serie = land_use_data.set_index("id")[opportunity]
+
+    pf = pq.ParquetFile(ttm_path)
+    nb_lots = pf.num_row_groups
+
+    def lire_lot(i):
+        table = pf.read_row_group(i, columns=["from_id", "to_id", travel_cost])
+        lot = table.to_pandas(categories=["from_id", "to_id"])
+        lot[travel_cost] = lot[travel_cost].astype("float32")
+        return lot
+
+    # passe 1 : demande pondérée par destination (to_id), lot par lot
+    demande_ponderee = pd.Series(dtype="float64")
+    for i in range(nb_lots):
+        if on_step is not None:
+            on_step(f"Enhanced 2SFCA, passe 1/2 (demande)... lot {i + 1}/{nb_lots}")
+        lot = lire_lot(i)
+        weight = decay_function(lot[travel_cost])
+        # .astype("float64") : Series.map() sur une colonne category renvoie
+        # elle-même une category (categories = valeurs mappées), incompatible
+        # avec une multiplication numpy directe ("cannot perform the numpy op
+        # multiply") — on la reconvertit donc en float juste après le map().
+        demand_weighted = lot["from_id"].map(demand_serie).astype("float64") * weight
+        partiel = demand_weighted.groupby(lot["to_id"], observed=True).sum()
+        demande_ponderee = demande_ponderee.add(partiel, fill_value=0.0)
+
+    ratio = supply_serie / demande_ponderee
+    ratio = ratio.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+
+    # passe 2 : accessibilité pondérée par origine (from_id), à partir du ratio ci-dessus
+    accessibilite = pd.Series(dtype="float64")
+    for i in range(nb_lots):
+        if on_step is not None:
+            on_step(f"Enhanced 2SFCA, passe 2/2 (accessibilité)... lot {i + 1}/{nb_lots}")
+        lot = lire_lot(i)
+        weight = decay_function(lot[travel_cost])
+        accessibilite_ponderee = lot["to_id"].map(ratio).astype("float64").fillna(0.0) * weight
+        partiel = accessibilite_ponderee.groupby(lot["from_id"], observed=True).sum()
+        accessibilite = accessibilite.add(partiel, fill_value=0.0)
+
+    result = land_use_data[["id"]].merge(
+        accessibilite.rename(opportunity), left_on="id", right_index=True, how="left"
+    )
     result[opportunity] = result[opportunity].fillna(0.0)
 
     return result

@@ -1,4 +1,5 @@
 import json
+import math
 import pathlib
 import shutil
 import subprocess
@@ -91,7 +92,7 @@ def session_avec_retries(methods=("GET",), total=5, backoff_factor=1):
     return session
 
 
-def codes_communes_via_api(stops_gdf, session, pause=0.05, timeout=30):
+def codes_communes_via_api(stops_gdf, session, pause=0.05, timeout=30, taille_lot=500, on_step=None, checkpoint_path=None):
     """Reverse-géocode chaque arrêt (lat/lon) en code INSEE via geo.api.gouv.fr.
 
     Best-effort par arrêt : une erreur ponctuelle sur un arrêt (ex. 502 côté
@@ -99,10 +100,32 @@ def codes_communes_via_api(stops_gdf, session, pause=0.05, timeout=30):
     persistante quelques minutes) est ignorée plutôt que de perdre tout le
     géocodage déjà fait pour les arrêts précédents — même logique que
     ville_principale ci-dessous.
+
+    Un arrêt = un appel HTTP séquentiel (+ pause) : sur un gros réseau (IDF,
+    dizaines de milliers d'arrêts uniques) ça peut prendre des heures sans
+    aucun retour, et une interruption (kernel arrêté à la main, coupure
+    réseau...) reperdrait tout le géocodage déjà fait. Comme pour
+    calculer_ttm_par_lots : progression journalisée par lots de taille_lot
+    (on_step, même contrat), et si checkpoint_path est fourni, état
+    (codes trouvés + nombre d'arrêts traités) sauvegardé sur disque à la fin
+    de chaque lot — une reprise relit ce fichier et continue à partir du
+    dernier arrêt traité plutôt que de tout regéocoder depuis le premier.
     """
+    stops_liste = list(stops_gdf[["stop_lat", "stop_lon"]].itertuples(index=False))
+    nb_lots = math.ceil(len(stops_liste) / taille_lot) if stops_liste else 0
+
     codes = set()
+    debut = 0
+    if checkpoint_path is not None and os.path.exists(checkpoint_path):
+        with open(checkpoint_path, encoding="utf-8") as f:
+            etat = json.load(f)
+        codes = set(etat["codes"])
+        debut = etat["arrets_traites"]
+        print(f"reprise du géocodage depuis le checkpoint : {debut}/{len(stops_liste)} arrêt(s) déjà traité(s)")
+
     echecs = 0
-    for lat, lon in stops_gdf[["stop_lat", "stop_lon"]].itertuples(index=False):
+    for i in range(debut, len(stops_liste)):
+        lat, lon = stops_liste[i]
         try:
             r = session.get(
                 "https://geo.api.gouv.fr/communes",
@@ -114,6 +137,19 @@ def codes_communes_via_api(stops_gdf, session, pause=0.05, timeout=30):
         except Exception:
             echecs += 1
         time.sleep(pause)
+
+        fin_de_lot = (i + 1) % taille_lot == 0 or (i + 1) == len(stops_liste)
+        if fin_de_lot:
+            if on_step is not None:
+                on_step(f"Géocodage des arrêts... lot {(i // taille_lot) + 1}/{nb_lots} ({i + 1}/{len(stops_liste)})")
+            if checkpoint_path is not None:
+                os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
+                with open(checkpoint_path, "w", encoding="utf-8") as f:
+                    json.dump({"codes": sorted(codes), "arrets_traites": i + 1}, f)
+
+    if checkpoint_path is not None and os.path.exists(checkpoint_path):
+        os.remove(checkpoint_path)
+
     if echecs:
         print(f"⚠ {echecs} arrêt(s) non géocodé(s) (API geo.api.gouv.fr indisponible) — ignoré(s)")
     return codes
@@ -186,7 +222,9 @@ def details_communes(codes, session, pause=0.05, timeout=30):
     return lignes
 
 
-def build_decoupage_agglo(gtfs_path, output_path, decoupage_reference_path=None, coord_round=4):
+def build_decoupage_agglo(
+    gtfs_path, output_path, decoupage_reference_path=None, coord_round=4, on_step=None, checkpoint_path=None
+):
     """
     Construit un CSV des communes desservies par un GTFS, au même format que
     decoupage_cda.csv (id, code_insee, nom_commune, coordinates, geojson).
@@ -195,6 +233,9 @@ def build_decoupage_agglo(gtfs_path, output_path, decoupage_reference_path=None,
     decoupage_reference_path: CSV existant du même format (optionnel), utilisé
         comme cache local pour éviter de géocoder les arrêts qui tombent dans
         des communes déjà connues (ex. decoupage_cda.csv pour le réseau CDA).
+    on_step, checkpoint_path: transmis à codes_communes_via_api pour suivre
+        la progression et reprendre après une interruption sur un gros GTFS
+        (ex. IDFM, dizaines de milliers d'arrêts) — cf. sa docstring.
     """
     feed = gk.read_feed(gtfs_path, dist_units="km")
     stops = feed.stops[["stop_lat", "stop_lon"]].dropna().round(coord_round).drop_duplicates()
@@ -224,7 +265,11 @@ def build_decoupage_agglo(gtfs_path, output_path, decoupage_reference_path=None,
     print(f"{len(codes_connus)} commune(s) déjà connue(s), {len(stops_gdf)} arrêt(s) à géocoder")
 
     with session_avec_retries() as session:
-        codes_a_geocoder = codes_communes_via_api(stops_gdf, session) if len(stops_gdf) else set()
+        codes_a_geocoder = (
+            codes_communes_via_api(stops_gdf, session, on_step=on_step, checkpoint_path=checkpoint_path)
+            if len(stops_gdf)
+            else set()
+        )
         nouveaux_codes = codes_a_geocoder - codes_connus
         print(f"{len(nouveaux_codes)} nouvelle(s) commune(s) identifiée(s) : {sorted(nouveaux_codes)}")
         nouvelles_lignes = details_communes(nouveaux_codes, session)
