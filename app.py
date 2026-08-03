@@ -140,10 +140,10 @@ st.markdown("---")
 # indication de la page courante, absente en V1 (F1 dans l'audit).
 PAGES_NAV = [
     ("🏠 Accueil", "Accueil"),
-    ("📍 Accessibilité", "Accessibilité"),
-    ("⚖️ Pondération équipements", "Pondération équipements"),
-    ("🗺️ Cartographie INSEE", "Cartographie INSEE"),
     ("📊 Benchmark Villes Françaises", "Benchmark Villes Françaises"),
+    ("📍 Accessibilité", "Accessibilité"),
+    ("⚖️ Localisation et pondération équipements", "Pondération équipements"),
+    ("🗺️ Carte population par déciles", "Cartographie INSEE"),
 ]
 
 for col, (libelle, page) in zip(st.columns(len(PAGES_NAV)), PAGES_NAV):

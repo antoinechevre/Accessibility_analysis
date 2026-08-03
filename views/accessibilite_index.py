@@ -528,8 +528,13 @@ def accessibilite_index_page():
     # La matrice des temps de trajet (ttm) est mise en cache sur disque par
     # réseau (cf. _construire_pipeline) : si le fichier existe déjà, ce n'est
     # pas le premier lancement pour ce réseau, pas besoin d'avertir sur le
-    # temps de calcul.
-    premier_lancement = not os.path.exists(chemins_reseau(nom_reseau_str)["ttm"])
+    # temps de calcul. On tente d'abord le cache HF (no-op si déjà présent en
+    # local, ou si absent des deux côtés) : sans ça, un Space sans stockage
+    # persistant se croit systématiquement au "premier lancement" après
+    # chaque redémarrage, même pour un réseau déjà calculé et mis en cache.
+    ttm_path = chemins_reseau(nom_reseau_str)["ttm"]
+    recuperer_depuis_hf(f"memory_ttm/ttm_{nom_reseau_str}.parquet", ttm_path)
+    premier_lancement = not os.path.exists(ttm_path)
 
     if premier_lancement:
         st.warning(
@@ -565,7 +570,12 @@ def accessibilite_index_page():
             message += f" {PRECISIONS_RESEAU[nom_reseau_str]}"
         st.warning(message)
 
-    lancer = st.button("🚀 Lancer / recharger l'analyse d'accessibilité", use_container_width=True)
+    # type="primary" : accent teal du thème (.streamlit/config.toml) plutôt
+    # que le bouton "secondary" par défaut, pour ressortir comme l'action
+    # principale de la page.
+    lancer = st.button(
+        "🚀 Lancer / recharger l'analyse d'accessibilité", use_container_width=True, type="primary"
+    )
 
     if "reseau_calcule" not in st.session_state:
         st.session_state.reseau_calcule = None
@@ -598,7 +608,6 @@ def accessibilite_index_page():
         st.session_state.analyse_detaillee = False
 
     if "pipeline_data" not in st.session_state or st.session_state.reseau_calcule != nom_reseau_str:
-        st.info("Cliquez sur le bouton ci-dessus pour lancer l'analyse.")
         return
 
     population_grid_agglo, land_use_data, BPE_agglo, ttm = st.session_state.pipeline_data
