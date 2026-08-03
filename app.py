@@ -140,8 +140,8 @@ st.markdown("---")
 # indication de la page courante, absente en V1 (F1 dans l'audit).
 PAGES_NAV = [
     ("🏠 Accueil", "Accueil"),
-    ("📊 Benchmark Villes Françaises", "Benchmark Villes Françaises"),
     ("📍 Accessibilité", "Accessibilité"),
+    ("📊 Benchmark Villes Françaises", "Benchmark Villes Françaises"),
     ("⚖️ Localisation et pondération équipements", "Pondération équipements"),
     ("🗺️ Carte population par déciles", "Cartographie INSEE"),
 ]
