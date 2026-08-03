@@ -133,29 +133,52 @@ section[data-testid="stSidebar"] h3 {
 
 st.markdown("---")
 
-# 5 boutons de navigation à parts égales (l'ancienne version avait 6
-# colonnes pour 5 boutons, la 6e vide servant juste de cale — IA4 dans
-# l'audit) ; type="primary" sur la page active donne l'accent plein (via le
-# thème ci-dessus) plutôt que le contour gris "secondary" partout — seule
-# indication de la page courante, absente en V1 (F1 dans l'audit).
+# 4 boutons de navigation à parts égales ("Accueil" a été sorti de cette
+# rangée et déplacé en tête de la sidebar, cf. plus bas) ; type="primary"
+# sur la page active donne l'accent plein (via le thème ci-dessus) plutôt
+# que le contour gris "secondary" partout — seule indication de la page
+# courante, absente en V1 (F1 dans l'audit).
 PAGES_NAV = [
-    ("🏠 Accueil", "Accueil"),
     ("📍 Accessibilité", "Accessibilité"),
     ("📊 Benchmark Villes Françaises", "Benchmark Villes Françaises"),
     ("⚖️ Localisation et pondération équipements", "Pondération équipements"),
     ("🗺️ Carte population par déciles", "Cartographie INSEE"),
 ]
 
+# Pages qui n'ont aucun sens sans GTFS chargé : boutons désactivés tant que
+# rien n'est sélectionné/téléversé, plutôt que de laisser l'utilisateur
+# cliquer pour atterrir sur un message "veuillez charger un GTFS".
+PAGES_NECESSITANT_GTFS = {"Accessibilité", "Pondération équipements", "Cartographie INSEE"}
+
 for col, (libelle, page) in zip(st.columns(len(PAGES_NAV)), PAGES_NAV):
     with col:
         est_active = st.session_state.get("selected_page") == page
-        if st.button(libelle, use_container_width=True, type="primary" if est_active else "secondary"):
+        desactive = page in PAGES_NECESSITANT_GTFS and st.session_state.get("feed") is None
+        if st.button(
+            libelle,
+            use_container_width=True,
+            type="primary" if est_active else "secondary",
+            disabled=desactive,
+        ):
             st.session_state.selected_page = page
 
 
 # Initialiser la page sélectionnée si pas déjà fait
 if "selected_page" not in st.session_state:
     st.session_state.selected_page = "Accueil"
+
+# Bouton Accueil isolé en tête de sidebar (sorti de la rangée de nav
+# horizontale ci-dessus, cf. PAGES_NAV) : reste visible en premier quel que
+# soit le défilement des paramètres en dessous, comme le logo/lien
+# "accueil" d'une appli classique.
+st.sidebar.markdown("### 🚌 Accessibilité GTFS")
+if st.sidebar.button(
+    "🏠 Accueil",
+    use_container_width=True,
+    type="primary" if st.session_state.get("selected_page") == "Accueil" else "secondary",
+):
+    st.session_state.selected_page = "Accueil"
+st.sidebar.divider()
 
 # Barre latérale pour les paramètres uniquement
 st.sidebar.header("📁 Paramètres d'analyse")
@@ -380,6 +403,9 @@ if st.session_state.last_uploaded_name:
         gtfs_analyse_url = f"{GTFS_ANALYSE_URL}?{urllib.parse.urlencode({'gtfs': st.session_state.last_uploaded_name})}"
     else:
         gtfs_analyse_url = GTFS_ANALYSE_URL
+    # Séparateur visible entre le choix du GTFS (uploader/dropdown ci-dessus)
+    # et ce lien vers une autre appli, pour bien distinguer les deux blocs.
+    st.sidebar.divider()
     # Couleur distincte (bleu clair) pour ce lien précis : st.link_button ne
     # propose pas de paramètre de couleur, la clé du conteneur (classe CSS
     # st-key-... générée par Streamlit) permet de cibler uniquement ce bouton
@@ -397,7 +423,13 @@ if st.session_state.last_uploaded_name:
         unsafe_allow_html=True,
     )
     with st.sidebar.container(key="lien_gtfs_analyse"):
-        st.link_button("Pour analyser le réseau à partir du GTFS", gtfs_analyse_url)
+        # icon="material/open_in_new" : pictogramme "lien externe" standard,
+        # signale que ce bouton quitte l'appli vers GTFS_analyse_fr.
+        st.link_button(
+            "Pour analyser le réseau à partir du GTFS",
+            gtfs_analyse_url,
+            icon=":material/open_in_new:",
+        )
 
 # Navigation entre les pages
 if st.session_state.selected_page == "Accueil":
