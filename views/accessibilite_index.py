@@ -661,6 +661,7 @@ def accessibilite_index_page():
             "📊 Voulez-vous analyser avec les déciles de niveau de revenu et les différents "
             "domaines d'équipement avec la sortie actuelle ?",
             use_container_width=True,
+            type="primary",
         ):
             st.session_state.analyse_detaillee = True
             st.rerun()
