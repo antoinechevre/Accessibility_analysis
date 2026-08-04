@@ -6,7 +6,6 @@ Application d'analyse de l'accessibilité piétons / transports collectifs à 30
 import os
 import sys
 import tempfile
-import urllib.parse
 
 sys.path.append('..')
 
@@ -17,7 +16,7 @@ from src.info_reseau import dates_service, nom_fichier_valide, nom_reseau_str, r
 from src.hf_cache import envoyer_vers_hf, lister_fichiers_hf, recuperer_depuis_hf
 from src.merge_gtfs import fusionner_gtfs
 from views.home import explications_analyse_gtfs, home_page
-from views.accessibilite_index import GTFS_ANALYSE_URL, accessibilite_index_page
+from views.accessibilite_index import accessibilite_index_page
 from views.ponderation_equipements import ponderation_equipements_page
 from views.cartographie_insee import cartographie_insee_page
 from views.benchmark_reseaux import benchmark_reseaux_page
@@ -507,47 +506,6 @@ def charger_donnees_gtfs():
 # l'app (calcul BPE, cartes...).
 with st.container(key="overlay_chargement_gtfs"):
     charger_donnees_gtfs()
-
-# Bouton vers l'app GTFS_analyse_fr, une fois un GTFS chargé (sidebar, pas
-# l'onglet Accessibilité : ce lien est utile quelle que soit la page visitée).
-#
-# last_uploaded_name est le nom de fichier GTFS exact (catalogue partagé sur
-# le dataset HF antoinechevre/accessibility-data, cf. src/hf_cache.py) — sauf
-# en cas de fusion de plusieurs GTFS, où il concatène leurs noms avec "+" et
-# ne correspond donc à aucun fichier réel : dans ce cas on ne peut pas
-# présélectionner de GTFS côté GTFS_analyse_fr.
-if st.session_state.last_uploaded_name:
-    if "+" not in st.session_state.last_uploaded_name:
-        gtfs_analyse_url = f"{GTFS_ANALYSE_URL}?{urllib.parse.urlencode({'gtfs': st.session_state.last_uploaded_name})}"
-    else:
-        gtfs_analyse_url = GTFS_ANALYSE_URL
-    # Séparateur visible entre le choix du GTFS (uploader/dropdown ci-dessus)
-    # et ce lien vers une autre appli, pour bien distinguer les deux blocs.
-    st.sidebar.divider()
-    # Couleur distincte (bleu clair) pour ce lien précis : st.link_button ne
-    # propose pas de paramètre de couleur, la clé du conteneur (classe CSS
-    # st-key-... générée par Streamlit) permet de cibler uniquement ce bouton
-    # sans affecter les autres boutons de l'app.
-    st.sidebar.markdown(
-        """
-        <style>
-        .st-key-lien_gtfs_analyse a {
-            background-color: #ADD8E6 !important;
-            border-color: #ADD8E6 !important;
-            color: #000000 !important;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-    with st.sidebar.container(key="lien_gtfs_analyse"):
-        # icon="material/open_in_new" : pictogramme "lien externe" standard,
-        # signale que ce bouton quitte l'appli vers GTFS_analyse_fr.
-        st.link_button(
-            "Pour analyser le réseau à partir du GTFS",
-            gtfs_analyse_url,
-            icon=":material/open_in_new:",
-        )
 
 # Navigation entre les pages
 if st.session_state.selected_page == "Accueil":
