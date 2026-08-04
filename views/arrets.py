@@ -66,8 +66,6 @@ def arrets_page(lang="fr"):
         if st.session_state.indicateurs_arrets is not None:
             indicateurs = st.session_state.indicateurs_arrets
 
-            st.success(t("arrets.succes", lang))
-
             # Statistiques globales
             st.header(t("arrets.header_stats", lang))
             col1, col2, col3 = st.columns(3)

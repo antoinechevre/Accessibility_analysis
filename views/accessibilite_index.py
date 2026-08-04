@@ -216,84 +216,91 @@ def _construire_pipeline(zip_path, nom_reseau_str, date_JOB):
     qui reste visible (dépliable) une fois le calcul terminé, plutôt qu'un
     message transitoire qui disparaît.
     """
-    with st.status("Préparation des données d'accessibilité...", expanded=True) as status:
-        population_grid_agglo, land_use_data, BPE_agglo = construire_donnees_bpe(
-            zip_path, nom_reseau_str, on_step=_log
-        )
-
-        chemins = chemins_reseau(nom_reseau_str)
-        osm_pbf_path = chemins["osm_pbf"]
-        ttm_path = chemins["ttm"]
-
-        if not os.path.exists(osm_pbf_path):
-            _recuperer_ou_extraire_osm_pbf(chemins, nom_reseau_str)
-
-        if not os.path.exists(ttm_path) and recuperer_depuis_hf(
-            f"memory_ttm/ttm_{nom_reseau_str}.parquet", ttm_path
-        ):
-            _log("✓ Matrice des temps de trajet récupérée depuis le cache Hugging Face")
-
-        if not os.path.exists(ttm_path):
-            _log(
-                "Calcul de la matrice des temps de trajet (r5py)... "
-                "premier lancement pour ce réseau, peut prendre plusieurs minutes"
+    # Conteneur vidé une fois le calcul terminé (cf. return ci-dessous) : le
+    # st.status() affichait auparavant son libellé replié en permanence après
+    # coup ("Données d'accessibilité prêtes") plutôt que de disparaître comme
+    # les autres indicateurs d'avancement de l'app une fois son rôle rempli.
+    conteneur_statut = st.empty()
+    with conteneur_statut.container():
+        with st.status("Préparation des données d'accessibilité...", expanded=True) as status:
+            population_grid_agglo, land_use_data, BPE_agglo = construire_donnees_bpe(
+                zip_path, nom_reseau_str, on_step=_log
             )
-            _assurer_r5py_pret()
-            points = population_grid_agglo[["id", "geometry"]].copy()
-            points["geometry"] = points.geometry.centroid
 
-            gtfs_r5py = preparer_gtfs_pour_r5py(zip_path)
-            try:
-                transport_network = _construire_reseau_transport(osm_pbf_path, gtfs_r5py)
-            except Exception:
-                # _construire_reseau_transport a déjà retenté une fois après avoir
-                # vidé le cache JVM de r5py (~/.cache/r5py) — si ça échoue encore,
-                # c'est potentiellement osm_pbf_path lui-même (sur le disque du
-                # Space) qui est corrompu, pas seulement sa copie de travail dans
-                # le cache JVM (observé sur T2C/Clermont-Ferrand : le fichier
-                # stocké sur HF était valide, donc le retéléchargement écrase la
-                # copie locale corrompue). On le supprime et on le régénère —
-                # forcer_extraction=True : si osm_pbf_path venait déjà du cache
-                # HF, un simple retéléchargement renverrait le même fichier
-                # corrompu en boucle (observé sur le GTFS de Périgueux, échec
-                # systématique malgré ce retry) — on réextrait donc directement
-                # via Overpass, ce qui écrase aussi le cache HF une fois réussi.
-                _log("⚠ Échec avec l'extrait OSM local, réextraction depuis Overpass...")
-                os.remove(osm_pbf_path)
-                _recuperer_ou_extraire_osm_pbf(chemins, nom_reseau_str, forcer_extraction=True)
-                transport_network = _construire_reseau_transport(osm_pbf_path, gtfs_r5py)
+            chemins = chemins_reseau(nom_reseau_str)
+            osm_pbf_path = chemins["osm_pbf"]
+            ttm_path = chemins["ttm"]
 
-            departure_datetime = datetime.datetime.strptime(date_JOB, "%Y%m%d").replace(hour=14, minute=0, second=0)
+            if not os.path.exists(osm_pbf_path):
+                _recuperer_ou_extraire_osm_pbf(chemins, nom_reseau_str)
 
-            # Par lots d'origines plutôt qu'un seul appel origins=destinations=tous
-            # les carreaux : borne le pic mémoire (JVM + résultat Python) à la
-            # taille d'un lot au lieu de la matrice complète — nécessaire pour
-            # les grosses agglomérations (ex: Lyon/TCL, "Memory limit exceeded
-            # (32.0G)" observé même avec 16 Go dédiés à la JVM en un seul appel).
-            calculer_ttm_par_lots(
-                r5py,
-                transport_network,
-                points,
-                departure=departure_datetime,
-                transport_modes=[r5py.TransportMode.WALK, r5py.TransportMode.TRANSIT],
-                max_time_walking=datetime.timedelta(minutes=30),
-                max_time=datetime.timedelta(minutes=120),
-                ttm_path=ttm_path,
-                on_step=_log,
-            )
-            _log("✓ Matrice des temps de trajet prête")
-            _log("Envoi de la matrice des temps de trajet vers le cache Hugging Face...")
-            nom_ttm_hf = f"memory_ttm/ttm_{nom_reseau_str}.parquet"
-            if envoyer_vers_hf(ttm_path, nom_ttm_hf):
-                _log("✓ Matrice envoyée vers Hugging Face (réutilisable aux prochains déploiements)")
-            else:
-                _log("⚠ Envoi vers Hugging Face échoué (pas bloquant, disponible seulement sur ce Space)")
+            if not os.path.exists(ttm_path) and recuperer_depuis_hf(
+                f"memory_ttm/ttm_{nom_reseau_str}.parquet", ttm_path
+            ):
+                _log("✓ Matrice des temps de trajet récupérée depuis le cache Hugging Face")
 
-        print("Chargement de la matrice des temps de trajet en mémoire...", flush=True)
-        ttm = charger_ttm(ttm_path)
-        print(f"✓ ttm chargé, {len(ttm)} lignes, {ttm.memory_usage(deep=True).sum() / 1e9:.2f} Go", flush=True)
-        status.update(label="Données d'accessibilité prêtes", state="complete", expanded=False)
+            if not os.path.exists(ttm_path):
+                _log(
+                    "Calcul de la matrice des temps de trajet (r5py)... "
+                    "premier lancement pour ce réseau, peut prendre plusieurs minutes"
+                )
+                _assurer_r5py_pret()
+                points = population_grid_agglo[["id", "geometry"]].copy()
+                points["geometry"] = points.geometry.centroid
 
+                gtfs_r5py = preparer_gtfs_pour_r5py(zip_path)
+                try:
+                    transport_network = _construire_reseau_transport(osm_pbf_path, gtfs_r5py)
+                except Exception:
+                    # _construire_reseau_transport a déjà retenté une fois après avoir
+                    # vidé le cache JVM de r5py (~/.cache/r5py) — si ça échoue encore,
+                    # c'est potentiellement osm_pbf_path lui-même (sur le disque du
+                    # Space) qui est corrompu, pas seulement sa copie de travail dans
+                    # le cache JVM (observé sur T2C/Clermont-Ferrand : le fichier
+                    # stocké sur HF était valide, donc le retéléchargement écrase la
+                    # copie locale corrompue). On le supprime et on le régénère —
+                    # forcer_extraction=True : si osm_pbf_path venait déjà du cache
+                    # HF, un simple retéléchargement renverrait le même fichier
+                    # corrompu en boucle (observé sur le GTFS de Périgueux, échec
+                    # systématique malgré ce retry) — on réextrait donc directement
+                    # via Overpass, ce qui écrase aussi le cache HF une fois réussi.
+                    _log("⚠ Échec avec l'extrait OSM local, réextraction depuis Overpass...")
+                    os.remove(osm_pbf_path)
+                    _recuperer_ou_extraire_osm_pbf(chemins, nom_reseau_str, forcer_extraction=True)
+                    transport_network = _construire_reseau_transport(osm_pbf_path, gtfs_r5py)
+
+                departure_datetime = datetime.datetime.strptime(date_JOB, "%Y%m%d").replace(hour=14, minute=0, second=0)
+
+                # Par lots d'origines plutôt qu'un seul appel origins=destinations=tous
+                # les carreaux : borne le pic mémoire (JVM + résultat Python) à la
+                # taille d'un lot au lieu de la matrice complète — nécessaire pour
+                # les grosses agglomérations (ex: Lyon/TCL, "Memory limit exceeded
+                # (32.0G)" observé même avec 16 Go dédiés à la JVM en un seul appel).
+                calculer_ttm_par_lots(
+                    r5py,
+                    transport_network,
+                    points,
+                    departure=departure_datetime,
+                    transport_modes=[r5py.TransportMode.WALK, r5py.TransportMode.TRANSIT],
+                    max_time_walking=datetime.timedelta(minutes=30),
+                    max_time=datetime.timedelta(minutes=120),
+                    ttm_path=ttm_path,
+                    on_step=_log,
+                )
+                _log("✓ Matrice des temps de trajet prête")
+                _log("Envoi de la matrice des temps de trajet vers le cache Hugging Face...")
+                nom_ttm_hf = f"memory_ttm/ttm_{nom_reseau_str}.parquet"
+                if envoyer_vers_hf(ttm_path, nom_ttm_hf):
+                    _log("✓ Matrice envoyée vers Hugging Face (réutilisable aux prochains déploiements)")
+                else:
+                    _log("⚠ Envoi vers Hugging Face échoué (pas bloquant, disponible seulement sur ce Space)")
+
+            print("Chargement de la matrice des temps de trajet en mémoire...", flush=True)
+            ttm = charger_ttm(ttm_path)
+            print(f"✓ ttm chargé, {len(ttm)} lignes, {ttm.memory_usage(deep=True).sum() / 1e9:.2f} Go", flush=True)
+            status.update(label="Données d'accessibilité prêtes", state="complete", expanded=False)
+
+    conteneur_statut.empty()
     return population_grid_agglo, land_use_data, BPE_agglo, ttm
 
 
@@ -536,6 +543,9 @@ def accessibilite_index_page():
     recuperer_depuis_hf(f"memory_ttm/ttm_{nom_reseau_str}.parquet", ttm_path)
     premier_lancement = not os.path.exists(ttm_path)
 
+    # conteneur_message_cache est vidé une fois le calcul terminé (cf. plus
+    # bas) : ce message n'a plus d'utilité une fois les résultats affichés.
+    conteneur_message_cache = st.empty()
     if premier_lancement:
         st.warning(
             "⚠️ Premier lancement pour ce réseau : extraction OSM puis calcul de la "
@@ -544,7 +554,7 @@ def accessibilite_index_page():
             "disque pour les lancements suivants."
         )
     else:
-        st.info("✓ Résultats déjà en cache pour ce réseau : le calcul sera quasi instantané.")
+        conteneur_message_cache.info("✓ Résultats déjà en cache pour ce réseau : le calcul sera quasi instantané.")
 
     resolution_speciale = RESOLUTIONS_GRILLE_SPECIALES.get(nom_reseau_str)
     if resolution_speciale is not None:
@@ -603,6 +613,8 @@ def accessibilite_index_page():
         # pondérés" seul, déciles fusionnés) plutôt que de garder le mode
         # détaillé d'un run précédent — cf. analyse_detaillee ci-dessous.
         st.session_state.analyse_detaillee = False
+
+    conteneur_message_cache.empty()
 
     if "pipeline_data" not in st.session_state or st.session_state.reseau_calcule != nom_reseau_str:
         return

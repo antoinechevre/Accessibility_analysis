@@ -189,9 +189,6 @@ def charger_ou_calculer_indicateurs(feed, route_type, nom_mode, nom_reseau_str, 
 def troncons_page(lang="fr"):
     st.markdown("---")
 
-    # Avertissement sur les limitations
-    st.warning(t("troncons.warning_limitations", lang))
-
     # Vérifier si les données sont chargées
     if (
         st.session_state.feed is not None
