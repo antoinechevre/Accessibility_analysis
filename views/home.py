@@ -169,7 +169,7 @@ def explications_analyse_gtfs():
     Analyse des données GTFS (General Transit Feed Specification) pour extraire des indicateurs clés
     sur les transports en commun — indépendamment de l'analyse d'accessibilité aux équipements ci-dessus.
     Détermine la plage temporelle sur laquelle le GTFS est actif et identifie un JOB (jour ouvré de base,
-    mardi ou jeudi tiré au hasard dans cette plage).
+    mardi ou jeudi le plus loin dans le temps sur cette plage).
 
     #### 📍 Analyse par arrêts
     - Nombre de passages par arrêt

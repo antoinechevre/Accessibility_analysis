@@ -544,10 +544,11 @@ def accessibilite_index_page():
     premier_lancement = not os.path.exists(ttm_path)
 
     # conteneur_message_cache est vidé une fois le calcul terminé (cf. plus
-    # bas) : ce message n'a plus d'utilité une fois les résultats affichés.
+    # bas) : ces deux messages n'ont plus d'utilité une fois les résultats
+    # affichés.
     conteneur_message_cache = st.empty()
     if premier_lancement:
-        st.warning(
+        conteneur_message_cache.warning(
             "⚠️ Premier lancement pour ce réseau : extraction OSM puis calcul de la "
             "matrice des temps de trajet (r5py), potentiellement long (plusieurs "
             "minutes) et gourmand en mémoire. Les résultats sont mis en cache sur "
