@@ -570,13 +570,6 @@ def accessibilite_index_page():
             message += f" {PRECISIONS_RESEAU[nom_reseau_str]}"
         st.warning(message)
 
-    # type="primary" : accent teal du thème (.streamlit/config.toml) plutôt
-    # que le bouton "secondary" par défaut, pour ressortir comme l'action
-    # principale de la page.
-    lancer = st.button(
-        "🚀 Lancer / recharger l'analyse d'accessibilité", use_container_width=True, type="primary"
-    )
-
     if "reseau_calcule" not in st.session_state:
         st.session_state.reseau_calcule = None
     if "benchmark_a_enregistrer" not in st.session_state:
@@ -584,7 +577,11 @@ def accessibilite_index_page():
     if "analyse_detaillee" not in st.session_state:
         st.session_state.analyse_detaillee = False
 
-    if lancer:
+    # Lancement automatique dès qu'un GTFS est chargé/changé (plus de bouton
+    # manuel) : ne recalcule que si ce réseau n'a pas déjà été traité dans
+    # cette session (reseau_calcule différent de nom_reseau_str), même
+    # principe que ponderation_equipements_page.
+    if st.session_state.reseau_calcule != nom_reseau_str:
         try:
             population_grid_agglo, land_use_data, BPE_agglo, ttm = _construire_pipeline(
                 zip_path, nom_reseau_str, date_str

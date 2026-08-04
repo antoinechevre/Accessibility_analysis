@@ -146,9 +146,15 @@ section[data-testid="stSidebar"] h3 {
     margin-top: -.3rem;
 }
 .st-key-nav_niveau2 [data-testid="stButtonGroup"] button {
-    font-size: .8rem;
+    font-size: .85rem;
     font-weight: 500;
-    padding: .3rem .8rem;
+    /* min-height 44px (recommandation Apple HIG pour une cible tactile) :
+       le padding réduit d'origine (.3rem .8rem, ~24px de hauteur) rendait
+       ces boutons difficiles à toucher précisément sur iPad — sans
+       équivalent en souris (le curseur reste pixel-précis), d'où des
+       soucis de navigation constatés uniquement sur iPad Safari. */
+    padding: .65rem 1rem;
+    min-height: 44px;
 }
 
 /* Overlay de chargement GTFS (cf. st.container(key="overlay_chargement_gtfs")
@@ -187,6 +193,11 @@ section[data-testid="stSidebar"] h3 {
 )
 
 st.markdown("---")
+
+# Placeholder pour le message "GTFS en cours de chargement" (rempli/vidé par
+# charger_donnees_gtfs plus bas) : créé ici pour s'afficher sous le titre,
+# alors que charger_donnees_gtfs() n'est appelée qu'après la nav/sidebar.
+placeholder_chargement_gtfs = st.empty()
 
 # Initialiser la page sélectionnée si pas déjà fait
 if "selected_page" not in st.session_state:
@@ -345,7 +356,7 @@ if "total_vk_plage" not in st.session_state:
 # pas choisie par l'utilisateur : elle est déterminée automatiquement à
 # partir du GTFS (le dernier mardi ou jeudi de la plage de service fiable,
 # toujours le même pour un GTFS donné — voir src/info_reseau.dates_service).
-def charger_donnees_gtfs():
+def charger_donnees_gtfs(placeholder=None):
     # Une "source" = (nom, fonction de lecture des octets du zip). uploaded_files
     # (upload libre) et gtfs_locaux_choisis (catalogue disque/HF) sont combinables
     # (ex: un GTFS uploadé + un GTFS du catalogue) : concaténés en une seule
@@ -378,6 +389,13 @@ def charger_donnees_gtfs():
 
     if not nouveau_fichier and st.session_state.feed is not None:
         return True
+
+    # Message affiché sous le titre pendant tout le chargement (y compris la
+    # phase de copie/fusion ci-dessous, avant que le premier st.spinner —
+    # couvert par l'overlay plein écran — n'apparaisse) : sans lui, l'appli
+    # semblait figée un court instant après la sélection du GTFS.
+    if placeholder is not None:
+        placeholder.info("🔄 GTFS en cours de chargement...")
 
     # Copie dans un/des fichier(s) temporaire(s) (le résultat final GTFS_PATH
     # est conservé pour toute la session : create_carte_arrets recharge le feed
@@ -484,14 +502,20 @@ def charger_donnees_gtfs():
             if envoyer_vers_hf(GTFS_PATH, f"GTFS/{nom_gtfs}"):
                 st.toast(f"✓ {nom_gtfs} envoyé vers Hugging Face (réutilisable aux prochains déploiements)")
 
+        if placeholder is not None:
+            placeholder.empty()
         return True
 
     except TropAgencesError as e:
+        if placeholder is not None:
+            placeholder.empty()
         st.error(f"⚠ Ce GTFS regroupe {e.args[0]} agences : ce que l'app ne peut pas gérer. Charger un GTFS urbain uniquement.")
         os.unlink(GTFS_PATH)
         st.stop()
 
     except Exception as e:
+        if placeholder is not None:
+            placeholder.empty()
         st.error(f"Erreur lors du chargement : {e}")
         os.unlink(GTFS_PATH)
         return False
@@ -505,7 +529,7 @@ def charger_donnees_gtfs():
 # plein écran le temps du chargement, sans toucher aux spinners du reste de
 # l'app (calcul BPE, cartes...).
 with st.container(key="overlay_chargement_gtfs"):
-    charger_donnees_gtfs()
+    charger_donnees_gtfs(placeholder_chargement_gtfs)
 
 # Navigation entre les pages
 if st.session_state.selected_page == "Accueil":

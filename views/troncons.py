@@ -216,40 +216,48 @@ def troncons_page(lang="fr"):
         # Calculer les indicateurs automatiquement si pas déjà fait
         if st.session_state.indicateurs_par_mode is None:
 
-            with st.spinner(t("troncons.spinner_reference", lang)):
-                troncons_par_mode = {
-                    nom_mode: charger_ou_calculer_troncons(
-                        st.session_state.feed,
-                        route_type=route_type,
-                        nom_mode=nom_mode,
-                        nom_reseau_str=st.session_state.nom_reseau_str,
-                        agency_ids=agency_ids,
-                        lang=lang,
-                    )
-                    for route_type, nom_mode, _, agency_ids in MODES
-                }
-
-                if any(t_ is None for t_ in troncons_par_mode.values()):
-                    st.error(t("troncons.erreur_reference", lang))
-                    return
-
-            with st.spinner(t("troncons.spinner_indicateurs", lang)):
-                try:
-                    st.session_state.indicateurs_par_mode = {
-                        nom_mode: charger_ou_calculer_indicateurs(
+            # Les messages d'avancement par mode (charger_ou_calculer_troncons
+            # ci-dessus) sont rendus dans ce conteneur unique, vidé une fois le
+            # calcul terminé : sinon ils restent tous empilés à l'écran en
+            # permanence au-dessus des résultats, plutôt que de disparaître
+            # une fois leur rôle (indiquer une progression) rempli.
+            conteneur_progression = st.empty()
+            with conteneur_progression.container():
+                with st.spinner(t("troncons.spinner_reference", lang)):
+                    troncons_par_mode = {
+                        nom_mode: charger_ou_calculer_troncons(
                             st.session_state.feed,
-                            route_type,
-                            nom_mode,
-                            st.session_state.nom_reseau_str,
-                            troncons_par_mode[nom_mode],
-                            st.session_state.active_service_ids,
+                            route_type=route_type,
+                            nom_mode=nom_mode,
+                            nom_reseau_str=st.session_state.nom_reseau_str,
                             agency_ids=agency_ids,
+                            lang=lang,
                         )
                         for route_type, nom_mode, _, agency_ids in MODES
                     }
-                except Exception as e:
-                    st.error(t("troncons.erreur_indicateurs", lang, erreur=e))
-                    return
+
+                    if any(t_ is None for t_ in troncons_par_mode.values()):
+                        st.error(t("troncons.erreur_reference", lang))
+                        return
+
+                with st.spinner(t("troncons.spinner_indicateurs", lang)):
+                    try:
+                        st.session_state.indicateurs_par_mode = {
+                            nom_mode: charger_ou_calculer_indicateurs(
+                                st.session_state.feed,
+                                route_type,
+                                nom_mode,
+                                st.session_state.nom_reseau_str,
+                                troncons_par_mode[nom_mode],
+                                st.session_state.active_service_ids,
+                                agency_ids=agency_ids,
+                            )
+                            for route_type, nom_mode, _, agency_ids in MODES
+                        }
+                    except Exception as e:
+                        st.error(t("troncons.erreur_indicateurs", lang, erreur=e))
+                        return
+            conteneur_progression.empty()
 
         if st.session_state.indicateurs_par_mode is not None:
 
