@@ -91,9 +91,13 @@ def ponderation_equipements_page():
         "Paramètres utilisés pour scorer la BPE par domaine (src/ponderation_bpe.py), "
         "communs à toutes les cartes ci-dessus."
     )
-    st.markdown(
-        "[description des différents équipements]"
-        "(https://www.insee.fr/fr/metadonnees/source/fichier/BPE25_liste_hierarchisee_TYPEQU.html)"
+    # st.link_button (plutôt qu'un lien markdown classique) : ouvre toujours
+    # dans un nouvel onglet — la page INSEE ciblée, servie en pièce jointe
+    # (content-disposition), se téléchargeait sinon comme un fichier.
+    st.link_button(
+        "description des différents équipements",
+        "https://www.insee.fr/fr/metadonnees/source/fichier/BPE25_liste_hierarchisee_TYPEQU.html",
+        icon=":material/open_in_new:",
     )
 
     st.markdown("#### Poids par gamme d'équipement, par domaine")
