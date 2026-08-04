@@ -260,8 +260,6 @@ def troncons_page(lang="fr"):
 
             indicateurs_par_mode = st.session_state.indicateurs_par_mode
 
-            st.success(t("troncons.succes", lang))
-
             # Statistiques globales
             st.header(t("troncons.header_stats", lang))
             colonnes_stats = st.columns(len(MODES))
