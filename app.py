@@ -166,8 +166,9 @@ section[data-testid="stSidebar"] h3 {
     inset: 0;
     z-index: 9999;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
+    padding-top: 3rem;
     background: rgba(18, 51, 53, 0.55);
     backdrop-filter: blur(2px);
 }
@@ -193,11 +194,6 @@ section[data-testid="stSidebar"] h3 {
 )
 
 st.markdown("---")
-
-# Placeholder pour le message "GTFS en cours de chargement" (rempli/vidé par
-# charger_donnees_gtfs plus bas) : créé ici pour s'afficher sous le titre,
-# alors que charger_donnees_gtfs() n'est appelée qu'après la nav/sidebar.
-placeholder_chargement_gtfs = st.empty()
 
 # Initialiser la page sélectionnée si pas déjà fait
 if "selected_page" not in st.session_state:
@@ -356,7 +352,7 @@ if "total_vk_plage" not in st.session_state:
 # pas choisie par l'utilisateur : elle est déterminée automatiquement à
 # partir du GTFS (le dernier mardi ou jeudi de la plage de service fiable,
 # toujours le même pour un GTFS donné — voir src/info_reseau.dates_service).
-def charger_donnees_gtfs(placeholder=None):
+def charger_donnees_gtfs():
     # Une "source" = (nom, fonction de lecture des octets du zip). uploaded_files
     # (upload libre) et gtfs_locaux_choisis (catalogue disque/HF) sont combinables
     # (ex: un GTFS uploadé + un GTFS du catalogue) : concaténés en une seule
@@ -390,13 +386,6 @@ def charger_donnees_gtfs(placeholder=None):
     if not nouveau_fichier and st.session_state.feed is not None:
         return True
 
-    # Message affiché sous le titre pendant tout le chargement (y compris la
-    # phase de copie/fusion ci-dessous, avant que le premier st.spinner —
-    # couvert par l'overlay plein écran — n'apparaisse) : sans lui, l'appli
-    # semblait figée un court instant après la sélection du GTFS.
-    if placeholder is not None:
-        placeholder.info("🔄 GTFS en cours de chargement...")
-
     # Copie dans un/des fichier(s) temporaire(s) (le résultat final GTFS_PATH
     # est conservé pour toute la session : create_carte_arrets recharge le feed
     # depuis ce chemin pour tracer les lignes) plutôt que d'opérer directement
@@ -406,10 +395,11 @@ def charger_donnees_gtfs(placeholder=None):
     # data/GTFS, ça modifierait silencieusement la source versionnée sur le
     # dataset HF.
     chemins_temp = []
-    for nom, lire_gtfs in sources:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp_file:
-            tmp_file.write(lire_gtfs())
-            chemins_temp.append(tmp_file.name)
+    with st.spinner("Chargement du GTFS..."):
+        for nom, lire_gtfs in sources:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp_file:
+                tmp_file.write(lire_gtfs())
+                chemins_temp.append(tmp_file.name)
 
     if fusion:
         with st.spinner(f"Fusion de {len(sources)} GTFS ({', '.join(noms_tries)})..."):
@@ -422,57 +412,61 @@ def charger_donnees_gtfs(placeholder=None):
         GTFS_PATH = chemins_temp[0]
 
     try:
-        # Charger le GTFS
-        with st.spinner("Chargement du fichier GTFS..."):
+        # Un seul st.spinner englobant (plutôt que plusieurs, un par étape) :
+        # l'overlay plein écran (CSS plus haut) ne couvre que le temps où un
+        # spinner de ce conteneur est actif — dates_service/logo n'avaient
+        # sinon aucun spinner dédié, laissant la page réapparaître un instant
+        # entre le parsing du GTFS et la fin du chargement.
+        with st.spinner("Chargement du GTFS..."):
             feed = charger_gtfs(GTFS_PATH)
 
-        # L'app ne sait traiter que des GTFS urbains (un GTFS national/régional
-        # regroupant de nombreuses agences ferait exploser les temps de calcul
-        # et n'a pas de sens pour les indicateurs arrêts/tronçons proposés ici)
-        # — sauf exception nommée explicitement (cf. GTFS_NOM_RESEAU_FORCE),
-        # jamais pour une fusion (nom_gtfs y est une concaténation de plusieurs
-        # noms, jamais une clé du dict). Vérifiée sur le NOM DE FICHIER exact
-        # (upload ou catalogue) : GTFS_NOM_RESEAU_FORCE n'est de toute façon
-        # peuplé qu'à la main avec des noms de fichiers déjà connus/vérifiés
-        # (IDFM, Aix-Marseille...), donc pas de risque à l'appliquer aussi au
-        # premier upload d'un de ces fichiers précis.
-        nb_agences = len(feed.agency)
-        exception_valide = not fusion and nom_gtfs in GTFS_NOM_RESEAU_FORCE
-        if nb_agences > 4 and not exception_valide:
-            raise TropAgencesError(nb_agences)
+            # L'app ne sait traiter que des GTFS urbains (un GTFS national/régional
+            # regroupant de nombreuses agences ferait exploser les temps de calcul
+            # et n'a pas de sens pour les indicateurs arrêts/tronçons proposés ici)
+            # — sauf exception nommée explicitement (cf. GTFS_NOM_RESEAU_FORCE),
+            # jamais pour une fusion (nom_gtfs y est une concaténation de plusieurs
+            # noms, jamais une clé du dict). Vérifiée sur le NOM DE FICHIER exact
+            # (upload ou catalogue) : GTFS_NOM_RESEAU_FORCE n'est de toute façon
+            # peuplé qu'à la main avec des noms de fichiers déjà connus/vérifiés
+            # (IDFM, Aix-Marseille...), donc pas de risque à l'appliquer aussi au
+            # premier upload d'un de ces fichiers précis.
+            nb_agences = len(feed.agency)
+            exception_valide = not fusion and nom_gtfs in GTFS_NOM_RESEAU_FORCE
+            if nb_agences > 4 and not exception_valide:
+                raise TropAgencesError(nb_agences)
 
-        # Plage de service fiable et jour ouvré de base (dernier mardi/jeudi,
-        # cf. src/info_reseau.dates_service)
-        _, _, _, date_JOB = dates_service(feed)
-        date_str = date_JOB
+            # Plage de service fiable et jour ouvré de base (dernier mardi/jeudi,
+            # cf. src/info_reseau.dates_service)
+            _, _, _, date_JOB = dates_service(feed)
+            date_str = date_JOB
 
-        # Services actifs à cette date (utilisé par l'onglet "Analyse réseau
-        # (GTFS)" — views/arrets.py, views/troncons.py)
-        active_service_ids = obtenir_service_ids_pour_date(feed, date_str)
+            # Services actifs à cette date (utilisé par l'onglet "Analyse réseau
+            # (GTFS)" — views/arrets.py, views/troncons.py)
+            active_service_ids = obtenir_service_ids_pour_date(feed, date_str)
 
-        # Logo du réseau (best-effort : nécessite une requête réseau vers le
-        # site de l'agence, ne doit jamais bloquer le chargement en cas
-        # d'échec) — utilisé par les cartes de l'onglet "Analyse réseau (GTFS)".
-        try:
-            chemin_logo = recuperer_logo_reseau(feed, dossier_sortie=tempfile.gettempdir())
-        except Exception:
-            chemin_logo = None
+            # Logo du réseau (best-effort : nécessite une requête réseau vers le
+            # site de l'agence, ne doit jamais bloquer le chargement en cas
+            # d'échec) — utilisé par les cartes de l'onglet "Analyse réseau (GTFS)".
+            try:
+                chemin_logo = recuperer_logo_reseau(feed, dossier_sortie=tempfile.gettempdir())
+            except Exception:
+                chemin_logo = None
 
-        # nom_reseau_str() (pas nom_reseau()) : sanitize les noms d'agences pour
-        # un usage sûr dans un chemin de fichier (cf. chemins_reseau) — nom_reseau()
-        # seul joint les agences par " / ", qui casse la construction des chemins
-        # pour un GTFS multi-agences (ex: Valenciennes, OSError "non-existent
-        # directory" car chaque "/" est lu comme un séparateur de répertoire).
-        # Priorité : nom saisi dans nom_reseau_force_saisi (fusion, cf. sa
-        # définition ci-dessus) > GTFS_NOM_RESEAU_FORCE (exceptions nommées,
-        # ex: IDFM, où nom_reseau_str() produirait aussi un nom bien trop
-        # long) > dérivé automatiquement des agences.
-        if nom_reseau_force_saisi:
-            reseau_str = nom_fichier_valide(nom_reseau_force_saisi)
-        elif exception_valide:
-            reseau_str = GTFS_NOM_RESEAU_FORCE[nom_gtfs]
-        else:
-            reseau_str = str(nom_reseau_str(feed))
+            # nom_reseau_str() (pas nom_reseau()) : sanitize les noms d'agences pour
+            # un usage sûr dans un chemin de fichier (cf. chemins_reseau) — nom_reseau()
+            # seul joint les agences par " / ", qui casse la construction des chemins
+            # pour un GTFS multi-agences (ex: Valenciennes, OSError "non-existent
+            # directory" car chaque "/" est lu comme un séparateur de répertoire).
+            # Priorité : nom saisi dans nom_reseau_force_saisi (fusion, cf. sa
+            # définition ci-dessus) > GTFS_NOM_RESEAU_FORCE (exceptions nommées,
+            # ex: IDFM, où nom_reseau_str() produirait aussi un nom bien trop
+            # long) > dérivé automatiquement des agences.
+            if nom_reseau_force_saisi:
+                reseau_str = nom_fichier_valide(nom_reseau_force_saisi)
+            elif exception_valide:
+                reseau_str = GTFS_NOM_RESEAU_FORCE[nom_gtfs]
+            else:
+                reseau_str = str(nom_reseau_str(feed))
 
         # Stocker dans session_state
         st.session_state.feed = feed
@@ -502,20 +496,14 @@ def charger_donnees_gtfs(placeholder=None):
             if envoyer_vers_hf(GTFS_PATH, f"GTFS/{nom_gtfs}"):
                 st.toast(f"✓ {nom_gtfs} envoyé vers Hugging Face (réutilisable aux prochains déploiements)")
 
-        if placeholder is not None:
-            placeholder.empty()
         return True
 
     except TropAgencesError as e:
-        if placeholder is not None:
-            placeholder.empty()
         st.error(f"⚠ Ce GTFS regroupe {e.args[0]} agences : ce que l'app ne peut pas gérer. Charger un GTFS urbain uniquement.")
         os.unlink(GTFS_PATH)
         st.stop()
 
     except Exception as e:
-        if placeholder is not None:
-            placeholder.empty()
         st.error(f"Erreur lors du chargement : {e}")
         os.unlink(GTFS_PATH)
         return False
@@ -529,7 +517,7 @@ def charger_donnees_gtfs(placeholder=None):
 # plein écran le temps du chargement, sans toucher aux spinners du reste de
 # l'app (calcul BPE, cartes...).
 with st.container(key="overlay_chargement_gtfs"):
-    charger_donnees_gtfs(placeholder_chargement_gtfs)
+    charger_donnees_gtfs()
 
 # Navigation entre les pages
 if st.session_state.selected_page == "Accueil":
