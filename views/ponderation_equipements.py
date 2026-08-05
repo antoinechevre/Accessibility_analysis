@@ -15,7 +15,7 @@ import pandas as pd
 import streamlit as st
 
 from src.BPE_traitement import carte_ponderation_domaine
-from src.pipeline_donnees import DOMAINES_BPE, construire_donnees_bpe
+from src.pipeline_donnees import DOMAINES_BPE, HorsMetropoleError, construire_donnees_bpe
 from src.ponderation_bpe import GAMMES_POIDS_PAR_DOMAINE, SEUILS_DOMAINE
 
 BASE_DIR = os.getcwd()
@@ -46,6 +46,9 @@ def ponderation_equipements_page():
             population_grid_agglo, land_use_data, BPE_agglo = construire_donnees_bpe(
                 zip_path, nom_reseau_str, on_step=lambda message: statut.info(message)
             )
+        except HorsMetropoleError as e:
+            st.error(f"⚠ {e}")
+            return
         except Exception as e:
             st.error(f"Erreur pendant le calcul : {type(e).__name__}: {e}")
             return

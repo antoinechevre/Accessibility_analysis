@@ -25,6 +25,7 @@ from src.pipeline_donnees import (
     RESEAUX_EXCLUS_BENCHMARK,
     RESEAUX_GRILLE_1KM,
     RESOLUTIONS_GRILLE_SPECIALES,
+    HorsMetropoleError,
     chemins_reseau,
     construire_donnees_bpe,
 )
@@ -597,6 +598,9 @@ def accessibilite_index_page():
             population_grid_agglo, land_use_data, BPE_agglo, ttm = _construire_pipeline(
                 zip_path, nom_reseau_str, date_str
             )
+        except HorsMetropoleError as e:
+            st.error(f"⚠ {e}")
+            return
         except Exception as e:
             # str(e) peut être vide (ex. MemoryError() par défaut) : le type
             # de l'exception donne l'info utile dans ce cas.

@@ -27,6 +27,19 @@ from src.hf_cache import HF_DATA_REPO_ID, envoyer_vers_hf, recuperer_depuis_hf
 from src.ponderation_bpe import GAMMES_POIDS_PAR_DOMAINE, SEUILS_DOMAINE
 from src.utils import exporter_df_to_csv
 
+class HorsMetropoleError(Exception):
+    """Levée quand le GTFS ne dessert aucune commune de France métropolitaine
+    (GTFS étranger, ou d'un DROM-COM) : le carroyage population (Filosofi) et
+    la BPE utilisés par construire_donnees_bpe ne couvrent que la métropole."""
+
+
+# Préfixes de code INSEE (3 premiers caractères) hors France métropolitaine :
+# 971 Guadeloupe, 972 Martinique, 973 Guyane, 974 La Réunion,
+# 975 Saint-Pierre-et-Miquelon, 976 Mayotte, 977 Saint-Barthélemy,
+# 978 Saint-Martin, 986 Wallis-et-Futuna, 987 Polynésie française,
+# 988 Nouvelle-Calédonie.
+PREFIXES_DEPARTEMENTS_HORS_METROPOLE = ("971", "972", "973", "974", "975", "976", "977", "978", "986", "987", "988")
+
 BASE_DIR = os.getcwd()
 DATA_DIR = os.path.join(BASE_DIR, "data")
 MEMORY_CSV_AGGLO_DIR = os.path.join(DATA_DIR, "memory_csv_agglo")
@@ -179,6 +192,19 @@ def construire_donnees_bpe(zip_path, nom_reseau_str, on_step=None):
             output_path=chemins["decoupage_csv"],
             decoupage_reference_path=decoupage_reference_path,
         )
+
+        # Vérifié avant toute mise en cache (local + HF) : un GTFS étranger ou
+        # d'un DROM-COM ne doit pas polluer le cache partagé avec un
+        # découpage vide/hors-périmètre — carroyage Filosofi et BPE ne
+        # couvrent que la France métropolitaine.
+        codes_insee_agglo = pd.read_csv(chemins["decoupage_csv"], dtype={"code_insee": str})["code_insee"]
+        codes_metropole = codes_insee_agglo[~codes_insee_agglo.str[:3].isin(PREFIXES_DEPARTEMENTS_HORS_METROPOLE)]
+        if codes_metropole.empty:
+            os.remove(chemins["decoupage_csv"])
+            raise HorsMetropoleError(
+                "Cette application ne fonctionne que pour des villes de France métropolitaine."
+            )
+
         os.makedirs(MEMORY_CSV_AGGLO_DIR, exist_ok=True)
         chemin_memoire_decoupage = os.path.join(MEMORY_CSV_AGGLO_DIR, f"decoupage_agglo_{nom_reseau_str}.csv")
         exporter_df_to_csv(
