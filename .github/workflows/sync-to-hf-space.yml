@@ -7,13 +7,18 @@ name: Sync to Hugging Face Space
 # avec droit d'écriture sur le Space), à ajouter dans Settings > Secrets
 # and variables > Actions.
 #
-# Ne pousse pas HEAD tel quel : HF refuse tout fichier de plus de 10 Mo hors
-# stockage Xet/LFS, et les notebooks du dépôt (sorties de cellules avec
-# cartes intégrées) dépassent régulièrement cette limite alors qu'ils ne
-# sont pas nécessaires à l'exécution de l'app Streamlit. Un commit sur
-# mesure (arborescence de HEAD moins EXCLUDE_PATHS) est donc construit et
-# empilé sur hf/main à chaque déploiement, plutôt qu'un force-push de HEAD
-# — même principe que scripts/deploy_hf.sh du dépôt gtfs_analysis_app.
+# Upload via l'API HTTP de huggingface_hub (upload_folder) plutôt qu'un push
+# git : le protocole git contre le serveur des Spaces HF s'est révélé peu
+# fiable dans les deux versions (v2 : "fatal: expected 'acknowledgments'" ;
+# v0, utilisé un temps en contournement : "fatal: the remote end hung up
+# unexpectedly", reproduit aussi en local donc pas spécifique au runner
+# GitHub). L'API HTTP contourne entièrement le protocole git et gère
+# nativement les gros fichiers (pas de limite 10 Mo à la git-plain), donc
+# plus besoin non plus de vérifier la taille des fichiers à la main.
+#
+# Exclut les notebooks de prototypage (cf. docstring des vues sous views/) :
+# pas nécessaires à l'exécution de l'app Streamlit, et leurs sorties de
+# cellules (cartes intégrées) sont volumineuses sans intérêt pour le Space.
 
 on:
   push:
@@ -25,66 +30,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
         with:
-          fetch-depth: 0
+          python-version: "3.12"
 
       - name: Push vers le Space Hugging Face
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          set -euo pipefail
-
-          REMOTE_URL="https://hf:${HF_TOKEN}@huggingface.co/spaces/antoinechevre/accessibility"
-          MAX_SIZE=$((10 * 1024 * 1024))  # 10 MiB, limite HF hors Xet/LFS
-
-          # git commit-tree exige une identité committer ; le runner n'en a pas
-          # par défaut ("fatal: empty ident name ... not allowed") — pas besoin
-          # d'une identité réelle, ce commit n'existe que sur hf/main.
-          git config user.email "actions@github.com"
-          git config user.name "GitHub Actions"
-
-          # Notebooks de prototypage (cf. docstring des vues sous views/) : pas
-          # nécessaires au runtime de l'app, et régulièrement trop volumineux
-          # une fois leurs sorties de cellules exécutées.
-          EXCLUDE_PATHS=(
-            "index_accessibility_notebook_def.ipynb"
-            "index_accessibility_notebook_IDF_1km.ipynb"
-            "index_accessibility_notebook_IDF_400x400.ipynb"
-          )
-
-          # -c protocol.version=0 : le protocole git v2 (par défaut depuis
-          # git >= 2.26) échoue contre le serveur git des Spaces HF avec
-          # "fatal: expected 'acknowledgments'" (reproduit aussi en local,
-          # donc pas spécifique au runner GitHub) — v0 fonctionne normalement.
-          git -c protocol.version=0 fetch "$REMOTE_URL" main -q || true
-          PARENT=$(git rev-parse FETCH_HEAD 2>/dev/null || echo "")
-
-          INDEX_FILE=$(mktemp)
-          trap 'rm -f "$INDEX_FILE"' EXIT
-          export GIT_INDEX_FILE="$INDEX_FILE"
-
-          git read-tree HEAD
-          for path in "${EXCLUDE_PATHS[@]}"; do
-              git rm --cached -q --ignore-unmatch -- "$path"
-          done
-          TREE=$(git write-tree)
-          unset GIT_INDEX_FILE
-
-          TOO_BIG=$(git ls-tree -r -l "$TREE" | awk -v max="$MAX_SIZE" '$4 ~ /^[0-9]+$/ && $4+0 > max {print $4, $5}')
-          if [ -n "$TOO_BIG" ]; then
-              echo "Fichier(s) trop volumineux pour le Space (>10 Mo) — ajoute-les à EXCLUDE_PATHS :" >&2
-              echo "$TOO_BIG" >&2
-              exit 1
-          fi
-
-          MESSAGE=$(printf '%s\n\n%s' \
-            "Deploy snapshot of $(git rev-parse --short HEAD) — $(git log -1 --format=%s HEAD)" \
-            "Excludes: ${EXCLUDE_PATHS[*]}. See GitHub for full history.")
-
-          if [ -n "$PARENT" ]; then
-              COMMIT=$(git commit-tree "$TREE" -p "$PARENT" -m "$MESSAGE")
-          else
-              COMMIT=$(git commit-tree "$TREE" -m "$MESSAGE")
-          fi
-
-          git -c protocol.version=0 push "$REMOTE_URL" "${COMMIT}:refs/heads/main"
+          pip install -q -U huggingface_hub
+          python "${GITHUB_WORKSPACE}/.github/workflows/deploy_hf_space.py"
