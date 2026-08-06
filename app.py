@@ -132,12 +132,27 @@ section[data-testid="stSidebar"] h3 {
 }
 
 /* Nav à deux niveaux (cf. plus bas, conteneurs st.container(key=...)) :
-   niveau 1 (section) plus affirmé, niveau 2 (sous-page) plus discret et
-   légèrement en retrait pour se lire comme un sous-menu, pas un pair. */
+   niveau 1 (section) calé sur le gabarit d'un h2, niveau 2 (sous-page) sur
+   celui d'un h3 (tailles/graisse mesurées sur les vrais h2/h3 de l'app :
+   36px/600 et 28px/600) — pour que la hiérarchie de la nav se lise comme
+   celle des titres de page plutôt que sur une échelle qui lui est propre.
+   Le texte visible est dans un <p> imbriqué avec sa propre font-size
+   (14px, fixée par le CSS interne de Streamlit) : la cibler directement
+   plutôt que le <button> (dont la font-size ne descend pas jusqu'au <p>).
+   Le <button> a par défaut overflow:hidden + min-height/height fixes
+   pensés pour ce texte à 14px : à lever explicitement, sans quoi le texte
+   agrandi est rogné dans une boîte trop petite. */
 .st-key-nav_niveau1 [data-testid="stButtonGroup"] button {
-    font-size: 1rem;
-    font-weight: 700;
-    padding: .6rem 1.3rem;
+    height: auto;
+    min-height: auto;
+    overflow: visible;
+    padding: .3rem 1.1rem;
+}
+.st-key-nav_niveau1 [data-testid="stButtonGroup"] button p {
+    font-size: 2.25rem;
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
 }
 .st-key-nav_niveau2 {
     background: rgba(14, 124, 123, 0.07);
@@ -146,15 +161,22 @@ section[data-testid="stSidebar"] h3 {
     margin-top: -.3rem;
 }
 .st-key-nav_niveau2 [data-testid="stButtonGroup"] button {
-    font-size: .85rem;
-    font-weight: 500;
+    height: auto;
+    overflow: visible;
     /* min-height 44px (recommandation Apple HIG pour une cible tactile) :
-       le padding réduit d'origine (.3rem .8rem, ~24px de hauteur) rendait
-       ces boutons difficiles à toucher précisément sur iPad — sans
-       équivalent en souris (le curseur reste pixel-précis), d'où des
-       soucis de navigation constatés uniquement sur iPad Safari. */
-    padding: .65rem 1rem;
+       sans lui, le padding réduit rendrait ces boutons difficiles à
+       toucher précisément sur iPad — sans équivalent en souris (le
+       curseur reste pixel-précis), d'où des soucis de navigation
+       constatés uniquement sur iPad Safari. Dépassé de toute façon par la
+       taille de police h3 ci-dessous, gardé par sécurité si elle change. */
     min-height: 44px;
+    padding: .3rem 1rem;
+}
+.st-key-nav_niveau2 [data-testid="stButtonGroup"] button p {
+    font-size: 1.75rem;
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
 }
 
 /* Overlay de chargement GTFS (cf. st.container(key="overlay_chargement_gtfs")
