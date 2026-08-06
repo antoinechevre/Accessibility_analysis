@@ -19,6 +19,23 @@ import os
 from src.hf_cache import recuperer_depuis_hf
 
 
+class HorsMetropoleError(Exception):
+    """Levée quand aucun arrêt du GTFS ne tombe dans la France métropolitaine
+    (GTFS étranger, ou d'un DROM-COM) : le carroyage population (Filosofi) et
+    la BPE utilisés en aval ne couvrent que la métropole."""
+
+
+# Boîte englobante large de la France métropolitaine (Corse comprise), avec
+# marge de sécurité aux frontières — sert de garde-fou RAPIDE (aucun appel
+# réseau) avant le géocodage arrêt par arrêt de codes_communes_via_api, qui
+# ferait sinon des milliers d'appels HTTP inutiles (un par arrêt, avec pause
+# entre chacun) sur un GTFS étranger volumineux avant de conclure qu'aucun
+# arrêt n'est en France — potentiellement des heures pour rien (ex: CTA
+# Chicago, ~10 000 arrêts).
+LAT_MIN_METROPOLE, LAT_MAX_METROPOLE = 41.0, 51.5
+LON_MIN_METROPOLE, LON_MAX_METROPOLE = -5.3, 9.7
+
+
 BASE_DIR = os.getcwd()  # Remonte d'un niveau depuis scripts/
 DATA_DIR = os.path.join(BASE_DIR,"data")
 
@@ -239,6 +256,17 @@ def build_decoupage_agglo(
     """
     feed = gk.read_feed(gtfs_path, dist_units="km")
     stops = feed.stops[["stop_lat", "stop_lon"]].dropna().round(coord_round).drop_duplicates()
+
+    # Garde-fou rapide (aucun appel réseau) avant le géocodage arrêt par
+    # arrêt ci-dessous — cf. HorsMetropoleError plus haut.
+    dans_bbox_metropole = stops["stop_lat"].between(LAT_MIN_METROPOLE, LAT_MAX_METROPOLE) & stops[
+        "stop_lon"
+    ].between(LON_MIN_METROPOLE, LON_MAX_METROPOLE)
+    if not dans_bbox_metropole.any():
+        raise HorsMetropoleError(
+            "Cette application ne fonctionne que pour des villes de France métropolitaine."
+        )
+
     stops_gdf = gpd.GeoDataFrame(
         stops,
         geometry=gpd.points_from_xy(stops["stop_lon"], stops["stop_lat"]),

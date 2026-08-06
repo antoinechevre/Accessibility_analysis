@@ -21,17 +21,12 @@ from src.build_data_agglo import (
     build_grid_agglo,
     build_grid_agglo_1km,
     fusionner_grille_resolution,
+    HorsMetropoleError,
 )
 from src.BPE_traitement import filtre_BPE, filtre_BPE_actifs, land_use_data_domaine
 from src.hf_cache import HF_DATA_REPO_ID, envoyer_vers_hf, recuperer_depuis_hf
 from src.ponderation_bpe import GAMMES_POIDS_PAR_DOMAINE, SEUILS_DOMAINE
 from src.utils import exporter_df_to_csv
-
-class HorsMetropoleError(Exception):
-    """Levée quand le GTFS ne dessert aucune commune de France métropolitaine
-    (GTFS étranger, ou d'un DROM-COM) : le carroyage population (Filosofi) et
-    la BPE utilisés par construire_donnees_bpe ne couvrent que la métropole."""
-
 
 # Préfixes de code INSEE (3 premiers caractères) hors France métropolitaine :
 # 971 Guadeloupe, 972 Martinique, 973 Guyane, 974 La Réunion,
