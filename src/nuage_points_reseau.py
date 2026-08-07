@@ -24,6 +24,7 @@ OPTIONS_Y = [
     ("vehicules_km_JOB_pour_1000hab", "Tout véhicules.km pour 1000 habitants (jour JOB)"),
     ("bus_km_JOB_pour_1000hab", "Bus (véh.km pour 1000 habitants, jour JOB)"),
     ("metro_tram_km_JOB_pour_1000hab", "Métro + Tram (véh.km pour 1000 habitants, jour JOB)"),
+    ("nombre_arrets_pour_1000hab", "Nombre d'arrêts pour 1000 habitants"),
 ]
 
 # metro_tram_km_JOB n'est pas stocké tel quel dans le CSV (métro/tram sont
@@ -40,6 +41,7 @@ COLONNES_POUR_1000HAB = {
     "vehicules_km_JOB": "vehicules_km_JOB_pour_1000hab",
     "bus_km_JOB": "bus_km_JOB_pour_1000hab",
     COLONNE_METRO_TRAM: "metro_tram_km_JOB_pour_1000hab",
+    "nombre_arrets": "nombre_arrets_pour_1000hab",
 }
 
 
