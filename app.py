@@ -61,7 +61,7 @@ st.set_page_config(page_title="Analyse accessibilite aux différents équipement
 # Titre principal
 st.title(
     "Application analyse accessibilité urbaine transports collectifs/piétons "
-    "et analyse réseau transports collectifs"
+    "et analyse réseau transports collectifs - France Métropolitaine"
 )
 
 
