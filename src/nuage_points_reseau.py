@@ -21,6 +21,9 @@ OPTIONS_Y = [
     ("metro_tram_km_JOB", "Métro + Tram (véh.km, jour JOB)"),
     ("vehicules_km_JOB", "Tout véhicules.km (jour JOB)"),
     ("nombre_arrets", "Nombre d'arrêts"),
+    ("vehicules_km_JOB_pour_1000hab", "Tout véhicules.km pour 1000 habitants (jour JOB)"),
+    ("bus_km_JOB_pour_1000hab", "Bus (véh.km pour 1000 habitants, jour JOB)"),
+    ("metro_tram_km_JOB_pour_1000hab", "Métro + Tram (véh.km pour 1000 habitants, jour JOB)"),
 ]
 
 # metro_tram_km_JOB n'est pas stocké tel quel dans le CSV (métro/tram sont
@@ -28,6 +31,16 @@ OPTIONS_Y = [
 # ici, uniquement pour ce graphique, comme somme des deux colonnes brutes.
 COLONNE_METRO_TRAM = "metro_tram_km_JOB"
 COLONNES_METRO_TRAM_SOURCE = ("metro_km_JOB", "tram_km_JOB")
+
+# Colonnes "pour 1000 habitants" : dérivées ici (pas stockées dans le CSV)
+# à partir des colonnes brutes ci-dessus et de population_totale — permet de
+# comparer des réseaux de tailles très différentes (Lyon vs une petite
+# agglomération) sans que la population seule n'explique tout l'écart.
+COLONNES_POUR_1000HAB = {
+    "vehicules_km_JOB": "vehicules_km_JOB_pour_1000hab",
+    "bus_km_JOB": "bus_km_JOB_pour_1000hab",
+    COLONNE_METRO_TRAM: "metro_tram_km_JOB_pour_1000hab",
+}
 
 
 def generer_html_str(df, reseau_actuel=None):
@@ -49,6 +62,12 @@ def generer_html_str(df, reseau_actuel=None):
 
     if all(c in df.columns for c in COLONNES_METRO_TRAM_SOURCE):
         df[COLONNE_METRO_TRAM] = df[list(COLONNES_METRO_TRAM_SOURCE)].sum(axis=1)
+
+    if "population_totale" in df.columns:
+        habitants_milliers = df["population_totale"] / 1000
+        for col_brut, col_norm in COLONNES_POUR_1000HAB.items():
+            if col_brut in df.columns:
+                df[col_norm] = df[col_brut] / habitants_milliers
 
     for col in ("reseau", "ville_principale", "population_totale"):
         if col not in df.columns:

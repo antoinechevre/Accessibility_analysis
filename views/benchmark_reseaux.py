@@ -59,8 +59,8 @@ def benchmark_reseaux_page():
     st.markdown("### Véhicules.km & arrêts")
     st.caption(
         "Population totale en abscisse, un point par réseau — ordonnée paramétrable "
-        "(bus/km, métro+tram/km, tout véhicules.km, ou nombre d'arrêts) directement "
-        "dans le graphique."
+        "(bus/km, métro+tram/km, tout véhicules.km, nombre d'arrêts, ou ces trois "
+        "premiers indicateurs rapportés à 1000 habitants) directement dans le graphique."
     )
     colonnes_reseau = {"bus_km_JOB", "metro_km_JOB", "tram_km_JOB", "vehicules_km_JOB", "nombre_arrets"}
     if not colonnes_reseau & set(tableau_benchmark_complet.columns):
