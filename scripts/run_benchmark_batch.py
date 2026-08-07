@@ -50,19 +50,26 @@ BENCHMARK_CSV = os.path.join(BASE_DIR, "output", "index_benchmark_reseaux.csv")
 LOG_DIR = os.path.join(BASE_DIR, "output", "batch_logs")
 
 # Réseaux volontairement exclus du batch, même s'ils ne sont pas encore dans
-# le benchmark : le fichier _r5py de Toulouse est une copie nettoyée du GTFS
-# principal, pas un réseau distinct à benchmarker séparément.
-#
-# Lyon_GTFS_TCL.ZIP n'est plus exclu : le run traversait bien tout le
-# pipeline mais plantait sur enhanced_2sfca (matrice dupliquée en mémoire,
-# cf. enhanced_2sfca_par_lots) et sur une purge de cache r5py trop large qui
-# supprimait le .jar R5 en plus du graphe corrompu (les deux corrigés
-# depuis). Le run pour Lyon retrouve directement ttm_TCL.parquet /
-# decoupage_agglo_TCL.csv / agglo_osm_pbf_TCL.osm.pbf / population_grid_
-# agglo_TCL.gpkg déjà en cache sur le dataset HF (recuperer_depuis_hf, dans
-# le notebook exécuté par ce script) plutôt que de tout recalculer : plus
-# besoin de l'exclure du batch routine.
-EXCLUS = {"Toulouse_tisseo_gtfs_v2_r5py.zip"}
+# le benchmark :
+# - Lyon_GTFS_TCL.zip : lancé à part (notebook TCL dédié, résolution 400m).
+# - IDFM-gtfs.zip : exclu du fichier de benchmark lui-même (cellule
+#   "#sauvegarde index", RESEAUX_EXCLUS_BENCHMARK — échelle de population
+#   incomparable aux autres réseaux) ; exclu ici aussi pour ne pas dépenser
+#   le pipeline complet (résolution 1km, coûteux) pour un résultat jeté.
+# - Chicago/NYC/Barcelona/Frankfurt/Budapest : réseaux hors France
+#   métropolitaine, gardés dans data/GTFS/ pour retester HorsMetropoleError
+#   à l'occasion — le pipeline les rejette de toute façon en quelques
+#   secondes (bounding box, cf. src/build_data_agglo.py), mais autant ne
+#   pas les inclure dans le batch.
+EXCLUS = {
+    "Lyon_GTFS_TCL.zip",
+    "IDFM-gtfs.zip",
+    "Chicago_google_transit.zip",
+    "NYC_gtfs_b.zip",
+    "Barcelona_mdb-3232-202607230126.zip",
+    "Frankfurt_gtfs.zip",
+    "budapest_gtfs.zip",
+}
 
 MARQUEUR_CELLULE_GTFS = "#chemin GTFS"
 

@@ -1,9 +1,15 @@
 """
-Page Benchmark Villes Françaises - nuage de points comparant tous les réseaux
-déjà enregistrés dans l'index de benchmark (cf. onglet Accessibilité, bouton
-"Enregistrer les indicateurs de ce run", et la cellule "#sauvegarde index" du
-notebook), avec le réseau actuellement chargé (GTFS sélectionné dans la barre
-latérale, s'il y en a un) surligné en rouge parmi les autres en bleu.
+Page Benchmark Villes Françaises - deux nuages de points comparant tous les
+réseaux déjà enregistrés dans l'index de benchmark (cf. onglet Accessibilité,
+bouton "Enregistrer les indicateurs de ce run", et la cellule "#sauvegarde
+index" du notebook), avec le réseau actuellement chargé (GTFS sélectionné
+dans la barre latérale, s'il y en a un) surligné en rouge parmi les autres
+en bleu :
+- Accessibilité aux équipements (src/nuage_points_benchmark.py) : axes,
+  domaine et décile paramétrables.
+- Véhicules.km & arrêts (src/nuage_points_reseau.py) : population en
+  abscisse, ordonnée paramétrable (bus/km, métro+tram/km, tout véh.km,
+  nombre d'arrêts).
 """
 
 import os
@@ -12,6 +18,7 @@ import streamlit as st
 
 from src.hf_cache import lire_csv_partage
 from src.nuage_points_benchmark import generer_html_str
+from src.nuage_points_reseau import generer_html_str as generer_html_reseau_str
 
 BASE_DIR = os.getcwd()
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
@@ -47,3 +54,21 @@ def benchmark_reseaux_page():
 
     html_benchmark = generer_html_str(tableau_benchmark_complet, reseau_actuel=reseau_actuel)
     st.components.v1.html(html_benchmark, height=760, scrolling=False)
+
+    st.markdown("---")
+    st.markdown("### Véhicules.km & arrêts")
+    st.caption(
+        "Population totale en abscisse, un point par réseau — ordonnée paramétrable "
+        "(bus/km, métro+tram/km, tout véhicules.km, ou nombre d'arrêts) directement "
+        "dans le graphique."
+    )
+    colonnes_reseau = {"bus_km_JOB", "metro_km_JOB", "tram_km_JOB", "vehicules_km_JOB", "nombre_arrets"}
+    if not colonnes_reseau & set(tableau_benchmark_complet.columns):
+        st.info(
+            "Aucun réseau de l'index n'a encore ces indicateurs (bus/km, métro+tram/km, "
+            "nombre d'arrêts) — relance l'analyse dans l'onglet Accessibilité pour les "
+            "calculer et les enregistrer."
+        )
+    else:
+        html_reseau = generer_html_reseau_str(tableau_benchmark_complet, reseau_actuel=reseau_actuel)
+        st.components.v1.html(html_reseau, height=760, scrolling=False)

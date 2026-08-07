@@ -299,7 +299,12 @@ def _construire_pipeline(zip_path, nom_reseau_str, date_JOB):
             print("Chargement de la matrice des temps de trajet en mémoire...", flush=True)
             ttm = charger_ttm(ttm_path)
             print(f"✓ ttm chargé, {len(ttm)} lignes, {ttm.memory_usage(deep=True).sum() / 1e9:.2f} Go", flush=True)
-            status.update(label="Données d'accessibilité prêtes", state="complete", expanded=False)
+            # status vaut None hors contexte Streamlit (ex: script batch appelant
+            # cette fonction directement, cf. scripts/run_benchmark_batch.py) :
+            # st.status() n'y lève pas d'exception, mais l'objet retourné ne peut
+            # pas être mis à jour — sans intérêt de toute façon en dehors d'une UI.
+            if status is not None:
+                status.update(label="Données d'accessibilité prêtes", state="complete", expanded=False)
 
     conteneur_statut.empty()
     return population_grid_agglo, land_use_data, BPE_agglo, ttm
@@ -848,8 +853,26 @@ def accessibilite_index_page():
                     vkm_par_ligne_job = km_par_ligne_jour(st.session_state.feed, longueur_par_ligne, date_str)
                     total_vkm_job = vkm_par_ligne_job["total_km"].sum()
 
+                    # Répartition par mode (bus / métro / tram) pour le graphique "véhicules.km
+                    # & arrêts" de l'onglet Benchmark villes françaises (src/nuage_points_reseau.py) —
+                    # route_type direct (pas de distinction RER/Transilien/TER par agence,
+                    # contrairement à views/troncons.py : indicateur simple, pas de raison de
+                    # complexifier ici pour IDFM, exclu du benchmark de toute façon, cf.
+                    # RESEAUX_EXCLUS_BENCHMARK plus bas).
+                    vkm_par_mode_job = vkm_par_ligne_job.merge(
+                        st.session_state.feed.routes[["route_id", "route_type"]], on="route_id", how="left"
+                    )
+                    bus_km_job = vkm_par_mode_job.loc[vkm_par_mode_job["route_type"] == 3, "total_km"].sum()
+                    metro_km_job = vkm_par_mode_job.loc[vkm_par_mode_job["route_type"] == 1, "total_km"].sum()
+                    tram_km_job = vkm_par_mode_job.loc[vkm_par_mode_job["route_type"] == 0, "total_km"].sum()
+                    nombre_arrets_reseau = st.session_state.feed.stops["stop_id"].nunique()
+
                     population_totale_reseau = land_use_data["population"].sum()
 
+                    tableau_benchmark.insert(0, "nombre_arrets", nombre_arrets_reseau)
+                    tableau_benchmark.insert(0, "tram_km_JOB", tram_km_job)
+                    tableau_benchmark.insert(0, "metro_km_JOB", metro_km_job)
+                    tableau_benchmark.insert(0, "bus_km_JOB", bus_km_job)
                     tableau_benchmark.insert(0, "population_totale", population_totale_reseau)
                     tableau_benchmark.insert(0, "vehicules_km_JOB", total_vkm_job)
                     tableau_benchmark.insert(0, "date_JOB", date_str)
