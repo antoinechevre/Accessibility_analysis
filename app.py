@@ -331,9 +331,23 @@ gtfs_locaux_disque = sorted(
 gtfs_locaux_hf = sorted(f for f in lister_fichiers_hf("GTFS") if f.lower().endswith(".zip"))
 gtfs_locaux = sorted(set(gtfs_locaux_disque) | set(gtfs_locaux_hf))
 
+# Ajoute best-effort un fichier tout juste (télé)chargé via la recherche
+# transport.data.gouv.fr (cf. plus bas) à la sélection courante : DOIT
+# s'exécuter avant la création du widget key="gtfs_locaux_choisis"
+# ci-dessous — Streamlit interdit de modifier st.session_state[key] après
+# l'instanciation du widget portant cette clé dans le même run (d'où ce
+# passage par une clé de "staging" séparée plutôt qu'une écriture directe
+# au moment du clic, plus bas dans le script).
+gtfs_a_ajouter_auto = st.session_state.pop("_gtfs_a_selectionner", None)
+if gtfs_a_ajouter_auto:
+    selection_actuelle = st.session_state.get("gtfs_locaux_choisis", [])
+    if gtfs_a_ajouter_auto not in selection_actuelle:
+        st.session_state["gtfs_locaux_choisis"] = [*selection_actuelle, gtfs_a_ajouter_auto]
+
 gtfs_locaux_choisis = st.sidebar.multiselect(
     "...ou choisir un/des GTFS déjà présent(s) — plusieurs = réseaux fusionnés",
     options=gtfs_locaux,
+    key="gtfs_locaux_choisis",
 )
 
 nb_sources_gtfs = len(uploaded_files) + len(gtfs_locaux_choisis)
@@ -362,22 +376,35 @@ with st.sidebar.expander("🔍 Rechercher un GTFS (transport.data.gouv.fr)"):
             if not resultats_recherche:
                 st.info("Aucun GTFS urbain trouvé pour cette ville.")
             provenance_gtfs = charger_provenance()
+            # Nom standard "<Ville recherchée>_GTFS.zip" plutôt que dérivé du
+            # titre du dataset (souvent le nom de l'opérateur, ex: "Kicéo"
+            # pour Vannes — invisible en cherchant "Vannes" dans la liste
+            # déjà présents ensuite). Basé sur la recherche elle-même (pas
+            # une "ville principale" recalculée depuis le GTFS, coûteux) :
+            # l'utilisateur la retrouve sous le nom qu'il a tapé.
+            nom_fichier_standard = nom_fichier_valide(nom_ville_recherche.strip().capitalize()) + "_GTFS.zip"
+
             for resultat in resultats_recherche:
                 statut, nom_fichier_existant = statut_resultat(resultat, provenance_gtfs)
+                nom_fichier_cible = nom_fichier_existant or nom_fichier_standard
                 st.markdown(f"**{resultat['title']}**")
                 st.caption(f"{resultat['covered_area_noms']} — màj {(resultat['ressource_maj'] or '?')[:10]}")
+
                 if statut == "a_jour":
                     st.success(f"✓ Déjà à jour dans le catalogue ({nom_fichier_existant})")
-                elif statut == "maj_disponible":
+                    deja_selectionne = nom_fichier_existant in st.session_state.get("gtfs_locaux_choisis", [])
+                    if not deja_selectionne and st.button("Sélectionner", key=f"sel_{resultat['ressource_url']}"):
+                        st.session_state["_gtfs_a_selectionner"] = nom_fichier_existant
+                        st.rerun()
+                    continue
+
+                if statut == "maj_disponible":
                     st.warning(f"⚠ Mise à jour disponible (catalogue actuel : {nom_fichier_existant})")
 
-                if statut != "a_jour" and st.button("Télécharger", key=f"dl_{resultat['ressource_url']}"):
+                if st.button("Télécharger", key=f"dl_{resultat['ressource_url']}"):
                     with st.spinner(f"Téléchargement de {resultat['title']}..."):
                         try:
                             contenu_gtfs = telecharger_gtfs(resultat)
-                            nom_fichier_cible = nom_fichier_existant or (
-                                nom_fichier_valide(resultat["title"]).replace(" ", "_") + ".zip"
-                            )
                             chemin_cible = os.path.join(GTFS_DATA_DIR, nom_fichier_cible)
                             os.makedirs(GTFS_DATA_DIR, exist_ok=True)
                             with open(chemin_cible, "wb") as f:
@@ -387,7 +414,8 @@ with st.sidebar.expander("🔍 Rechercher un GTFS (transport.data.gouv.fr)"):
                         except requests.RequestException as e:
                             st.error(f"Échec du téléchargement : {e}")
                         else:
-                            st.success(f"✓ {nom_fichier_cible} ajouté au catalogue — sélectionnable ci-dessus.")
+                            st.session_state["_gtfs_a_selectionner"] = nom_fichier_cible
+                            st.success(f"✓ {nom_fichier_cible} ajouté au catalogue et sélectionné.")
                             st.rerun()
                 st.divider()
 
