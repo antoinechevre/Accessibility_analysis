@@ -9,12 +9,21 @@ import tempfile
 
 sys.path.append('..')
 
+import requests
 import streamlit as st
 
 from src.utils import charger_gtfs, obtenir_service_ids_pour_date
 from src.info_reseau import dates_service, nom_fichier_valide, nom_reseau_str, recuperer_logo_reseau
 from src.hf_cache import envoyer_vers_hf, lister_fichiers_hf, recuperer_depuis_hf
 from src.merge_gtfs import fusionner_gtfs
+from src.transport_data_gouv import (
+    charger_provenance,
+    enregistrer_provenance,
+    rechercher_gtfs_urbain,
+    recuperer_datasets_public_transit,
+    statut_resultat,
+    telecharger_gtfs,
+)
 from views.home import explications_analyse_gtfs, home_page
 from views.accessibilite_index import accessibilite_index_page
 from views.ponderation_equipements import ponderation_equipements_page
@@ -245,7 +254,7 @@ LIBELLES_PAGE = {
     "Pondération équipements": "⚖️ Localisation et pondération équipements",
     "Cartographie INSEE": "🗺️ Carte population par déciles",
     "Arrêts": "📍 Arrêts",
-    "Tronçons": "🛤️ Tronçons",
+    "Tronçons": "🛤️ Lignes",
     "Explications GTFS": "📖 Explications",
 }
 GROUPE_DE_LA_PAGE = {page: groupe for groupe, pages in GROUPES_NAV.items() for page in pages}
@@ -328,6 +337,59 @@ gtfs_locaux_choisis = st.sidebar.multiselect(
 )
 
 nb_sources_gtfs = len(uploaded_files) + len(gtfs_locaux_choisis)
+
+# --- Recherche d'un GTFS sur transport.data.gouv.fr (PAN) -------------------
+# Alternative à l'upload manuel : chercher directement le jeu de données
+# source par nom de ville, vérifier s'il est déjà dans le catalogue (et à
+# jour) avant de le retélécharger, et l'ajouter au catalogue HF en un clic.
+with st.sidebar.expander("🔍 Rechercher un GTFS (transport.data.gouv.fr)"):
+    nom_ville_recherche = st.text_input("Nom de ville", key="recherche_gtfs_ville", placeholder="ex: Nice")
+    if nom_ville_recherche.strip():
+        try:
+            # st.cache_data : la liste complète (775 datasets mi-2026) ne
+            # change pas d'une recherche à l'autre dans la même session —
+            # évite de la retélécharger à chaque frappe/rerun.
+            @st.cache_data(ttl=3600, show_spinner="Récupération du catalogue transport.data.gouv.fr...")
+            def _datasets_transport_gouv():
+                return recuperer_datasets_public_transit()
+
+            resultats_recherche = rechercher_gtfs_urbain(nom_ville_recherche, datasets=_datasets_transport_gouv())
+        except requests.RequestException as e:
+            resultats_recherche = None
+            st.error(f"transport.data.gouv.fr injoignable : {e}")
+
+        if resultats_recherche is not None:
+            if not resultats_recherche:
+                st.info("Aucun GTFS urbain trouvé pour cette ville.")
+            provenance_gtfs = charger_provenance()
+            for resultat in resultats_recherche:
+                statut, nom_fichier_existant = statut_resultat(resultat, provenance_gtfs)
+                st.markdown(f"**{resultat['title']}**")
+                st.caption(f"{resultat['covered_area_noms']} — màj {(resultat['ressource_maj'] or '?')[:10]}")
+                if statut == "a_jour":
+                    st.success(f"✓ Déjà à jour dans le catalogue ({nom_fichier_existant})")
+                elif statut == "maj_disponible":
+                    st.warning(f"⚠ Mise à jour disponible (catalogue actuel : {nom_fichier_existant})")
+
+                if statut != "a_jour" and st.button("Télécharger", key=f"dl_{resultat['ressource_url']}"):
+                    with st.spinner(f"Téléchargement de {resultat['title']}..."):
+                        try:
+                            contenu_gtfs = telecharger_gtfs(resultat)
+                            nom_fichier_cible = nom_fichier_existant or (
+                                nom_fichier_valide(resultat["title"]).replace(" ", "_") + ".zip"
+                            )
+                            chemin_cible = os.path.join(GTFS_DATA_DIR, nom_fichier_cible)
+                            os.makedirs(GTFS_DATA_DIR, exist_ok=True)
+                            with open(chemin_cible, "wb") as f:
+                                f.write(contenu_gtfs)
+                            envoyer_vers_hf(chemin_cible, f"GTFS/{nom_fichier_cible}")
+                            enregistrer_provenance(nom_fichier_cible, resultat)
+                        except requests.RequestException as e:
+                            st.error(f"Échec du téléchargement : {e}")
+                        else:
+                            st.success(f"✓ {nom_fichier_cible} ajouté au catalogue — sélectionnable ci-dessus.")
+                            st.rerun()
+                st.divider()
 
 # nom_reseau_str() concatène les noms de toutes les agences des GTFS
 # fusionnés (via " / ") : pour 2+ GTFS distincts, souvent long/peu lisible
@@ -488,6 +550,23 @@ def charger_donnees_gtfs():
                 reseau_str = GTFS_NOM_RESEAU_FORCE[nom_gtfs]
             else:
                 reseau_str = str(nom_reseau_str(feed))
+
+            # Rattache best-effort ce GTFS à son jeu de données
+            # transport.data.gouv.fr (cf. src/transport_data_gouv.py) : ne
+            # tente que si ce fichier n'est pas déjà dans la provenance, et
+            # seulement quand la recherche par nom de réseau renvoie un seul
+            # résultat non ambigu — jamais bloquant (silencieux en cas
+            # d'échec ou d'ambiguïté, l'utilisateur peut toujours associer
+            # manuellement via la recherche en barre latérale).
+            try:
+                if nom_gtfs not in charger_provenance():
+                    candidats_provenance = rechercher_gtfs_urbain(
+                        reseau_str, datasets=recuperer_datasets_public_transit()
+                    )
+                    if len(candidats_provenance) == 1:
+                        enregistrer_provenance(nom_gtfs, candidats_provenance[0])
+            except Exception:
+                pass
 
         # Stocker dans session_state
         st.session_state.feed = feed
