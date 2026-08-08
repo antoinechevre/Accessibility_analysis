@@ -52,7 +52,25 @@ def benchmark_reseaux_page():
         )
         return
 
-    html_benchmark = generer_html_str(tableau_benchmark_complet, reseau_actuel=reseau_actuel)
+    # Filtre commun aux deux graphiques ci-dessous : les grandes agglomérations
+    # (Paris, Marseille...) peuvent écraser visuellement les réseaux plus
+    # modestes sur les deux nuages de points — même logique que
+    # RESEAUX_EXCLUS_BENCHMARK (IDFM), mais ajustable par l'utilisateur plutôt
+    # que figé dans le code.
+    SEUIL_GRANDES_VILLES = 500_000
+    exclure_grandes_villes = st.checkbox(
+        f"Exclure les villes de plus de {SEUIL_GRANDES_VILLES:,} habitants".replace(",", " "),
+        value=False,
+        help="S'applique aux deux graphiques ci-dessous.",
+    )
+    tableau_filtre = tableau_benchmark_complet
+    if exclure_grandes_villes and "population_totale" in tableau_benchmark_complet.columns:
+        tableau_filtre = tableau_benchmark_complet[tableau_benchmark_complet["population_totale"] <= SEUIL_GRANDES_VILLES]
+        if tableau_filtre.empty:
+            st.info(f"Aucun réseau de l'index n'a une population ≤ {SEUIL_GRANDES_VILLES:,} habitants.".replace(",", " "))
+            return
+
+    html_benchmark = generer_html_str(tableau_filtre, reseau_actuel=reseau_actuel)
     st.components.v1.html(html_benchmark, height=760, scrolling=False)
 
     st.markdown("---")
@@ -63,12 +81,12 @@ def benchmark_reseaux_page():
         "indicateurs rapportés à 1000 habitants) directement dans le graphique."
     )
     colonnes_reseau = {"bus_km_JOB", "metro_km_JOB", "tram_km_JOB", "vehicules_km_JOB", "nombre_arrets"}
-    if not colonnes_reseau & set(tableau_benchmark_complet.columns):
+    if not colonnes_reseau & set(tableau_filtre.columns):
         st.info(
             "Aucun réseau de l'index n'a encore ces indicateurs (bus/km, métro+tram/km, "
             "nombre d'arrêts) — relance l'analyse dans l'onglet Accessibilité pour les "
             "calculer et les enregistrer."
         )
     else:
-        html_reseau = generer_html_reseau_str(tableau_benchmark_complet, reseau_actuel=reseau_actuel)
+        html_reseau = generer_html_reseau_str(tableau_filtre, reseau_actuel=reseau_actuel)
         st.components.v1.html(html_reseau, height=760, scrolling=False)
