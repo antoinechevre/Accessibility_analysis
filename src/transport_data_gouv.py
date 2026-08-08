@@ -17,9 +17,12 @@ ressource source et sa date de mise à jour. Sert à la fois à afficher "déjà
 (cf. discussion "rafraîchissement mensuel").
 """
 
+import csv
+import io
 import json
 import os
 import unicodedata
+import zipfile
 
 import requests
 
@@ -55,47 +58,67 @@ def recuperer_datasets_public_transit(timeout=30):
     return reponse.json()
 
 
-def _ressource_gtfs_recente(dataset):
-    """Parmi les ressources d'un dataset, renvoie la ressource au format
-    GTFS la plus récemment mise à jour (certains datasets, ex. TCL, ont
-    plusieurs ressources GTFS — l'ancienne restant listée) ou None si le
-    dataset n'en a aucune."""
-    ressources_gtfs = [r for r in dataset.get("resources", []) if (r.get("format") or "").upper() == "GTFS"]
-    if not ressources_gtfs:
-        return None
-    return max(ressources_gtfs, key=lambda r: r.get("updated") or "")
+def _ressources_gtfs(dataset):
+    """Toutes les ressources au format GTFS d'un dataset. Certains datasets
+    ne couvrent qu'un seul réseau (une ressource, éventuellement plusieurs
+    versions historiques — cf. TCL) ; d'autres agrègent plusieurs opérateurs
+    d'une même métropole en un seul dataset PAN, une ressource par opérateur
+    PLUS souvent une ressource "référentiel complet" qui les fusionne tous
+    (ex: "Réseaux urbains de la Métropole Aix-Marseille-Provence" a une
+    ressource "GTFS RTM" à côté d'un "Référentiel complet (tous les
+    réseaux)" à 17 agences, que l'app ne peut pas charger — cf.
+    TropAgencesError dans app.py). Choisir une seule ressource "la plus
+    récente" comme avant reviendrait à piocher au hasard entre ces deux cas
+    très différents ; les exposer toutes laisse l'appelant (recherche,
+    vérification de fraîcheur) choisir la bonne."""
+    return [r for r in dataset.get("resources", []) if (r.get("format") or "").upper() == "GTFS"]
 
 
-def _resultat_depuis_dataset(dataset):
+def _resultat_depuis_ressource(dataset, ressource):
     """Construit le dict résultat (title, page_url, covered_area_noms,
-    ressource_titre, ressource_url, ressource_maj) à partir d'un dataset brut
-    du PAN — None si le dataset n'a aucune ressource au format GTFS."""
-    ressource = _ressource_gtfs_recente(dataset)
-    if ressource is None:
-        return None
+    ressource_titre, ressource_url, ressource_maj) pour une ressource GTFS
+    précise d'un dataset. Quand le dataset a plusieurs ressources GTFS
+    (cf. _ressources_gtfs), le titre inclut celui de la ressource pour les
+    distinguer dans la recherche (ex: "Réseaux urbains ... — GTFS RTM")."""
     noms_zones = [z.get("nom", "") for z in dataset.get("covered_area") or []]
+    titre_dataset = dataset.get("title") or ""
+    titre_ressource = ressource.get("title") or ""
+    a_plusieurs_ressources = len(_ressources_gtfs(dataset)) > 1
     return {
-        "title": dataset.get("title") or "",
+        "title": f"{titre_dataset} — {titre_ressource}" if a_plusieurs_ressources else titre_dataset,
         "page_url": dataset.get("page_url"),
         "covered_area_noms": ", ".join(noms_zones[:3]) + ("…" if len(noms_zones) > 3 else ""),
-        "ressource_titre": ressource.get("title"),
+        "ressource_titre": titre_ressource,
         "ressource_url": ressource.get("url"),
         "ressource_maj": ressource.get("updated"),
     }
 
 
-def resultat_pour_page_url(page_url, datasets=None):
+def resultat_pour_page_url(page_url, ressource_url=None, datasets=None):
     """Retrouve, dans datasets (cf. recuperer_datasets_public_transit), le
-    dataset dont page_url correspond exactement, et renvoie son résultat au
-    même format que rechercher_gtfs_urbain (utilisé pour re-vérifier la
-    fraîcheur d'un GTFS déjà associé, cf. scripts/rafraichir_gtfs.py) — None
-    si introuvable (page supprimée/déplacée sur le PAN) ou sans ressource
-    GTFS."""
+    dataset dont page_url correspond exactement, et renvoie le résultat
+    (même format que rechercher_gtfs_urbain) de sa ressource ressource_url —
+    utilisé pour re-vérifier la fraîcheur d'un GTFS déjà associé (cf.
+    scripts/rafraichir_gtfs.py), où provenance connaît déjà la ressource
+    précise choisie au moment du téléchargement. Si ressource_url est None
+    ou ne correspond à aucune ressource du dataset (ex: provenance créée
+    avant l'ajout de ce paramètre), retombe sur la ressource GTFS la plus
+    récente du dataset — comportement d'avant, gardé en repli uniquement.
+
+    None si le dataset est introuvable (page supprimée/déplacée sur le PAN)
+    ou sans ressource GTFS."""
     if datasets is None:
         datasets = recuperer_datasets_public_transit()
     for dataset in datasets:
-        if dataset.get("page_url") == page_url:
-            return _resultat_depuis_dataset(dataset)
+        if dataset.get("page_url") != page_url:
+            continue
+        ressources = _ressources_gtfs(dataset)
+        if not ressources:
+            return None
+        ressource = next((r for r in ressources if r.get("url") == ressource_url), None)
+        if ressource is None:
+            ressource = max(ressources, key=lambda r: r.get("updated") or "")
+        return _resultat_depuis_ressource(dataset, ressource)
     return None
 
 
@@ -108,8 +131,14 @@ def rechercher_gtfs_urbain(nom_ville, datasets=None, limite=15):
     déjà en cache) ; sinon récupérée ici.
 
     Retourne une liste de dicts : title, page_url, covered_area_noms (str),
-    ressource_titre, ressource_url, ressource_maj (date ISO ou None) — triée
-    par pertinence approximative (titre correspondant exactement d'abord).
+    ressource_titre, ressource_url, ressource_maj (date ISO ou None) — un
+    élément par ressource GTFS (un dataset qui agrège plusieurs opérateurs,
+    ex. une métropole, en fournit plusieurs — cf. _ressources_gtfs), triée
+    par pertinence approximative (titre du dataset correspondant exactement
+    d'abord, puis les ressources d'un même dataset par nombre d'agences
+    croissant — une ressource par opérateur avant l'éventuel "référentiel
+    complet" qui les fusionne tous et dépasse souvent la limite que l'app
+    peut charger, cf. TropAgencesError dans app.py).
     """
     if datasets is None:
         datasets = recuperer_datasets_public_transit()
@@ -129,11 +158,15 @@ def rechercher_gtfs_urbain(nom_ville, datasets=None, limite=15):
         if not (correspond_titre or correspond_zone):
             continue
 
-        resultat = _resultat_depuis_dataset(dataset)
-        if resultat is not None:
-            resultats.append(resultat)
+        for ressource in _ressources_gtfs(dataset):
+            resultats.append(_resultat_depuis_ressource(dataset, ressource))
 
-    resultats.sort(key=lambda r: 0 if _sans_accents(r["title"]) == cible else 1)
+    resultats.sort(
+        key=lambda r: (
+            0 if _sans_accents(r["title"]) == cible else 1,
+            "complet" in _sans_accents(r["ressource_titre"] or ""),
+        )
+    )
     return resultats[:limite]
 
 
@@ -196,3 +229,17 @@ def telecharger_gtfs(dataset_resultat, timeout=60):
     reponse = requests.get(dataset_resultat["ressource_url"], timeout=timeout)
     reponse.raise_for_status()
     return reponse.content
+
+
+def nb_agences_gtfs(contenu_zip):
+    """Nombre d'agences (lignes d'agency.txt) d'un GTFS téléchargé (bytes).
+    Ne lit que agency.txt (pas gtfs_kit.read_feed, coûteux) — juste assez
+    pour appliquer le même garde-fou "max 4 agences" que app.py
+    (TropAgencesError) avant d'enregistrer un GTFS trouvé via la recherche :
+    une recherche par nom de ville peut remonter un jeu de données régional
+    agrégeant de nombreux opérateurs (ex: "Marseille" -> GTFS métropolitain
+    Aix-Marseille, 17 agences) que l'app ne peut de toute façon pas charger."""
+    with zipfile.ZipFile(io.BytesIO(contenu_zip)) as archive:
+        with archive.open("agency.txt") as f:
+            lignes = list(csv.reader(io.TextIOWrapper(f, encoding="utf-8-sig")))
+    return max(len(lignes) - 1, 0)

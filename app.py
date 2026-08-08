@@ -19,6 +19,7 @@ from src.merge_gtfs import fusionner_gtfs
 from src.transport_data_gouv import (
     charger_provenance,
     enregistrer_provenance,
+    nb_agences_gtfs,
     rechercher_gtfs_urbain,
     recuperer_datasets_public_transit,
     statut_resultat,
@@ -405,18 +406,31 @@ with st.sidebar.expander("🔍 Rechercher un GTFS (transport.data.gouv.fr)"):
                     with st.spinner(f"Téléchargement de {resultat['title']}..."):
                         try:
                             contenu_gtfs = telecharger_gtfs(resultat)
-                            chemin_cible = os.path.join(GTFS_DATA_DIR, nom_fichier_cible)
-                            os.makedirs(GTFS_DATA_DIR, exist_ok=True)
-                            with open(chemin_cible, "wb") as f:
-                                f.write(contenu_gtfs)
-                            envoyer_vers_hf(chemin_cible, f"GTFS/{nom_fichier_cible}")
-                            enregistrer_provenance(nom_fichier_cible, resultat)
+                            nb_agences = nb_agences_gtfs(contenu_gtfs)
                         except requests.RequestException as e:
                             st.error(f"Échec du téléchargement : {e}")
-                        else:
-                            st.session_state["_gtfs_a_selectionner"] = nom_fichier_cible
-                            st.success(f"✓ {nom_fichier_cible} ajouté au catalogue et sélectionné.")
-                            st.rerun()
+                            nb_agences = None
+
+                        if nb_agences is not None and nb_agences > 4:
+                            st.error(
+                                f"⚠ Ce GTFS regroupe {nb_agences} agences : ce que l'app ne peut pas "
+                                "gérer. Cherche un jeu de données plus spécifique (ex: le nom de "
+                                "l'opérateur urbain) plutôt que celui-ci, qui couvre toute une région."
+                            )
+                        elif nb_agences is not None:
+                            try:
+                                chemin_cible = os.path.join(GTFS_DATA_DIR, nom_fichier_cible)
+                                os.makedirs(GTFS_DATA_DIR, exist_ok=True)
+                                with open(chemin_cible, "wb") as f:
+                                    f.write(contenu_gtfs)
+                                envoyer_vers_hf(chemin_cible, f"GTFS/{nom_fichier_cible}")
+                                enregistrer_provenance(nom_fichier_cible, resultat)
+                            except requests.RequestException as e:
+                                st.error(f"Échec du téléchargement : {e}")
+                            else:
+                                st.session_state["_gtfs_a_selectionner"] = nom_fichier_cible
+                                st.success(f"✓ {nom_fichier_cible} ajouté au catalogue et sélectionné.")
+                                st.rerun()
                 st.divider()
 
 # nom_reseau_str() concatène les noms de toutes les agences des GTFS

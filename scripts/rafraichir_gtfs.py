@@ -122,7 +122,7 @@ def main():
         info = provenance[nom_fichier]
         print(f"▶ {nom_fichier} ({info.get('titre')})")
 
-        resultat_actuel = resultat_pour_page_url(info["page_url"], datasets)
+        resultat_actuel = resultat_pour_page_url(info["page_url"], info.get("ressource_url"), datasets)
         if resultat_actuel is None:
             print("  ⚠ dataset introuvable sur transport.data.gouv.fr (page supprimée/déplacée ?) — à vérifier manuellement")
             resultats["introuvable"].append(nom_fichier)
