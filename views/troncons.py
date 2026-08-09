@@ -199,7 +199,8 @@ def troncons_page(lang="fr"):
         st.info(t("commun.reseau_info", lang, reseau=nom_reseau_valeur))
 
         _, date_debut, date_fin, date_JOB = charger_ou_calculer_dates_service(
-            st.session_state.feed, st.session_state.nom_reseau_str
+            st.session_state.feed, st.session_state.nom_reseau_str,
+            academie=st.session_state.get("academie_reseau"),
         )
 
         date_service_str, date_JOB_text = date_str(date_debut, date_fin, date_JOB, lang=lang)
@@ -284,7 +285,8 @@ def troncons_page(lang="fr"):
                 with st.spinner(t("troncons.spinner_vkm", lang)):
                     def _calculer_vk_plage():
                         liste_dates_service, _, _, _ = charger_ou_calculer_dates_service(
-                            st.session_state.feed, st.session_state.nom_reseau_str
+                            st.session_state.feed, st.session_state.nom_reseau_str,
+                            academie=st.session_state.get("academie_reseau"),
                         )
                         return km_par_ligne_plage(liste_dates_service, st.session_state.feed)
 

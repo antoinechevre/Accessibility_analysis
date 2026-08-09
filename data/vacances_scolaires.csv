@@ -1,0 +1,248 @@
+academie,zone,description,date_debut,date_fin,annee_scolaire
+Aix-Marseille,Zone B,Vacances de la Toussaint,2024-10-18,2024-11-03,2024-2025
+Aix-Marseille,Zone B,Vacances de Noël,2024-12-20,2025-01-05,2024-2025
+Aix-Marseille,Zone B,Vacances d'Hiver,2025-02-07,2025-02-23,2024-2025
+Aix-Marseille,Zone B,Vacances de Printemps,2025-04-04,2025-04-21,2024-2025
+Aix-Marseille,Zone B,Pont de l'Ascension,2025-05-28,2025-06-01,2024-2025
+Aix-Marseille,Zone B,Vacances d'Été,2025-07-04,2025-08-28,2024-2025
+Amiens,Zone B,Vacances de la Toussaint,2024-10-18,2024-11-03,2024-2025
+Amiens,Zone B,Vacances d'Hiver,2025-02-07,2025-02-23,2024-2025
+Amiens,Zone B,Vacances d'Été,2025-07-04,2025-08-31,2024-2025
+Besançon,Zone A,Vacances de la Toussaint,2024-10-18,2024-11-03,2024-2025
+Besançon,Zone A,Pont de l'Ascension,2025-05-28,2025-06-01,2024-2025
+Besançon,Zone A,Vacances d'Été,2025-07-04,2025-08-28,2024-2025
+Bordeaux,Zone A,Vacances de la Toussaint,2024-10-18,2024-11-03,2024-2025
+Bordeaux,Zone A,Vacances d'Été,2025-07-04,2025-08-31,2024-2025
+Clermont-Ferrand,Zone A,Vacances de Printemps,2025-04-18,2025-05-04,2024-2025
+Clermont-Ferrand,Zone A,Pont de l'Ascension,2025-05-28,2025-06-01,2024-2025
+Clermont-Ferrand,Zone A,Vacances d'Été,2025-07-04,2025-08-28,2024-2025
+Corse,Corse,Vacances de la Toussaint,2024-10-18,2024-11-03,2024-2025
+Corse,Corse,Vacances de Printemps,2025-04-11,2025-04-27,2024-2025
+Corse,Corse,Pont de l'Ascension,2025-05-28,2025-06-01,2024-2025
+Créteil,Zone C,Vacances de la Toussaint,2024-10-18,2024-11-03,2024-2025
+Créteil,Zone C,Vacances de Printemps,2025-04-11,2025-04-27,2024-2025
+Créteil,Zone C,Pont de l'Ascension,2025-05-28,2025-06-01,2024-2025
+Créteil,Zone C,Vacances d'Été,2025-07-04,2025-08-31,2024-2025
+Dijon,Zone A,Vacances de Printemps,2025-04-18,2025-05-04,2024-2025
+Grenoble,Zone A,Vacances d'Hiver,2025-02-21,2025-03-09,2024-2025
+Limoges,Zone A,Vacances de la Toussaint,2024-10-18,2024-11-03,2024-2025
+Limoges,Zone A,Vacances de Noël,2024-12-20,2025-01-05,2024-2025
+Limoges,Zone A,Pont de l'Ascension,2025-05-28,2025-06-01,2024-2025
+Lyon,Zone A,Vacances de Noël,2024-12-20,2025-01-05,2024-2025
+Lyon,Zone A,Vacances d'Été,2025-07-04,2025-08-31,2024-2025
+Montpellier,Zone C,Vacances de Noël,2024-12-20,2025-01-05,2024-2025
+Montpellier,Zone C,Pont de l'Ascension,2025-05-28,2025-06-01,2024-2025
+Nancy-Metz,Zone B,Vacances de la Toussaint,2024-10-18,2024-11-03,2024-2025
+Nancy-Metz,Zone B,Vacances d'Hiver,2025-02-07,2025-02-23,2024-2025
+Nancy-Metz,Zone B,Pont de l'Ascension,2025-05-28,2025-06-01,2024-2025
+Nancy-Metz,Zone B,Vacances d'Été,2025-07-04,2025-08-28,2024-2025
+Nantes,Zone B,Vacances de Noël,2024-12-20,2025-01-05,2024-2025
+Nantes,Zone B,Vacances de Printemps,2025-04-04,2025-04-21,2024-2025
+Nantes,Zone B,Vacances d'Été,2025-07-04,2025-08-31,2024-2025
+Nice,Zone B,Vacances de Printemps,2025-04-04,2025-04-21,2024-2025
+Nice,Zone B,Pont de l'Ascension,2025-05-28,2025-06-01,2024-2025
+Nice,Zone B,Vacances d'Été,2025-07-04,2025-08-31,2024-2025
+Normandie,Zone B,Vacances de la Toussaint,2024-10-18,2024-11-03,2024-2025
+Normandie,Zone B,Vacances de Noël,2024-12-20,2025-01-05,2024-2025
+Normandie,Zone B,Vacances de Printemps,2025-04-04,2025-04-21,2024-2025
+Orléans-Tours,Zone B,Vacances de Noël,2024-12-20,2025-01-05,2024-2025
+Orléans-Tours,Zone B,Vacances d'Hiver,2025-02-07,2025-02-23,2024-2025
+Orléans-Tours,Zone B,Pont de l'Ascension,2025-05-28,2025-06-01,2024-2025
+Orléans-Tours,Zone B,Vacances d'Été,2025-07-04,2025-08-28,2024-2025
+Paris,Zone C,Vacances de la Toussaint,2024-10-18,2024-11-03,2024-2025
+Paris,Zone C,Vacances d'Hiver,2025-02-14,2025-03-02,2024-2025
+Paris,Zone C,Vacances d'Été,2025-07-04,2025-08-28,2024-2025
+Poitiers,Zone A,Vacances de Noël,2024-12-20,2025-01-05,2024-2025
+Poitiers,Zone A,Vacances d'Hiver,2025-02-21,2025-03-09,2024-2025
+Reims,Zone B,Vacances de la Toussaint,2024-10-18,2024-11-03,2024-2025
+Reims,Zone B,Vacances de Noël,2024-12-20,2025-01-05,2024-2025
+Reims,Zone B,Vacances de Printemps,2025-04-04,2025-04-21,2024-2025
+Reims,Zone B,Pont de l'Ascension,2025-05-28,2025-06-01,2024-2025
+Reims,Zone B,Vacances d'Été,2025-07-04,2025-08-31,2024-2025
+Rennes,Zone B,Vacances de Printemps,2025-04-04,2025-04-21,2024-2025
+Rennes,Zone B,Pont de l'Ascension,2025-05-28,2025-06-01,2024-2025
+Rennes,Zone B,Vacances d'Été,2025-07-04,2025-08-28,2024-2025
+Strasbourg,Zone B,Vacances de la Toussaint,2024-10-18,2024-11-03,2024-2025
+Strasbourg,Zone B,Vacances de Noël,2024-12-20,2025-01-05,2024-2025
+Strasbourg,Zone B,Vacances d'Hiver,2025-02-07,2025-02-23,2024-2025
+Strasbourg,Zone B,Vacances d'Été,2025-07-04,2025-08-31,2024-2025
+Toulouse,Zone C,Vacances de Noël,2024-12-20,2025-01-05,2024-2025
+Toulouse,Zone C,Pont de l'Ascension,2025-05-28,2025-06-01,2024-2025
+Versailles,Zone C,Vacances de Printemps,2025-04-11,2025-04-27,2024-2025
+Versailles,Zone C,Vacances d'Été,2025-07-04,2025-08-31,2024-2025
+Aix-Marseille,Zone B,Vacances de Printemps,2026-04-10,2026-04-26,2025-2026
+Amiens,Zone B,Vacances de la Toussaint,2025-10-17,2025-11-02,2025-2026
+Amiens,Zone B,Vacances de Noël,2025-12-19,2026-01-04,2025-2026
+Amiens,Zone B,Vacances d'Hiver,2026-02-13,2026-03-01,2025-2026
+Amiens,Zone B,Vacances de Printemps,2026-04-10,2026-04-26,2025-2026
+Amiens,Zone B,Vacances d'Été,2026-07-03,2026-08-31,2025-2026
+Besançon,Zone A,Vacances de la Toussaint,2025-10-17,2025-11-02,2025-2026
+Besançon,Zone A,Vacances de Noël,2025-12-19,2026-01-04,2025-2026
+Bordeaux,Zone A,Vacances de Noël,2025-12-19,2026-01-04,2025-2026
+Bordeaux,Zone A,Vacances de Printemps,2026-04-03,2026-04-19,2025-2026
+Bordeaux,Zone A,Pont de l'Ascension,2026-05-13,2026-05-17,2025-2026
+Bordeaux,Zone A,Vacances d'Été,2026-07-03,2026-08-31,2025-2026
+Clermont-Ferrand,Zone A,Vacances de la Toussaint,2025-10-17,2025-11-02,2025-2026
+Clermont-Ferrand,Zone A,Vacances de Printemps,2026-04-03,2026-04-19,2025-2026
+Clermont-Ferrand,Zone A,Vacances d'Été,2026-07-03,2026-08-31,2025-2026
+Corse,Corse,Pont de l'Ascension,2026-05-14,2026-05-14,2025-2026
+Créteil,Zone C,Vacances de Noël,2025-12-19,2026-01-04,2025-2026
+Créteil,Zone C,Pont de l'Ascension,2026-05-13,2026-05-17,2025-2026
+Créteil,Zone C,Vacances d'Été,2026-07-03,2026-08-30,2025-2026
+Dijon,Zone A,Vacances de la Toussaint,2025-10-17,2025-11-02,2025-2026
+Dijon,Zone A,Vacances de Noël,2025-12-19,2026-01-04,2025-2026
+Dijon,Zone A,Vacances d'Été,2026-07-03,2026-08-31,2025-2026
+Grenoble,Zone A,Vacances de la Toussaint,2025-10-17,2025-11-02,2025-2026
+Grenoble,Zone A,Vacances de Noël,2025-12-19,2026-01-04,2025-2026
+Grenoble,Zone A,Vacances d'Hiver,2026-02-06,2026-02-22,2025-2026
+Grenoble,Zone A,Vacances d'Été,2026-07-03,2026-08-30,2025-2026
+Lille,Zone B,Vacances de Noël,2025-12-19,2026-01-04,2025-2026
+Lille,Zone B,Vacances de Printemps,2026-04-10,2026-04-26,2025-2026
+Lille,Zone B,Vacances d'Été,2026-07-03,2026-08-31,2025-2026
+Limoges,Zone A,Vacances de la Toussaint,2025-10-17,2025-11-02,2025-2026
+Limoges,Zone A,Vacances d'Été,2026-07-03,2026-08-30,2025-2026
+Lyon,Zone A,Vacances de la Toussaint,2025-10-17,2025-11-02,2025-2026
+Lyon,Zone A,Vacances d'Hiver,2026-02-06,2026-02-22,2025-2026
+Lyon,Zone A,Pont de l'Ascension,2026-05-13,2026-05-17,2025-2026
+Montpellier,Zone C,Vacances de Printemps,2026-04-17,2026-05-03,2025-2026
+Montpellier,Zone C,Vacances d'Été,2026-07-03,2026-08-30,2025-2026
+Nancy-Metz,Zone B,Vacances de la Toussaint,2025-10-17,2025-11-02,2025-2026
+Nancy-Metz,Zone B,Vacances de Noël,2025-12-19,2026-01-04,2025-2026
+Nancy-Metz,Zone B,Vacances d'Hiver,2026-02-13,2026-03-01,2025-2026
+Nancy-Metz,Zone B,Vacances d'Été,2026-07-03,2026-08-31,2025-2026
+Nantes,Zone B,Vacances de Printemps,2026-04-10,2026-04-26,2025-2026
+Nantes,Zone B,Vacances d'Été,2026-07-03,2026-08-30,2025-2026
+Nice,Zone B,Vacances de la Toussaint,2025-10-17,2025-11-02,2025-2026
+Nice,Zone B,Vacances de Noël,2025-12-19,2026-01-04,2025-2026
+Nice,Zone B,Vacances d'Hiver,2026-02-13,2026-03-01,2025-2026
+Nice,Zone B,Vacances de Printemps,2026-04-10,2026-04-26,2025-2026
+Nice,Zone B,Vacances d'Été,2026-07-03,2026-08-31,2025-2026
+Normandie,Zone B,Vacances d'Hiver,2026-02-13,2026-03-01,2025-2026
+Normandie,Zone B,Vacances de Printemps,2026-04-10,2026-04-26,2025-2026
+Normandie,Zone B,Pont de l'Ascension,2026-05-13,2026-05-17,2025-2026
+Normandie,Zone B,Vacances d'Été,2026-07-03,2026-08-31,2025-2026
+Orléans-Tours,Zone B,Vacances de la Toussaint,2025-10-17,2025-11-02,2025-2026
+Orléans-Tours,Zone B,Vacances d'Hiver,2026-02-13,2026-03-01,2025-2026
+Orléans-Tours,Zone B,Vacances d'Été,2026-07-03,2026-08-31,2025-2026
+Paris,Zone C,Vacances d'Hiver,2026-02-20,2026-03-08,2025-2026
+Paris,Zone C,Vacances de Printemps,2026-04-17,2026-05-03,2025-2026
+Paris,Zone C,Vacances d'Été,2026-07-03,2026-08-30,2025-2026
+Poitiers,Zone A,Vacances de Printemps,2026-04-03,2026-04-19,2025-2026
+Reims,Zone B,Vacances de la Toussaint,2025-10-17,2025-11-02,2025-2026
+Reims,Zone B,Vacances d'Hiver,2026-02-13,2026-03-01,2025-2026
+Reims,Zone B,Pont de l'Ascension,2026-05-13,2026-05-17,2025-2026
+Rennes,Zone B,Vacances de Noël,2025-12-19,2026-01-04,2025-2026
+Rennes,Zone B,Vacances d'Hiver,2026-02-13,2026-03-01,2025-2026
+Rennes,Zone B,Vacances de Printemps,2026-04-10,2026-04-26,2025-2026
+Rennes,Zone B,Pont de l'Ascension,2026-05-13,2026-05-17,2025-2026
+Rennes,Zone B,Vacances d'Été,2026-07-03,2026-08-31,2025-2026
+Strasbourg,Zone B,Vacances de la Toussaint,2025-10-17,2025-11-02,2025-2026
+Strasbourg,Zone B,Vacances de Noël,2025-12-19,2026-01-04,2025-2026
+Strasbourg,Zone B,Vacances d'Hiver,2026-02-13,2026-03-01,2025-2026
+Strasbourg,Zone B,Vacances de Printemps,2026-04-10,2026-04-26,2025-2026
+Strasbourg,Zone B,Pont de l'Ascension,2026-05-13,2026-05-17,2025-2026
+Toulouse,Zone C,Vacances d'Hiver,2026-02-20,2026-03-08,2025-2026
+Toulouse,Zone C,Vacances d'Été,2026-07-03,2026-08-30,2025-2026
+Versailles,Zone C,Vacances de la Toussaint,2025-10-17,2025-11-02,2025-2026
+Versailles,Zone C,Vacances de Noël,2025-12-19,2026-01-04,2025-2026
+Versailles,Zone C,Vacances d'Hiver,2026-02-20,2026-03-08,2025-2026
+Aix-Marseille,Zone B,Vacances de la Toussaint,2026-10-16,2026-11-01,2026-2027
+Aix-Marseille,Zone B,Vacances de Noël,2026-12-18,2027-01-03,2026-2027
+Aix-Marseille,Zone B,Vacances d'Hiver,2027-02-19,2027-03-07,2026-2027
+Aix-Marseille,Zone B,Vacances de Printemps,2027-04-16,2027-05-02,2026-2027
+Aix-Marseille,Zone B,Pont de l'Ascension,2027-05-06,2027-05-06,2026-2027
+Aix-Marseille,Zone B,Début des Vacances d'Été,2027-07-02,2027-07-02,2026-2027
+Amiens,Zone B,Vacances de la Toussaint,2026-10-16,2026-11-01,2026-2027
+Amiens,Zone B,Vacances de Noël,2026-12-18,2027-01-03,2026-2027
+Amiens,Zone B,Vacances de Printemps,2027-04-16,2027-05-02,2026-2027
+Amiens,Zone B,Début des Vacances d'Été,2027-07-02,2027-07-02,2026-2027
+Besançon,Zone A,Vacances de Noël,2026-12-18,2027-01-03,2026-2027
+Besançon,Zone A,Vacances d'Hiver,2027-02-12,2027-02-28,2026-2027
+Besançon,Zone A,Début des Vacances d'Été,2027-07-02,2027-07-02,2026-2027
+Bordeaux,Zone A,Vacances de Noël,2026-12-18,2027-01-03,2026-2027
+Bordeaux,Zone A,Vacances d'Hiver,2027-02-12,2027-02-28,2026-2027
+Bordeaux,Zone A,Vacances de Printemps,2027-04-09,2027-04-25,2026-2027
+Bordeaux,Zone A,Pont de l'Ascension,2027-05-06,2027-05-06,2026-2027
+Bordeaux,Zone A,Début des Vacances d'Été,2027-07-02,2027-07-02,2026-2027
+Clermont-Ferrand,Zone A,Vacances de Noël,2026-12-18,2027-01-03,2026-2027
+Clermont-Ferrand,Zone A,Vacances d'Hiver,2027-02-12,2027-02-28,2026-2027
+Clermont-Ferrand,Zone A,Vacances de Printemps,2027-04-09,2027-04-25,2026-2027
+Clermont-Ferrand,Zone A,Pont de l'Ascension,2027-05-06,2027-05-06,2026-2027
+Clermont-Ferrand,Zone A,Début des Vacances d'Été,2027-07-02,2027-07-02,2026-2027
+Créteil,Zone C,Vacances de la Toussaint,2026-10-16,2026-11-01,2026-2027
+Créteil,Zone C,Vacances de Noël,2026-12-18,2027-01-03,2026-2027
+Créteil,Zone C,Vacances d'Hiver,2027-02-05,2027-02-21,2026-2027
+Créteil,Zone C,Vacances de Printemps,2027-04-02,2027-04-18,2026-2027
+Créteil,Zone C,Pont de l'Ascension,2027-05-06,2027-05-06,2026-2027
+Créteil,Zone C,Début des Vacances d'Été,2027-07-02,2027-07-02,2026-2027
+Dijon,Zone A,Vacances de la Toussaint,2026-10-16,2026-11-01,2026-2027
+Dijon,Zone A,Vacances d'Hiver,2027-02-12,2027-02-28,2026-2027
+Dijon,Zone A,Vacances de Printemps,2027-04-09,2027-04-25,2026-2027
+Dijon,Zone A,Début des Vacances d'Été,2027-07-02,2027-07-02,2026-2027
+Grenoble,Zone A,Vacances de la Toussaint,2026-10-16,2026-11-01,2026-2027
+Grenoble,Zone A,Vacances de Printemps,2027-04-09,2027-04-25,2026-2027
+Grenoble,Zone A,Pont de l'Ascension,2027-05-06,2027-05-06,2026-2027
+Grenoble,Zone A,Début des Vacances d'Été,2027-07-02,2027-07-02,2026-2027
+Lille,Zone B,Vacances de la Toussaint,2026-10-16,2026-11-01,2026-2027
+Lille,Zone B,Vacances de Noël,2026-12-18,2027-01-03,2026-2027
+Lille,Zone B,Vacances d'Hiver,2027-02-19,2027-03-07,2026-2027
+Lille,Zone B,Vacances de Printemps,2027-04-16,2027-05-02,2026-2027
+Lille,Zone B,Pont de l'Ascension,2027-05-06,2027-05-06,2026-2027
+Limoges,Zone A,Vacances de la Toussaint,2026-10-16,2026-11-01,2026-2027
+Limoges,Zone A,Vacances d'Hiver,2027-02-12,2027-02-28,2026-2027
+Limoges,Zone A,Vacances de Printemps,2027-04-09,2027-04-25,2026-2027
+Limoges,Zone A,Pont de l'Ascension,2027-05-06,2027-05-06,2026-2027
+Lyon,Zone A,Vacances de Noël,2026-12-18,2027-01-03,2026-2027
+Lyon,Zone A,Vacances d'Hiver,2027-02-12,2027-02-28,2026-2027
+Lyon,Zone A,Pont de l'Ascension,2027-05-06,2027-05-06,2026-2027
+Lyon,Zone A,Début des Vacances d'Été,2027-07-02,2027-07-02,2026-2027
+Montpellier,Zone C,Vacances de la Toussaint,2026-10-16,2026-11-01,2026-2027
+Montpellier,Zone C,Vacances de Noël,2026-12-18,2027-01-03,2026-2027
+Montpellier,Zone C,Pont de l'Ascension,2027-05-06,2027-05-06,2026-2027
+Montpellier,Zone C,Début des Vacances d'Été,2027-07-02,2027-07-02,2026-2027
+Nancy-Metz,Zone B,Vacances de la Toussaint,2026-10-16,2026-11-01,2026-2027
+Nancy-Metz,Zone B,Vacances d'Hiver,2027-02-19,2027-03-07,2026-2027
+Nancy-Metz,Zone B,Vacances de Printemps,2027-04-16,2027-05-02,2026-2027
+Nancy-Metz,Zone B,Pont de l'Ascension,2027-05-06,2027-05-06,2026-2027
+Nantes,Zone B,Vacances de Printemps,2027-04-16,2027-05-02,2026-2027
+Nice,Zone B,Vacances de la Toussaint,2026-10-16,2026-11-01,2026-2027
+Nice,Zone B,Vacances d'Hiver,2027-02-19,2027-03-07,2026-2027
+Nice,Zone B,Vacances de Printemps,2027-04-16,2027-05-02,2026-2027
+Normandie,Zone B,Vacances de la Toussaint,2026-10-16,2026-11-01,2026-2027
+Normandie,Zone B,Vacances de Noël,2026-12-18,2027-01-03,2026-2027
+Normandie,Zone B,Vacances d'Hiver,2027-02-19,2027-03-07,2026-2027
+Normandie,Zone B,Vacances de Printemps,2027-04-16,2027-05-02,2026-2027
+Normandie,Zone B,Pont de l'Ascension,2027-05-06,2027-05-06,2026-2027
+Normandie,Zone B,Début des Vacances d'Été,2027-07-02,2027-07-02,2026-2027
+Orléans-Tours,Zone B,Vacances de la Toussaint,2026-10-16,2026-11-01,2026-2027
+Orléans-Tours,Zone B,Vacances de Noël,2026-12-18,2027-01-03,2026-2027
+Orléans-Tours,Zone B,Vacances d'Hiver,2027-02-19,2027-03-07,2026-2027
+Orléans-Tours,Zone B,Pont de l'Ascension,2027-05-06,2027-05-06,2026-2027
+Orléans-Tours,Zone B,Début des Vacances d'Été,2027-07-02,2027-07-02,2026-2027
+Paris,Zone C,Vacances de la Toussaint,2026-10-16,2026-11-01,2026-2027
+Paris,Zone C,Vacances de Noël,2026-12-18,2027-01-03,2026-2027
+Paris,Zone C,Vacances d'Hiver,2027-02-05,2027-02-21,2026-2027
+Paris,Zone C,Pont de l'Ascension,2027-05-06,2027-05-06,2026-2027
+Paris,Zone C,Début des Vacances d'Été,2027-07-02,2027-07-02,2026-2027
+Poitiers,Zone A,Vacances de la Toussaint,2026-10-16,2026-11-01,2026-2027
+Poitiers,Zone A,Vacances de Noël,2026-12-18,2027-01-03,2026-2027
+Poitiers,Zone A,Vacances d'Hiver,2027-02-12,2027-02-28,2026-2027
+Poitiers,Zone A,Pont de l'Ascension,2027-05-06,2027-05-06,2026-2027
+Poitiers,Zone A,Début des Vacances d'Été,2027-07-02,2027-07-02,2026-2027
+Reims,Zone B,Vacances de la Toussaint,2026-10-16,2026-11-01,2026-2027
+Reims,Zone B,Vacances de Noël,2026-12-18,2027-01-03,2026-2027
+Reims,Zone B,Vacances d'Hiver,2027-02-19,2027-03-07,2026-2027
+Reims,Zone B,Vacances de Printemps,2027-04-16,2027-05-02,2026-2027
+Reims,Zone B,Pont de l'Ascension,2027-05-06,2027-05-06,2026-2027
+Reims,Zone B,Début des Vacances d'Été,2027-07-02,2027-07-02,2026-2027
+Rennes,Zone B,Vacances d'Hiver,2027-02-19,2027-03-07,2026-2027
+Rennes,Zone B,Vacances de Printemps,2027-04-16,2027-05-02,2026-2027
+Rennes,Zone B,Pont de l'Ascension,2027-05-06,2027-05-06,2026-2027
+Strasbourg,Zone B,Vacances de Noël,2026-12-18,2027-01-03,2026-2027
+Strasbourg,Zone B,Vacances de Printemps,2027-04-16,2027-05-02,2026-2027
+Strasbourg,Zone B,Pont de l'Ascension,2027-05-06,2027-05-06,2026-2027
+Toulouse,Zone C,Vacances de Noël,2026-12-18,2027-01-03,2026-2027
+Toulouse,Zone C,Vacances d'Hiver,2027-02-05,2027-02-21,2026-2027
+Toulouse,Zone C,Début des Vacances d'Été,2027-07-02,2027-07-02,2026-2027
+Versailles,Zone C,Vacances de la Toussaint,2026-10-16,2026-11-01,2026-2027
+Versailles,Zone C,Vacances d'Hiver,2027-02-05,2027-02-21,2026-2027

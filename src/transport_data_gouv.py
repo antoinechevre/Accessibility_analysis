@@ -182,18 +182,73 @@ def charger_provenance():
         return json.load(f)
 
 
+def _provenance_hf_fraiche():
+    """Retélécharge gtfs_sources.json depuis le dataset HF, en ignorant tout
+    cache local existant. Contrairement à charger_provenance() (cache local
+    prioritaire — adapté aux gros fichiers immuables de src/hf_cache.py),
+    gtfs_sources.json est un petit index partagé modifié indépendamment par
+    plusieurs écrivains (ce Mac en dev, le Space HF déployé qui enregistre sa
+    propre provenance à chaque nouveau GTFS chargé par un visiteur) : se fier
+    à un cache local pour la fusion avant écriture perdrait silencieusement
+    les entrées ajoutées entre-temps par l'autre côté."""
+    try:
+        from huggingface_hub import hf_hub_download
+        chemin = hf_hub_download(
+            repo_id="antoinechevre/accessibility-data",
+            repo_type="dataset",
+            filename=GTFS_SOURCES_HF_PATH,
+            token=os.environ.get("HF_TOKEN"),
+            force_download=True,
+        )
+        with open(chemin, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        # HF injoignable, jamais encore poussé, etc. : repli sur le cache
+        # local plutôt que de bloquer l'enregistrement.
+        return charger_provenance()
+
+
+def enregistrer_zone(nom_fichier_gtfs, code_departement, academie, zone):
+    """Enregistre/actualise, pour nom_fichier_gtfs, l'académie/zone de
+    vacances scolaires déterminée à partir de la position de ses arrêts (cf.
+    src/vacances_scolaires.departement_academie_zone_pour_feed) — même
+    fichier partagé gtfs_sources.json que enregistrer_provenance, fusionné
+    avec l'entrée existante plutôt que de l'écraser (un GTFS téléchargé via
+    la recherche a déjà une entrée avec page_url/ressource_url ; un GTFS
+    seulement uploadé n'en a pas encore, l'entrée est alors créée avec
+    uniquement ces trois champs).
+
+    Ne fait rien si academie est None (feed hors métropole ou API
+    injoignable, cf. departement_academie_zone_pour_feed) — inutile de créer
+    une entrée sans information exploitable."""
+    if academie is None:
+        return
+    provenance = _provenance_hf_fraiche()
+    entree = provenance.get(nom_fichier_gtfs, {})
+    entree.update({"code_departement": code_departement, "academie": academie, "zone": zone})
+    provenance[nom_fichier_gtfs] = entree
+    os.makedirs(os.path.dirname(GTFS_SOURCES_LOCAL_PATH), exist_ok=True)
+    with open(GTFS_SOURCES_LOCAL_PATH, "w", encoding="utf-8") as f:
+        json.dump(provenance, f, ensure_ascii=False, indent=2, sort_keys=True)
+    envoyer_vers_hf(GTFS_SOURCES_LOCAL_PATH, GTFS_SOURCES_HF_PATH)
+
+
 def enregistrer_provenance(nom_fichier_gtfs, dataset_resultat):
     """Enregistre/actualise, pour nom_fichier_gtfs, la provenance issue d'un
     résultat de rechercher_gtfs_urbain (page_url/ressource_url/ressource_maj/
-    title) — local + dataset HF (best-effort, comme les autres écritures de
-    src/hf_cache.py)."""
-    provenance = charger_provenance()
-    provenance[nom_fichier_gtfs] = {
+    title) — fusionné avec l'état HF le plus récent (cf. _provenance_hf_fraiche)
+    ET avec l'entrée existante (garde ses champs académie/zone déjà
+    enregistrés par enregistrer_zone, s'il y en a), local + dataset HF
+    (best-effort, comme les autres écritures de src/hf_cache.py)."""
+    provenance = _provenance_hf_fraiche()
+    entree = provenance.get(nom_fichier_gtfs, {})
+    entree.update({
         "page_url": dataset_resultat["page_url"],
         "ressource_url": dataset_resultat["ressource_url"],
         "ressource_maj": dataset_resultat["ressource_maj"],
         "titre": dataset_resultat["title"],
-    }
+    })
+    provenance[nom_fichier_gtfs] = entree
     os.makedirs(os.path.dirname(GTFS_SOURCES_LOCAL_PATH), exist_ok=True)
     with open(GTFS_SOURCES_LOCAL_PATH, "w", encoding="utf-8") as f:
         json.dump(provenance, f, ensure_ascii=False, indent=2, sort_keys=True)

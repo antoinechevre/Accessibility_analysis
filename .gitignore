@@ -14,6 +14,12 @@ output/
 # déploiement (Streamlit Cloud, nouveau clone...).
 !data/memory_csv_agglo/
 
+# Exception : référence vacances scolaires/académies (quelques Ko, statique,
+# cf. src/vacances_scolaires.py) — comme memory_csv_agglo ci-dessus, doit
+# être disponible dès le premier déploiement sans dépendre du dataset HF.
+!data/vacances_scolaires.csv
+!data/departements_academies.csv
+
 # Python
 __pycache__/
 *.pyc

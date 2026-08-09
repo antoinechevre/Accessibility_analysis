@@ -30,7 +30,8 @@ def arrets_page(lang="fr"):
         st.info(t("commun.reseau_info", lang, reseau=nom_reseau_valeur))
 
         _, date_debut, date_fin, date_JOB = charger_ou_calculer_dates_service(
-            st.session_state.feed, st.session_state.nom_reseau_str
+            st.session_state.feed, st.session_state.nom_reseau_str,
+            academie=st.session_state.get("academie_reseau"),
         )
 
         date_service_str, date_JOB_text = date_str(date_debut, date_fin, date_JOB, lang=lang)

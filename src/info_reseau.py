@@ -38,10 +38,10 @@ def nom_reseau(feed):
     return " / ".join(noms)
 
 
-def dates_service (feed):
+def dates_service (feed, academie=None):
 
-    dates_service = feed.get_dates() # attention cela dépasse la plage temporelle fiable 
-    
+    dates_service = feed.get_dates() # attention cela dépasse la plage temporelle fiable
+
     liste_active_trips=[]
 
     for d in dates_service:
@@ -49,17 +49,23 @@ def dates_service (feed):
         len_active_trips=len(active_trips)
         liste_active_trips.append((d,len_active_trips))
 
-    max_services_trips = max(t[1] for t in liste_active_trips) #max du nombre de trips / jour 
-    seuil = 0.7 * max_services_trips # pour filtrer les dates avec GTFS pas à jour par hypothèse <70% max nombre de trips jour 
+    max_services_trips = max(t[1] for t in liste_active_trips) #max du nombre de trips / jour
+    seuil = 0.7 * max_services_trips # pour filtrer les dates avec GTFS pas à jour par hypothèse <70% max nombre de trips jour
     liste_active_trips = [t for t in liste_active_trips if t[1] >= seuil]
 
     dates_service = [t[0] for t in liste_active_trips]  # dates fiables uniquement
     date_debut = min(dates_service)
     date_fin = max(dates_service)
-    
-    #Sélection d'un jour au hasard un mardi ou un jeudi JOB au hasard
+
+    # Sélection du dernier mardi ou jeudi JOB (jour ouvré de référence)
     # parmi les dates de service effectivement présentes dans le GTFS
-    # (l'année est déduite de dates_service, pas codée en dur)
+    # (l'année est déduite de dates_service, pas codée en dur), en écartant
+    # si possible les dates tombant en période de vacances scolaires de
+    # l'académie du réseau (cf. src/vacances_scolaires.py) : le service y
+    # est souvent allégé, non représentatif d'un jour ouvré normal. Repli
+    # sur le dernier mardi/jeudi tout court si academie est inconnue (feed
+    # hors métropole non géocodé, API indisponible...) ou si tous les
+    # mardis/jeudis du GTFS tombent en vacances.
 
     dates_parsees = [datetime.strptime(d, "%Y%m%d") for d in dates_service]
 
@@ -67,23 +73,40 @@ def dates_service (feed):
         d.strftime("%Y%m%d") for d in dates_parsees
         if d.weekday() in (1, 3)  # 1=mardi, 3=jeudi
     ]
-    date_JOB = max(dates__mar_jeu) if dates__mar_jeu else max(dates_service)
-    
+
+    dates__mar_jeu_hors_vacances = dates__mar_jeu
+    if academie and dates__mar_jeu:
+        from src.vacances_scolaires import est_en_vacances
+        dates__mar_jeu_hors_vacances = [d for d in dates__mar_jeu if not est_en_vacances(d, academie)]
+
+    if dates__mar_jeu_hors_vacances:
+        date_JOB = max(dates__mar_jeu_hors_vacances)
+    elif dates__mar_jeu:
+        date_JOB = max(dates__mar_jeu)
+    else:
+        date_JOB = max(dates_service)
+
     return dates_service, date_debut, date_fin, date_JOB
 
 
-def charger_ou_calculer_dates_service(feed, nom_reseau_str):
+def charger_ou_calculer_dates_service(feed, nom_reseau_str, academie=None):
     """
     Cache à deux niveaux (disque local puis dataset Hugging Face, même
     principe que charger_ou_calculer_avec_cache_hf dans hf_cache.py) pour
     dates_service(), dont le calcul boucle sur feed.get_trips() une fois
     par date du calendrier GTFS et peut prendre plusieurs minutes sur un
     gros réseau (IDFM). Sûr à réutiliser d'une exécution à l'autre :
-    dates_service() est déterministe pour un GTFS donné.
+    dates_service() est déterministe pour un GTFS et une academie donnés.
 
     Indispensable pour les pages Streamlit (troncons_page, arrets_page) qui
     appellent dates_service() à chaque rerun : sans ce cache, la moindre
     interaction utilisateur relancerait ce calcul coûteux.
+
+    Un cache écrit avant l'ajout de l'évitement des vacances scolaires (pas
+    de clé "academie") ou écrit pour une academie différente est traité
+    comme périmé et recalculé — sinon date_JOB resterait figée sur
+    l'ancienne date (potentiellement en vacances) malgré le nouveau
+    paramètre.
     """
     import json
     from src.hf_cache import recuperer_depuis_hf, envoyer_vers_hf
@@ -95,12 +118,14 @@ def charger_ou_calculer_dates_service(feed, nom_reseau_str):
         recuperer_depuis_hf(nom_fichier_hf, chemin_cache)
 
     if os.path.exists(chemin_cache):
-        print(f"✓ dates_service chargé depuis le cache : {chemin_cache}")
         with open(chemin_cache) as f:
             donnees = json.load(f)
-        return donnees["dates_service"], donnees["date_debut"], donnees["date_fin"], donnees["date_JOB"]
+        if donnees.get("academie") == academie:
+            print(f"✓ dates_service chargé depuis le cache : {chemin_cache}")
+            return donnees["dates_service"], donnees["date_debut"], donnees["date_fin"], donnees["date_JOB"]
+        print(f"⟳ cache {chemin_cache} périmé (academie absente ou différente) — recalcul")
 
-    dates_service_liste, date_debut, date_fin, date_JOB = dates_service(feed)
+    dates_service_liste, date_debut, date_fin, date_JOB = dates_service(feed, academie=academie)
     os.makedirs(os.path.dirname(chemin_cache), exist_ok=True)
     with open(chemin_cache, "w") as f:
         json.dump({
@@ -108,6 +133,7 @@ def charger_ou_calculer_dates_service(feed, nom_reseau_str):
             "date_debut": date_debut,
             "date_fin": date_fin,
             "date_JOB": date_JOB,
+            "academie": academie,
         }, f)
     print(f"✓ dates_service calculé et mis en cache : {chemin_cache}")
     envoyer_vers_hf(chemin_cache, nom_fichier_hf)

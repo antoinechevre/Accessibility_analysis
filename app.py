@@ -19,12 +19,14 @@ from src.merge_gtfs import fusionner_gtfs
 from src.transport_data_gouv import (
     charger_provenance,
     enregistrer_provenance,
+    enregistrer_zone,
     nb_agences_gtfs,
     rechercher_gtfs_urbain,
     recuperer_datasets_public_transit,
     statut_resultat,
     telecharger_gtfs,
 )
+from src.vacances_scolaires import departement_academie_zone_pour_feed
 from views.home import explications_analyse_gtfs, home_page
 from views.accessibilite_index import accessibilite_index_page
 from views.ponderation_equipements import ponderation_equipements_page
@@ -454,6 +456,8 @@ if "date_str" not in st.session_state:
     st.session_state.date_str = None
 if "nom_reseau_str" not in st.session_state:
     st.session_state.nom_reseau_str = None
+if "academie_reseau" not in st.session_state:
+    st.session_state.academie_reseau = None
 if "zip_path" not in st.session_state:
     st.session_state.zip_path = None
 if "last_uploaded_name" not in st.session_state:
@@ -560,9 +564,23 @@ def charger_donnees_gtfs():
             if nb_agences > 4 and not exception_valide:
                 raise TropAgencesError(nb_agences)
 
-            # Plage de service fiable et jour ouvré de base (dernier mardi/jeudi,
-            # cf. src/info_reseau.dates_service)
-            _, _, _, date_JOB = dates_service(feed)
+            # Académie/zone de vacances scolaires du réseau (un seul appel de
+            # reverse géocodage sur le barycentre des arrêts, cf.
+            # src/vacances_scolaires.py) : sert à écarter les vacances
+            # scolaires du choix de date_JOB ci-dessous, et est enregistrée
+            # dans l'index gtfs_sources.json plus bas. Best-effort : ne doit
+            # jamais bloquer le chargement (feed hors métropole déjà rejeté
+            # plus loin par HorsMetropoleError le cas échéant, API
+            # géocodage indisponible...).
+            try:
+                code_departement, academie, zone_vacances = departement_academie_zone_pour_feed(feed)
+            except Exception:
+                code_departement, academie, zone_vacances = None, None, None
+
+            # Plage de service fiable et jour ouvré de base (dernier mardi/jeudi
+            # hors vacances scolaires de l'académie si connue, cf.
+            # src/info_reseau.dates_service)
+            _, _, _, date_JOB = dates_service(feed, academie=academie)
             date_str = date_JOB
 
             # Services actifs à cette date (utilisé par l'onglet "Analyse réseau
@@ -593,28 +611,12 @@ def charger_donnees_gtfs():
             else:
                 reseau_str = str(nom_reseau_str(feed))
 
-            # Rattache best-effort ce GTFS à son jeu de données
-            # transport.data.gouv.fr (cf. src/transport_data_gouv.py) : ne
-            # tente que si ce fichier n'est pas déjà dans la provenance, et
-            # seulement quand la recherche par nom de réseau renvoie un seul
-            # résultat non ambigu — jamais bloquant (silencieux en cas
-            # d'échec ou d'ambiguïté, l'utilisateur peut toujours associer
-            # manuellement via la recherche en barre latérale).
-            try:
-                if nom_gtfs not in charger_provenance():
-                    candidats_provenance = rechercher_gtfs_urbain(
-                        reseau_str, datasets=recuperer_datasets_public_transit()
-                    )
-                    if len(candidats_provenance) == 1:
-                        enregistrer_provenance(nom_gtfs, candidats_provenance[0])
-            except Exception:
-                pass
-
         # Stocker dans session_state
         st.session_state.feed = feed
         st.session_state.date_str = date_str
         st.session_state.zip_path = GTFS_PATH
         st.session_state.nom_reseau_str = reseau_str
+        st.session_state.academie_reseau = academie
         st.session_state.last_uploaded_name = nom_gtfs
         st.session_state.active_service_ids = active_service_ids
         st.session_state.chemin_logo = chemin_logo
@@ -637,6 +639,15 @@ def charger_donnees_gtfs():
         if not fusion and uploaded_files and nom_gtfs not in gtfs_locaux:
             if envoyer_vers_hf(GTFS_PATH, f"GTFS/{nom_gtfs}"):
                 st.toast(f"✓ {nom_gtfs} envoyé vers Hugging Face (réutilisable aux prochains déploiements)")
+
+        # Académie/zone dans l'index gtfs_sources.json (cf. plus haut) : comme
+        # pour l'envoi HF ci-dessus, pas de sens pour une fusion (le nom
+        # composite "A+B" ne correspond à aucun GTFS réutilisable tel quel).
+        if not fusion and academie is not None:
+            try:
+                enregistrer_zone(nom_gtfs, code_departement, academie, zone_vacances)
+            except Exception:
+                pass
 
         return True
 
