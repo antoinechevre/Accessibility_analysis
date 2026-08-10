@@ -147,6 +147,13 @@ def main():
         help="Chemin où écrire un résumé JSON de ce run (comptes + listes par catégorie) — pensé pour "
         "être relu par un step de notification (mail) dans une CI, plutôt que de reparser la sortie texte.",
     )
+    parser.add_argument(
+        "--force", action="store_true",
+        help="Retélécharge/écrase même les GTFS déjà à jour d'après ressource_maj (cf. statut_resultat) — "
+        "pour forcer une resynchronisation complète (ex: doute sur l'exactitude du cache local/HF) plutôt "
+        "que de se fier à la comparaison de dates. cf. scripts/rafraichir_gtfs_force.py, qui appelle "
+        "juste ce script avec ce drapeau.",
+    )
     args = parser.parse_args()
 
     provenance = charger_provenance()
@@ -181,12 +188,15 @@ def main():
             continue
 
         statut, _ = statut_resultat(resultat_actuel, provenance)
-        if statut == "a_jour":
+        if statut == "a_jour" and not args.force:
             print(f"  ✓ à jour (màj source : {info.get('ressource_maj')})")
             resultats["a_jour"].append(nom_fichier)
             continue
 
-        print(f"  ⬇ mise à jour disponible : {info.get('ressource_maj')} -> {resultat_actuel['ressource_maj']}")
+        if statut == "a_jour":
+            print(f"  ⬇ à jour d'après ressource_maj ({info.get('ressource_maj')}) mais --force : retéléchargé quand même")
+        else:
+            print(f"  ⬇ mise à jour disponible : {info.get('ressource_maj')} -> {resultat_actuel['ressource_maj']}")
 
         if nom_fichier in args.exclude:
             print("    ⛔ exclu du rafraîchissement automatique — à télécharger/retraiter manuellement")
