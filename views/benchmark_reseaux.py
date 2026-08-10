@@ -12,7 +12,6 @@ en bleu :
   nombre d'arrêts).
 """
 
-import base64
 import os
 
 import streamlit as st
@@ -54,20 +53,28 @@ def benchmark_reseaux_page():
         )
         return
 
-    # Lien data: URI (pas de fichier à servir) ouvrant dans un nouvel onglet
-    # la liste ville/réseau/période de validité/date_JOB de tous les réseaux
-    # du benchmark — valeurs telles qu'enregistrées au dernier run, cf.
-    # src/tableau_validite_reseaux.py.
+    # Liste ville/réseau/période de validité/date_JOB de tous les réseaux du
+    # benchmark (src/tableau_validite_reseaux.py), valeurs telles
+    # qu'enregistrées au dernier run. st.download_button plutôt qu'un lien
+    # data: URI avec target="_blank" : Chrome (et la plupart des
+    # navigateurs récents) bloque silencieusement l'ouverture d'un nouvel
+    # onglet sur une URI data: (mesure anti-hameçonnage — ce même motif
+    # servait à déguiser de fausses pages) ; un <script> injecté via
+    # st.markdown(unsafe_allow_html=True) ne s'exécute jamais non plus
+    # (comportement standard des navigateurs pour du HTML inséré ainsi),
+    # et l'iframe de st.components.v1.html est sandboxée sans
+    # allow-popups — aucune de ces deux voies ne permet un window.open()
+    # fiable. Le téléchargement natif Streamlit contourne ces trois
+    # limites ; le fichier .html téléchargé s'ouvre ensuite dans le
+    # navigateur en un clic.
     colonnes_validite = {"ville_principale", "reseau", "date_debut", "date_fin", "date_JOB"}
     if colonnes_validite <= set(tableau_benchmark_complet.columns):
         html_validite = generer_html_validite_str(tableau_benchmark_complet)
-        b64_validite = base64.b64encode(html_validite.encode("utf-8")).decode("ascii")
-        st.markdown(
-            f'<a href="data:text/html;base64,{b64_validite}" target="_blank" '
-            'style="display:inline-block;padding:.4rem .9rem;border-radius:6px;'
-            'border:1px solid rgba(14,124,123,0.4);color:#0E7C7B;text-decoration:none;'
-            'font-size:.9rem;">📋 Ouvrir la liste des réseaux (période de validité)</a>',
-            unsafe_allow_html=True,
+        st.download_button(
+            "📋 Télécharger la liste des réseaux (période de validité)",
+            data=html_validite,
+            file_name="reseaux_benchmark.html",
+            mime="text/html",
         )
 
     # Filtre commun aux deux graphiques ci-dessous : les grandes agglomérations
