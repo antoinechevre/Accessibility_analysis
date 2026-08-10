@@ -6,7 +6,8 @@ d'accessibilité — cf. src/nuage_points_benchmark.py pour ce dernier.
 
 Un seul point par réseau (pas de facette domaine/décile ici, ces
 indicateurs ne varient pas par domaine BPE ni par décile de niveau de vie) :
-- Abscisses : population totale (fixe).
+- Abscisses : population totale, ou surface du périmètre des transports
+  urbains (km²) — choix parmi les colonnes détectées dans le CSV.
 - Ordonnées : bus/km, métro+tram/km, tout véh.km, ou nombre d'arrêts —
   choix parmi les colonnes détectées dans le CSV (calculées et enregistrées
   par le bloc "Indicateurs de benchmark inter-réseaux" de l'onglet
@@ -15,6 +16,11 @@ indicateurs ne varient pas par domaine BPE ni par décile de niveau de vie) :
 
 import json
 import string
+
+OPTIONS_X = [
+    ("population_totale", "Population totale"),
+    ("surface_km2", "Surface périmètre des transports urbains (km²)"),
+]
 
 OPTIONS_Y = [
     ("bus_km_JOB", "Bus (véh.km, jour JOB)"),
@@ -75,6 +81,7 @@ def generer_html_str(df, reseau_actuel=None):
         if col not in df.columns:
             raise ValueError(f"Colonne attendue absente du benchmark : {col}")
 
+    options_x_dispo = [(c, l) for c, l in OPTIONS_X if c in df.columns]
     options_y_dispo = [(c, l) for c, l in OPTIONS_Y if c in df.columns]
     if not options_y_dispo:
         raise ValueError(
@@ -82,12 +89,19 @@ def generer_html_str(df, reseau_actuel=None):
             "vehicules_km_JOB / nombre_arrets)."
         )
 
-    colonnes_utiles = ["reseau", "ville_principale", "population_totale"] + [c for c, _ in options_y_dispo]
-    donnees = df[colonnes_utiles].dropna(subset=["population_totale"]).to_dict(orient="records")
+    colonnes_utiles = ["reseau", "ville_principale"] + [c for c, _ in options_x_dispo] + [c for c, _ in options_y_dispo]
+    # Pas de dropna sur une colonne d'abscisses précise ici (contrairement à
+    # avant) : surface_km2 peut manquer pour un réseau (découpage jamais
+    # calculé, cf. surface_km2_decoupage) sans que ce réseau doive
+    # disparaître du graphique dès qu'on choisit population_totale — le
+    # filtrage par valeur nulle se fait côté JS, au moment de tracer,
+    # d'après l'abscisse effectivement sélectionnée (comme pour l'ordonnée).
+    donnees = df[colonnes_utiles].to_dict(orient="records")
 
     template = string.Template(TEMPLATE_HTML)
     return template.substitute(
         donnees_json=json.dumps(donnees, ensure_ascii=False, default=str),
+        options_x_json=json.dumps(options_x_dispo, ensure_ascii=False),
         options_y_json=json.dumps(options_y_dispo, ensure_ascii=False),
         nb_reseaux=df["reseau"].nunique(),
         reseau_actuel_json=json.dumps(reseau_actuel, ensure_ascii=False) if reseau_actuel else "null",
@@ -250,6 +264,10 @@ TEMPLATE_HTML = r"""<!doctype html>
 
   <div class="filtres">
     <div class="filtre">
+      <label>Abscisses</label>
+      <select id="select-x" hidden></select>
+    </div>
+    <div class="filtre">
       <label>Ordonnées</label>
       <select id="select-y" hidden></select>
     </div>
@@ -267,10 +285,9 @@ TEMPLATE_HTML = r"""<!doctype html>
 
 <script>
 const DONNEES = $donnees_json;
+const OPTIONS_X = $options_x_json;   // [[colonne, libelle], ...]
 const OPTIONS_Y = $options_y_json;   // [[colonne, libelle], ...]
 const RESEAU_ACTUEL = $reseau_actuel_json;  // nom du réseau à surligner, ou null
-const COL_X = "population_totale";
-const LIBELLE_X = "Population totale";
 
 function cssVar(nom) {
   return getComputedStyle(document.documentElement).getPropertyValue(nom).trim();
@@ -349,15 +366,18 @@ function creerMenuPersonnalise(select) {
   rafraichir();
 }
 
+const selectX = document.getElementById("select-x");
 const selectY = document.getElementById("select-y");
+remplirSelect(selectX, OPTIONS_X, OPTIONS_X[0][0]);
 remplirSelect(selectY, OPTIONS_Y, OPTIONS_Y[0][0]);
+creerMenuPersonnalise(selectX);
 creerMenuPersonnalise(selectY);
 
 let derniereSelection = [];
 
-function traceDe(nom, couleur, pts, colY, libelleY, couleurTexte, couleurAnneau) {
+function traceDe(nom, couleur, pts, colX, colY, libelleX, libelleY, couleurTexte, couleurAnneau) {
   return {
-    x: pts.map(l => l[COL_X]),
+    x: pts.map(l => l[colX]),
     y: pts.map(l => l[colY]),
     text: pts.map(l => l.ville_principale),
     customdata: pts.map(l => [l.reseau]),
@@ -369,16 +389,20 @@ function traceDe(nom, couleur, pts, colY, libelleY, couleurTexte, couleurAnneau)
     marker: { size: 10, color: couleur, line: { width: 2, color: couleurAnneau } },
     hovertemplate:
       "<b>%{text}</b> (%{customdata[0]})<br>" +
-      LIBELLE_X + " : %{x}<br>" +
+      libelleX + " : %{x}<br>" +
       libelleY + " : %{y:.1f}<extra></extra>",
   };
 }
 
 function redessiner() {
+  const colX = selectX.value;
   const colY = selectY.value;
+  const libelleX = OPTIONS_X.find(o => o[0] === colX)[1];
   const libelleY = OPTIONS_Y.find(o => o[0] === colY)[1];
 
-  const filtre = DONNEES.filter(l => l[colY] !== null && l[colY] !== undefined);
+  const filtre = DONNEES.filter(l =>
+    l[colX] !== null && l[colX] !== undefined && l[colY] !== null && l[colY] !== undefined
+  );
   derniereSelection = filtre;
 
   const couleurTexte = cssVar("--text-secondary");
@@ -389,12 +413,12 @@ function redessiner() {
     const autres = filtre.filter(l => l.reseau !== RESEAU_ACTUEL);
     const actuel = filtre.filter(l => l.reseau === RESEAU_ACTUEL);
     traces = [
-      traceDe("Autres réseaux", cssVar("--couleur-autres"), autres, colY, libelleY, couleurTexte, couleurAnneau),
-      traceDe(`$${RESEAU_ACTUEL} (ce réseau)`, cssVar("--couleur-actuel"), actuel, colY, libelleY, couleurTexte, couleurAnneau),
+      traceDe("Autres réseaux", cssVar("--couleur-autres"), autres, colX, colY, libelleX, libelleY, couleurTexte, couleurAnneau),
+      traceDe(`$${RESEAU_ACTUEL} (ce réseau)`, cssVar("--couleur-actuel"), actuel, colX, colY, libelleX, libelleY, couleurTexte, couleurAnneau),
     ];
     showlegend = true;
   } else {
-    traces = [traceDe("Réseaux", cssVar("--couleur-autres"), filtre, colY, libelleY, couleurTexte, couleurAnneau)];
+    traces = [traceDe("Réseaux", cssVar("--couleur-autres"), filtre, colX, colY, libelleX, libelleY, couleurTexte, couleurAnneau)];
     showlegend = false;
   }
 
@@ -406,7 +430,7 @@ function redessiner() {
     paper_bgcolor: "rgba(0,0,0,0)",
     plot_bgcolor: "rgba(0,0,0,0)",
     font: { family: "system-ui, -apple-system, Segoe UI, sans-serif", color: "#898781", size: 12 },
-    xaxis: { title: LIBELLE_X, gridcolor: couleurGrille, zerolinecolor: couleurAxe, linecolor: couleurAxe },
+    xaxis: { title: libelleX, gridcolor: couleurGrille, zerolinecolor: couleurAxe, linecolor: couleurAxe },
     yaxis: { title: libelleY, gridcolor: couleurGrille, zerolinecolor: couleurAxe, linecolor: couleurAxe },
     showlegend: showlegend,
     legend: { orientation: "h", y: -0.18 },
@@ -415,17 +439,17 @@ function redessiner() {
 
   Plotly.react("chart", traces, layout, { displayModeBar: true, responsive: true });
   document.getElementById("compte-points").textContent = `$${filtre.length} point(s) affiché(s)`;
-  if (document.getElementById("zone-tableau").style.display !== "none") remplirTableau(colY, libelleY);
+  if (document.getElementById("zone-tableau").style.display !== "none") remplirTableau(colX, colY, libelleX, libelleY);
 }
 
-function remplirTableau(colY, libelleY) {
+function remplirTableau(colX, colY, libelleX, libelleY) {
   const thead = document.querySelector("#tableau thead");
   const tbody = document.querySelector("#tableau tbody");
   thead.textContent = "";
   tbody.textContent = "";
 
   const ligneEntete = document.createElement("tr");
-  for (const texte of ["Ville principale", "Réseau", LIBELLE_X, libelleY]) {
+  for (const texte of ["Ville principale", "Réseau", libelleX, libelleY]) {
     const th = document.createElement("th");
     th.textContent = texte;
     ligneEntete.appendChild(th);
@@ -434,7 +458,7 @@ function remplirTableau(colY, libelleY) {
 
   for (const l of derniereSelection) {
     const tr = document.createElement("tr");
-    const cellules = [l.ville_principale, l.reseau, l[COL_X], typeof l[colY] === "number" ? l[colY].toFixed(1) : l[colY]];
+    const cellules = [l.ville_principale, l.reseau, l[colX], typeof l[colY] === "number" ? l[colY].toFixed(1) : l[colY]];
     cellules.forEach((valeur, i) => {
       const td = document.createElement("td");
       td.textContent = valeur;
@@ -452,9 +476,15 @@ document.getElementById("btn-tableau").addEventListener("click", () => {
   const affichee = zone.style.display !== "none";
   zone.style.display = affichee ? "none" : "block";
   document.getElementById("btn-tableau").textContent = affichee ? "Afficher le tableau" : "Masquer le tableau";
-  if (!affichee) remplirTableau(selectY.value, OPTIONS_Y.find(o => o[0] === selectY.value)[1]);
+  if (!affichee) {
+    remplirTableau(
+      selectX.value, selectY.value,
+      OPTIONS_X.find(o => o[0] === selectX.value)[1], OPTIONS_Y.find(o => o[0] === selectY.value)[1]
+    );
+  }
 });
 
+selectX.addEventListener("change", redessiner);
 selectY.addEventListener("change", redessiner);
 
 window.addEventListener("resize", () => {

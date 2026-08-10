@@ -330,6 +330,25 @@ def decoupage_agglo_geojson(csv_path="data/decoupage_agglo.csv", output_path="da
     print(f"✓ {len(gdf)} commune(s) écrite(s) dans {output_path}")
     return gdf
 
+
+def surface_km2_decoupage(csv_path):
+    """Surface (km²) de l'agglomération décrite par un decoupage_agglo_*.csv
+    (id/code_insee/nom_commune/coordinates/geojson, cf. build_decoupage_agglo)
+    : union des géométries communales, reprojetée en Lambert-93 (EPSG:2154,
+    mètres) pour une surface exacte — les degrés lat/lon ne donnent pas une
+    surface en km² directement. buffer(0) répare les géométries invalides
+    (auto-intersections, déjà observées sur des communes du Fond de plan
+    IGN) avant l'union, même précaution que build_grid_agglo."""
+    decoupage = pd.read_csv(csv_path, dtype={"code_insee": str}).drop_duplicates(subset="code_insee")
+    gdf = gpd.GeoDataFrame(
+        decoupage,
+        geometry=decoupage["geojson"].apply(lambda g: shapely.geometry.shape(json.loads(g))),
+        crs="EPSG:4326",
+    )
+    gdf.geometry = gdf.geometry.buffer(0)
+    agglo_2154 = gpd.GeoSeries([gdf.union_all()], crs=gdf.crs).to_crs("EPSG:2154")
+    return agglo_2154.area.iloc[0] / 1e6
+
 def _tuiles_bbox(min_lon, min_lat, max_lon, max_lat, taille_deg):
     """Découpe une bbox en tuiles carrées d'au plus `taille_deg` degrés de côté.
 

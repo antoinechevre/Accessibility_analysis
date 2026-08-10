@@ -32,6 +32,7 @@ import string
 OPTIONS_X = [
     ("population_totale", "Population totale", "numerique"),
     ("vehicules_km_JOB", "Véhicules.km (jour JOB)", "numerique"),
+    ("surface_km2", "Surface périmètre des transports urbains (km²)", "numerique"),
     ("date_JOB", "Date JOB", "date"),
 ]
 

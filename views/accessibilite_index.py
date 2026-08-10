@@ -16,7 +16,7 @@ import streamlit as st
 from folium.plugins import DualMap
 
 from src.BPE_traitement import land_use_data_domaine
-from src.build_data_agglo import osm_pbf_creator, ville_principale
+from src.build_data_agglo import osm_pbf_creator, surface_km2_decoupage, ville_principale
 from src.cartographie import echelle_continue_html, script_reajuster_si_masque, titre_carte_html
 from src.hf_cache import envoyer_vers_hf, fusionner_et_envoyer_csv, recuperer_depuis_hf
 from src.pipeline_donnees import (
@@ -869,7 +869,12 @@ def accessibilite_index_page():
 
                     population_totale_reseau = land_use_data["population"].sum()
 
+                    # Surface (km²) de l'agglomération — union des géométries
+                    # communales du découpage, cf. build_data_agglo.surface_km2_decoupage.
+                    surface_km2_reseau = surface_km2_decoupage(chemin_decoupage)
+
                     tableau_benchmark.insert(0, "nombre_arrets", nombre_arrets_reseau)
+                    tableau_benchmark.insert(0, "surface_km2", surface_km2_reseau)
                     tableau_benchmark.insert(0, "tram_km_JOB", tram_km_job)
                     tableau_benchmark.insert(0, "metro_km_JOB", metro_km_job)
                     tableau_benchmark.insert(0, "bus_km_JOB", bus_km_job)
