@@ -12,6 +12,7 @@ en bleu :
   nombre d'arrêts).
 """
 
+import base64
 import os
 
 import streamlit as st
@@ -19,6 +20,7 @@ import streamlit as st
 from src.hf_cache import lire_csv_partage
 from src.nuage_points_benchmark import generer_html_str
 from src.nuage_points_reseau import generer_html_str as generer_html_reseau_str
+from src.tableau_validite_reseaux import generer_html_str as generer_html_validite_str
 
 BASE_DIR = os.getcwd()
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
@@ -51,6 +53,22 @@ def benchmark_reseaux_page():
             "ou utilise la cellule \"#sauvegarde index\" du notebook."
         )
         return
+
+    # Lien data: URI (pas de fichier à servir) ouvrant dans un nouvel onglet
+    # la liste ville/réseau/période de validité/date_JOB de tous les réseaux
+    # du benchmark — valeurs telles qu'enregistrées au dernier run, cf.
+    # src/tableau_validite_reseaux.py.
+    colonnes_validite = {"ville_principale", "reseau", "date_debut", "date_fin", "date_JOB"}
+    if colonnes_validite <= set(tableau_benchmark_complet.columns):
+        html_validite = generer_html_validite_str(tableau_benchmark_complet)
+        b64_validite = base64.b64encode(html_validite.encode("utf-8")).decode("ascii")
+        st.markdown(
+            f'<a href="data:text/html;base64,{b64_validite}" target="_blank" '
+            'style="display:inline-block;padding:.4rem .9rem;border-radius:6px;'
+            'border:1px solid rgba(14,124,123,0.4);color:#0E7C7B;text-decoration:none;'
+            'font-size:.9rem;">📋 Ouvrir la liste des réseaux (période de validité)</a>',
+            unsafe_allow_html=True,
+        )
 
     # Filtre commun aux deux graphiques ci-dessous : les grandes agglomérations
     # (Paris, Marseille...) peuvent écraser visuellement les réseaux plus

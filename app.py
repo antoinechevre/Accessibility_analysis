@@ -459,6 +459,10 @@ if "feed" not in st.session_state:
     st.session_state.feed = None
 if "date_str" not in st.session_state:
     st.session_state.date_str = None
+if "date_debut" not in st.session_state:
+    st.session_state.date_debut = None
+if "date_fin" not in st.session_state:
+    st.session_state.date_fin = None
 if "nom_reseau_str" not in st.session_state:
     st.session_state.nom_reseau_str = None
 if "academie_reseau" not in st.session_state:
@@ -585,7 +589,7 @@ def charger_donnees_gtfs():
             # Plage de service fiable et jour ouvré de base (dernier mardi/jeudi
             # hors vacances scolaires de l'académie si connue, cf.
             # src/info_reseau.dates_service)
-            _, _, _, date_JOB = dates_service(feed, academie=academie)
+            _, date_debut, date_fin, date_JOB = dates_service(feed, academie=academie)
             date_str = date_JOB
 
             # Services actifs à cette date (utilisé par l'onglet "Analyse réseau
@@ -619,6 +623,8 @@ def charger_donnees_gtfs():
         # Stocker dans session_state
         st.session_state.feed = feed
         st.session_state.date_str = date_str
+        st.session_state.date_debut = date_debut
+        st.session_state.date_fin = date_fin
         st.session_state.zip_path = GTFS_PATH
         st.session_state.nom_reseau_str = reseau_str
         st.session_state.academie_reseau = academie

@@ -880,6 +880,8 @@ def accessibilite_index_page():
                     tableau_benchmark.insert(0, "bus_km_JOB", bus_km_job)
                     tableau_benchmark.insert(0, "population_totale", population_totale_reseau)
                     tableau_benchmark.insert(0, "vehicules_km_JOB", total_vkm_job)
+                    tableau_benchmark.insert(0, "date_fin", st.session_state.date_fin)
+                    tableau_benchmark.insert(0, "date_debut", st.session_state.date_debut)
                     tableau_benchmark.insert(0, "date_JOB", date_str)
                     tableau_benchmark.insert(0, "ville_principale", ville_principale_reseau)
                     tableau_benchmark.insert(0, "date_run", datetime.datetime.now().strftime("%Y-%m-%d %H:%M"))
