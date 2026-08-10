@@ -48,12 +48,12 @@ GTFS_ANALYSE_URL = "https://huggingface.co/spaces/antoinechevre/GTFS_analyse_fr"
 
 # Précision supplémentaire à afficher pour certains réseaux de
 # RESOLUTIONS_GRILLE_SPECIALES, en plus de l'avertissement générique sur la
-# résolution de grille — ex. IDFM : le GTFS utilisé ne couvre que Paris +
-# petite couronne, malgré son nom d'agence "Île-de-France Mobilités" qui
-# pourrait laisser croire à une couverture régionale complète (cf.
+# résolution de grille — ex. IDFM : le GTFS utilisé couvre tout le
+# périmètre Île-de-France Mobilités (métro/RER/tram/bus, Paris et grande
+# couronne comprises) mais pas le réseau Transilien (cf.
 # app.py::GTFS_NOM_RESEAU_FORCE).
 PRECISIONS_RESEAU = {
-    "IDFM": "Ce GTFS ne couvre que Paris et la petite couronne (75/92/93/94), pas la grande couronne.",
+    "IDFM": "Ce GTFS couvre le périmètre d'Île-de-France Mobilités mais pas le Transilien.",
 }
 
 FONDS_CARTE = {

@@ -17,6 +17,7 @@ from src.info_reseau import dates_service, nom_fichier_valide, nom_reseau_str, r
 from src.hf_cache import envoyer_vers_hf, lister_fichiers_hf, recuperer_depuis_hf
 from src.merge_gtfs import fusionner_gtfs
 from src.transport_data_gouv import (
+    associer_gtfs_a_pan,
     charger_provenance,
     enregistrer_provenance,
     enregistrer_zone,
@@ -355,6 +356,17 @@ gtfs_locaux_choisis = st.sidebar.multiselect(
 
 nb_sources_gtfs = len(uploaded_files) + len(gtfs_locaux_choisis)
 
+
+# st.cache_data : la liste complète (775 datasets mi-2026) ne change pas
+# d'un appel à l'autre dans la même session — évite de la retélécharger à
+# chaque frappe dans la recherche/chaque nouvel upload (cf. usages plus
+# bas : recherche en barre latérale ET association automatique d'un
+# nouvel upload).
+@st.cache_data(ttl=3600, show_spinner="Récupération du catalogue transport.data.gouv.fr...")
+def _datasets_transport_gouv():
+    return recuperer_datasets_public_transit()
+
+
 # --- Recherche d'un GTFS sur transport.data.gouv.fr (PAN) -------------------
 # Alternative à l'upload manuel : chercher directement le jeu de données
 # source par nom de ville, vérifier s'il est déjà dans le catalogue (et à
@@ -363,13 +375,6 @@ with st.sidebar.expander("🔍 Rechercher un GTFS (transport.data.gouv.fr)"):
     nom_ville_recherche = st.text_input("Nom de ville", key="recherche_gtfs_ville", placeholder="ex: Nice")
     if nom_ville_recherche.strip():
         try:
-            # st.cache_data : la liste complète (775 datasets mi-2026) ne
-            # change pas d'une recherche à l'autre dans la même session —
-            # évite de la retélécharger à chaque frappe/rerun.
-            @st.cache_data(ttl=3600, show_spinner="Récupération du catalogue transport.data.gouv.fr...")
-            def _datasets_transport_gouv():
-                return recuperer_datasets_public_transit()
-
             resultats_recherche = rechercher_gtfs_urbain(nom_ville_recherche, datasets=_datasets_transport_gouv())
         except requests.RequestException as e:
             resultats_recherche = None
@@ -646,6 +651,27 @@ def charger_donnees_gtfs():
         if not fusion and academie is not None:
             try:
                 enregistrer_zone(nom_gtfs, code_departement, academie, zone_vacances)
+            except Exception:
+                pass
+
+        # Association automatique au jeu de données transport.data.gouv.fr
+        # (cf. src.transport_data_gouv.associer_gtfs_a_pan), pour qu'un
+        # nouvel upload profite du contrôle de fraîcheur hebdomadaire
+        # (scripts/rafraichir_gtfs.py) sans devoir passer par la recherche
+        # en barre latérale à la main. Best-effort, jamais bloquant — et
+        # jamais sur le seul nom de fichier (cf. la comparaison agency.txt
+        # dans associer_gtfs_a_pan) : une précédente version, basée sur le
+        # nom de réseau dérivé des agences, avait associé à tort un GTFS à
+        # un opérateur sans rapport (recherche par un nom d'agence qui, par
+        # coïncidence, ne matchait qu'un seul jeu de données PAN erroné).
+        if not fusion and uploaded_files and nom_gtfs not in gtfs_locaux:
+            try:
+                if not charger_provenance().get(nom_gtfs, {}).get("page_url"):
+                    with open(GTFS_PATH, "rb") as f:
+                        contenu_local = f.read()
+                    resultat, _ = associer_gtfs_a_pan(nom_gtfs, contenu_local, _datasets_transport_gouv())
+                    if resultat is not None:
+                        enregistrer_provenance(nom_gtfs, resultat)
             except Exception:
                 pass
 

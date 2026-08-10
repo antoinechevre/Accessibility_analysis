@@ -19,11 +19,20 @@ vérifiable ici sans intervention humaine : plusieurs jeux de données
 pourraient correspondre, ou aucun. Ouvrir l'app et utiliser la recherche en
 barre latérale pour l'associer une première fois.
 
+Exécuté aussi automatiquement chaque semaine par
+.github/workflows/rafraichir-gtfs.yml (--exclude IDFM/Lyon TCL — trop
+coûteux à retraiter en CI, cf. commentaire du workflow — --journal et
+--json-resultat pour le journal git et le mail de notification).
+
 Usage :
     .venv/bin/python scripts/rafraichir_gtfs.py [--dry-run] [--include FICHIER ...]
+        [--exclude FICHIER ...] [--journal CHEMIN.csv] [--json-resultat CHEMIN.json]
 """
 
 import argparse
+import csv
+import datetime
+import json
 import os
 import sys
 
@@ -34,6 +43,7 @@ from src.info_reseau import nom_reseau_str as calculer_nom_reseau_str
 from src.transport_data_gouv import (
     charger_provenance,
     enregistrer_provenance,
+    nb_agences_gtfs,
     recuperer_datasets_public_transit,
     resultat_pour_page_url,
     statut_resultat,
@@ -95,6 +105,25 @@ def _invalider_caches_derives(nom_reseau, dry_run):
             print(f"    (rien à invalider pour {chemin_hf} : {type(e).__name__})")
 
 
+def _ajouter_au_journal(chemin_journal, lignes):
+    """Ajoute lignes (liste de dicts date/nom_fichier/reseau/statut/
+    ancienne_maj/nouvelle_maj) à chemin_journal — un CSV commité sur git
+    (cf. .github/workflows/rafraichir-gtfs.yml, pas synchronisé via HF comme
+    le reste de data/) qui garde un historique des mises à jour détectées,
+    au-delà de ce que gtfs_sources.json (juste l'état courant) retient.
+    N'écrit l'en-tête que si le fichier n'existe pas encore."""
+    if not lignes:
+        return
+    nouveau = not os.path.exists(chemin_journal)
+    os.makedirs(os.path.dirname(chemin_journal), exist_ok=True)
+    with open(chemin_journal, "a", newline="", encoding="utf-8") as f:
+        colonnes = ["date", "nom_fichier", "reseau", "statut", "ancienne_maj", "nouvelle_maj"]
+        writer = csv.DictWriter(f, fieldnames=colonnes)
+        if nouveau:
+            writer.writeheader()
+        writer.writerows(lignes)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--dry-run", action="store_true", help="Liste ce qui serait fait, sans rien télécharger/écraser.")
@@ -102,24 +131,47 @@ def main():
         "--include", nargs="*", default=None,
         help="Ne vérifier que ces fichiers (basename dans data/GTFS/), même sous-ensemble de gtfs_sources.json.",
     )
+    parser.add_argument(
+        "--exclude", nargs="*", default=[],
+        help="Vérifier la fraîcheur de ces fichiers sans jamais les télécharger/écraser automatiquement "
+        "(une mise à jour détectée est journalisée/signalée comme 'à traiter manuellement') — pour les "
+        "réseaux trop coûteux à retraiter automatiquement (IDFM, Lyon TCL : plusieurs heures de calcul r5py).",
+    )
+    parser.add_argument(
+        "--journal", default=None,
+        help="Chemin d'un CSV où ajouter une ligne par mise à jour détectée (date, nom_fichier, reseau, "
+        "statut, ancienne_maj, nouvelle_maj) — historique cumulatif, pensé pour être commité sur git.",
+    )
+    parser.add_argument(
+        "--json-resultat", default=None,
+        help="Chemin où écrire un résumé JSON de ce run (comptes + listes par catégorie) — pensé pour "
+        "être relu par un step de notification (mail) dans une CI, plutôt que de reparser la sortie texte.",
+    )
     args = parser.parse_args()
 
     provenance = charger_provenance()
-    if not provenance:
-        print("data/gtfs_sources.json est vide — aucun GTFS associé à vérifier.")
+    # Un fichier peut être dans gtfs_sources.json seulement pour son
+    # académie/zone (cf. src.vacances_scolaires, enregistrer_zone dans
+    # app.py) sans jamais avoir été associé à un dataset transport.data.gouv.fr
+    # (upload manuel, jamais passé par la recherche) — pas vérifiable ici.
+    provenance_pan = {f: info for f, info in provenance.items() if info.get("page_url")}
+    if not provenance_pan:
+        print("Aucun GTFS associé à un dataset transport.data.gouv.fr dans data/gtfs_sources.json.")
         print("Utilise la recherche transport.data.gouv.fr en barre latérale de l'app pour en associer.")
         return
 
-    a_verifier = sorted(provenance) if args.include is None else [f for f in args.include if f in provenance]
+    a_verifier = sorted(provenance_pan) if args.include is None else [f for f in args.include if f in provenance_pan]
     print(f"{len(a_verifier)} GTFS à vérifier : {a_verifier}\n")
 
     print("Récupération du catalogue transport.data.gouv.fr...")
     datasets = recuperer_datasets_public_transit()
 
-    resultats = {"a_jour": [], "mis_a_jour": [], "introuvable": [], "erreur": []}
+    resultats = {"a_jour": [], "mis_a_jour": [], "a_traiter_manuellement": [], "introuvable": [], "erreur": []}
+    aujourdhui = datetime.date.today().isoformat()
+    lignes_journal = []
 
     for nom_fichier in a_verifier:
-        info = provenance[nom_fichier]
+        info = provenance_pan[nom_fichier]
         print(f"▶ {nom_fichier} ({info.get('titre')})")
 
         resultat_actuel = resultat_pour_page_url(info["page_url"], info.get("ressource_url"), datasets)
@@ -135,6 +187,17 @@ def main():
             continue
 
         print(f"  ⬇ mise à jour disponible : {info.get('ressource_maj')} -> {resultat_actuel['ressource_maj']}")
+
+        if nom_fichier in args.exclude:
+            print("    ⛔ exclu du rafraîchissement automatique — à télécharger/retraiter manuellement")
+            resultats["a_traiter_manuellement"].append(nom_fichier)
+            lignes_journal.append({
+                "date": aujourdhui, "nom_fichier": nom_fichier, "reseau": "",
+                "statut": "a_traiter_manuellement",
+                "ancienne_maj": info.get("ressource_maj"), "nouvelle_maj": resultat_actuel["ressource_maj"],
+            })
+            continue
+
         if args.dry_run:
             print("    [dry-run] téléchargement/écrasement non effectué")
             resultats["mis_a_jour"].append(nom_fichier)
@@ -142,6 +205,26 @@ def main():
 
         try:
             contenu = telecharger_gtfs(resultat_actuel)
+
+            # Même garde-fou que la recherche en barre latérale de l'app
+            # (nb_agences_gtfs, cf. app.py) : un dataset PAN peut regrouper
+            # plusieurs ressources par opérateur PLUS un "référentiel
+            # complet" qui les fusionne toutes (ex: Aix-Marseille, 17
+            # agences) — ici, sans validation humaine au moment du
+            # téléchargement, mieux vaut refuser et signaler que d'écraser
+            # un GTFS urbain valide par un fichier que l'app ne peut pas
+            # charger.
+            nb_agences = nb_agences_gtfs(contenu)
+            if nb_agences > 4:
+                print(f"    ⛔ {nb_agences} agences dans la ressource trouvée — rejeté, à vérifier manuellement via la recherche de l'app")
+                resultats["a_traiter_manuellement"].append(nom_fichier)
+                lignes_journal.append({
+                    "date": aujourdhui, "nom_fichier": nom_fichier, "reseau": "",
+                    "statut": f"rejete_{nb_agences}_agences",
+                    "ancienne_maj": info.get("ressource_maj"), "nouvelle_maj": resultat_actuel["ressource_maj"],
+                })
+                continue
+
             chemin_local = os.path.join(GTFS_DIR, nom_fichier)
             os.makedirs(GTFS_DIR, exist_ok=True)
             with open(chemin_local, "wb") as f:
@@ -153,6 +236,11 @@ def main():
             nom_reseau = _nom_reseau_pour_fichier(nom_fichier, chemin_local)
             print(f"    Invalidation des caches dérivés pour '{nom_reseau}'...")
             _invalider_caches_derives(nom_reseau, args.dry_run)
+            lignes_journal.append({
+                "date": aujourdhui, "nom_fichier": nom_fichier, "reseau": nom_reseau,
+                "statut": "mis_a_jour",
+                "ancienne_maj": info.get("ressource_maj"), "nouvelle_maj": resultat_actuel["ressource_maj"],
+            })
         except Exception as e:
             print(f"    ✗ échec : {type(e).__name__}: {e}")
             resultats["erreur"].append(nom_fichier)
@@ -162,15 +250,26 @@ def main():
 
     print("\n" + "=" * 80)
     print("Résumé :")
-    print(f"  à jour        : {len(resultats['a_jour'])}")
-    print(f"  mis à jour    : {len(resultats['mis_a_jour'])} — {resultats['mis_a_jour']}")
-    print(f"  introuvables  : {len(resultats['introuvable'])} — {resultats['introuvable']}")
-    print(f"  erreurs       : {len(resultats['erreur'])} — {resultats['erreur']}")
+    print(f"  à jour               : {len(resultats['a_jour'])}")
+    print(f"  mis à jour           : {len(resultats['mis_a_jour'])} — {resultats['mis_a_jour']}")
+    print(f"  à traiter manuellement : {len(resultats['a_traiter_manuellement'])} — {resultats['a_traiter_manuellement']}")
+    print(f"  introuvables         : {len(resultats['introuvable'])} — {resultats['introuvable']}")
+    print(f"  erreurs              : {len(resultats['erreur'])} — {resultats['erreur']}")
     if resultats["mis_a_jour"] and not args.dry_run:
         print(
             "\nRéseau(x) mis à jour : relance l'analyse dans l'onglet Accessibilité de l'app "
             "(ou scripts/run_benchmark_batch.py) pour recalculer leurs indicateurs avec le GTFS à jour."
         )
+
+    if args.journal and not args.dry_run:
+        _ajouter_au_journal(args.journal, lignes_journal)
+        if lignes_journal:
+            print(f"\n{len(lignes_journal)} ligne(s) ajoutée(s) au journal {args.journal}")
+
+    if args.json_resultat:
+        os.makedirs(os.path.dirname(args.json_resultat) or ".", exist_ok=True)
+        with open(args.json_resultat, "w", encoding="utf-8") as f:
+            json.dump(resultats, f, ensure_ascii=False, indent=2)
 
 
 if __name__ == "__main__":

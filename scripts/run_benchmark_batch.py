@@ -40,8 +40,9 @@ from nbclient.exceptions import CellExecutionError
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.info_reseau import nom_reseau_str as _nom_reseau_str
+from src.info_reseau import dates_service, nom_reseau_str as _nom_reseau_str
 from src.utils import charger_gtfs
+from src.vacances_scolaires import departement_academie_zone_pour_feed
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NOTEBOOK_PATH = os.path.join(BASE_DIR, "index_accessibility_notebook_def.ipynb")
@@ -75,9 +76,16 @@ MARQUEUR_CELLULE_GTFS = "#chemin GTFS"
 
 
 def reseaux_deja_benchmarkes():
+    """dict reseau -> date_JOB (str) déjà enregistrée dans le benchmark — la
+    plus récente si plusieurs lignes/dates coexistent pour un même réseau
+    (fusions concurrentes app/notebook/batch). Sert à distinguer un réseau
+    déjà benchmarké mais dont le GTFS a depuis été rafraîchi (cf.
+    scripts/rafraichir_gtfs.py — date_JOB a changé, donc les indicateurs
+    enregistrés sont obsolètes) d'un réseau réellement à jour."""
     if not os.path.exists(BENCHMARK_CSV):
-        return set()
-    return set(pd.read_csv(BENCHMARK_CSV)["reseau"].unique())
+        return {}
+    df = pd.read_csv(BENCHMARK_CSV, dtype={"date_JOB": str})
+    return df.groupby("reseau")["date_JOB"].max().to_dict()
 
 
 def copier_vers_temp(chemin_gtfs):
@@ -135,7 +143,8 @@ def main():
         chemin_gtfs = os.path.join(GTFS_DIR, nom_fichier)
         chemin_tmp = copier_vers_temp(chemin_gtfs)
         try:
-            nom_reseau = _nom_reseau_str(charger_gtfs(chemin_tmp))
+            feed = charger_gtfs(chemin_tmp)
+            nom_reseau = _nom_reseau_str(feed)
         except Exception as e:
             print(f"⚠️  {nom_fichier} : impossible de déterminer le réseau ({type(e).__name__}: {e}), traité quand même")
             a_traiter.append(nom_fichier)
@@ -143,9 +152,34 @@ def main():
         finally:
             os.unlink(chemin_tmp)
 
-        if nom_reseau in deja_benchmarkes:
-            print(f"⏭  {nom_fichier} : réseau '{nom_reseau}' déjà dans le benchmark")
+        # 1 = le réseau existe déjà dans le benchmark ?
+        if nom_reseau not in deja_benchmarkes:
+            a_traiter.append(nom_fichier)
             continue
+
+        # 2 = sa date_JOB enregistrée est-elle obsolète par rapport à celle
+        # que produirait ce GTFS aujourd'hui ? (GTFS rafraîchi depuis le
+        # dernier run, cf. scripts/rafraichir_gtfs.py — même calcul que la
+        # cellule "#sauvegarde index" du notebook, académie comprise, sinon
+        # une comparaison sans academie retraiterait à tort tout réseau
+        # déjà benchmarké avant l'ajout de l'évitement des vacances
+        # scolaires.)
+        try:
+            _, academie, _ = departement_academie_zone_pour_feed(feed)
+        except Exception:
+            academie = None
+        try:
+            _, _, _, date_job_actuelle = dates_service(feed, academie=academie)
+        except Exception as e:
+            print(f"⚠️  {nom_fichier} : impossible de calculer date_JOB pour comparaison ({type(e).__name__}: {e}), traité quand même")
+            a_traiter.append(nom_fichier)
+            continue
+
+        date_job_enregistree = deja_benchmarkes[nom_reseau]
+        if str(date_job_actuelle) == str(date_job_enregistree):
+            print(f"⏭  {nom_fichier} : réseau '{nom_reseau}' déjà dans le benchmark, date_JOB à jour ({date_job_actuelle})")
+            continue
+        print(f"↻ {nom_fichier} : réseau '{nom_reseau}' déjà dans le benchmark mais date_JOB obsolète ({date_job_enregistree} -> {date_job_actuelle}) — retraité")
         a_traiter.append(nom_fichier)
 
     if args.limit is not None:

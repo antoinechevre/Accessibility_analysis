@@ -239,6 +239,57 @@ def details_communes(codes, session, pause=0.05, timeout=30):
     return lignes
 
 
+DISTANCE_MAX_ISOLEMENT_KM = 40
+
+
+def plus_grande_composante_connexe(decoupage_agglo):
+    """Exclut, parmi les communes de decoupage_agglo, celles trop
+    lointaines du cœur du réseau (DISTANCE_MAX_ISOLEMENT_KM) pour être une
+    desserte réelle plutôt qu'un unique arrêt de car interurbain — observé
+    sur "Cap Cotentin" avec un arrêt "RENNES-GARE ROUTIERE" qui faisait
+    remonter Rennes entière (commune ET population/équipements de son
+    carroyage plus loin dans le pipeline, à 159 km du cœur du réseau) dans
+    l'agglomération analysée.
+
+    Pas un simple "plus grande composante connexe" (communes strictement
+    adjacentes) : un réseau intercommunal réel peut légitimement avoir des
+    trous de desserte entre deux zones proches (aucun arrêt dans les
+    communes intermédiaires) sans que la zone la plus petite soit pour
+    autant hors du périmètre — vérifié sur ce même "Cap Cotentin",
+    Valognes/Montebourg/Saint-Sauveur-le-Vicomte etc. à 7-19 km du cœur
+    (Cherbourg-en-Cotentin) mais dans une composante séparée, alors que
+    Rennes était à 159 km. Le seuil (40 km) sépare largement les deux cas
+    observés, à ajuster si un réseau légitimement plus étendu s'avère
+    coupé à tort."""
+    if len(decoupage_agglo) <= 1:
+        return decoupage_agglo
+
+    gdf = gpd.GeoDataFrame(
+        decoupage_agglo,
+        geometry=decoupage_agglo["geojson"].apply(lambda g: shapely.geometry.shape(json.loads(g))),
+        crs="EPSG:4326",
+    ).to_crs("EPSG:2154")
+
+    union = gdf.buffer(0).union_all()
+    composantes = list(union.geoms) if hasattr(union, "geoms") else [union]
+    tailles = [gdf.geometry.intersects(c).sum() for c in composantes]
+    coeur = composantes[tailles.index(max(tailles))]
+
+    distances_km = gdf.geometry.distance(coeur) / 1000
+    dans_perimetre = distances_km <= DISTANCE_MAX_ISOLEMENT_KM
+
+    nb_exclues = (~dans_perimetre).sum()
+    if nb_exclues:
+        exclues = decoupage_agglo.loc[~dans_perimetre, "nom_commune"]
+        distances_exclues = distances_km.loc[~dans_perimetre]
+        detail = ", ".join(f"{nom} ({dist:.0f} km)" for nom, dist in zip(exclues, distances_exclues))
+        print(
+            f"⚠ {nb_exclues} commune(s) à plus de {DISTANCE_MAX_ISOLEMENT_KM} km du cœur du réseau "
+            f"exclue(s) du découpage (desserte ponctuelle probable, ex. terminus interurbain) : {detail}"
+        )
+    return decoupage_agglo.loc[dans_perimetre].reset_index(drop=True)
+
+
 def build_decoupage_agglo(
     gtfs_path, output_path, decoupage_reference_path=None, coord_round=4, on_step=None, checkpoint_path=None
 ):
@@ -308,6 +359,7 @@ def build_decoupage_agglo(
         .sort_values("nom_commune")
         .reset_index(drop=True)
     )
+    decoupage_agglo = plus_grande_composante_connexe(decoupage_agglo)
     decoupage_agglo.insert(0, "id", range(1, len(decoupage_agglo) + 1))
 
     decoupage_agglo.to_csv(output_path, index=False)

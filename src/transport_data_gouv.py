@@ -21,6 +21,7 @@ import csv
 import io
 import json
 import os
+import re
 import unicodedata
 import zipfile
 
@@ -298,3 +299,62 @@ def nb_agences_gtfs(contenu_zip):
         with archive.open("agency.txt") as f:
             lignes = list(csv.reader(io.TextIOWrapper(f, encoding="utf-8-sig")))
     return max(len(lignes) - 1, 0)
+
+
+def noms_agences_gtfs(contenu_zip):
+    """Ensemble des noms d'agence (normalisés — cf. _sans_accents) d'un GTFS
+    téléchargé (bytes). Sert de "signature" de contenu pour rapprocher un
+    GTFS local d'un jeu de données PAN (cf. associer_gtfs_a_pan) — plus
+    fiable qu'un nom de fichier, potentiellement renommé depuis son
+    téléchargement d'origine."""
+    with zipfile.ZipFile(io.BytesIO(contenu_zip)) as archive:
+        with archive.open("agency.txt") as f:
+            lignes = list(csv.DictReader(io.TextIOWrapper(f, encoding="utf-8-sig")))
+    return {_sans_accents(l["agency_name"].strip()) for l in lignes if l.get("agency_name")}
+
+
+# Corrections pour quelques noms de fichiers dont le préfixe ne suffit pas à
+# retrouver la ville sur le PAN (typo, ville composée coupée par un "_"...).
+# À compléter au besoin plutôt qu'à essayer de deviner algorithmiquement.
+CORRECTIONS_TERME_RECHERCHE = {
+    "Auxerres_gtfs-mdma.zip": "Auxerre",
+    "SaintEtienne_STAS.GTFS.zip": "Saint-Étienne",
+}
+
+
+def associer_gtfs_a_pan(nom_fichier, contenu_local, datasets, max_candidats=8):
+    """Cherche, parmi les résultats PAN pour un terme dérivé de nom_fichier
+    (cf. CORRECTIONS_TERME_RECHERCHE), le premier (dans l'ordre déjà trié
+    par pertinence par rechercher_gtfs_urbain, qui déprioritise les
+    ressources "référentiel complet") dont les agences (agency.txt)
+    recoupent celles de contenu_local — télécharge chaque candidat jusqu'à
+    trouver une correspondance ou épuiser max_candidats.
+
+    Le nom de fichier n'est qu'un point de départ pour la recherche : la
+    confirmation se fait sur le contenu réel (agences en commun), jamais sur
+    le seul nom, potentiellement renommé depuis son téléchargement d'origine
+    — utilisé aussi bien pour indexer un GTFS déjà présent (cf.
+    scripts/indexer_gtfs_locaux.py) que pour associer automatiquement un
+    nouvel upload dans l'app (cf. app.py).
+
+    Retourne (resultat, None) en cas de succès. En cas d'échec, (None,
+    motif) avec motif = "trop_agences" (candidat trouvé — agences en
+    commun — mais dépasse le garde-fou "max 4 agences", cf. nb_agences_gtfs
+    ; mieux vaut ne rien associer qu'associer à tort un jeu de données
+    régional agrégé) ou "aucune_correspondance" (aucun candidat, parmi les
+    max_candidats essayés, ne partage d'agence avec le GTFS local)."""
+    agences_locales = noms_agences_gtfs(contenu_local)
+    terme = CORRECTIONS_TERME_RECHERCHE.get(nom_fichier) or re.split(r"[_\-.]", nom_fichier, maxsplit=1)[0]
+    resultats = rechercher_gtfs_urbain(terme, datasets=datasets)
+    for resultat in resultats[:max_candidats]:
+        try:
+            contenu_candidat = telecharger_gtfs(resultat)
+        except requests.RequestException:
+            continue
+        if not (agences_locales & noms_agences_gtfs(contenu_candidat)):
+            continue
+        nb_agences = nb_agences_gtfs(contenu_candidat)
+        if nb_agences > 4:
+            return None, "trop_agences"
+        return resultat, None
+    return None, "aucune_correspondance"

@@ -1,0 +1,89 @@
+name: Verification hebdomadaire GTFS
+
+# Verifie chaque semaine si les GTFS deja associes a un dataset
+# transport.data.gouv.fr (data/gtfs_sources.json, alimente par l'app a
+# chaque nouveau chargement ou via la recherche en barre laterale) ont ete
+# mis a jour -- cf. scripts/rafraichir_gtfs.py pour le detail des etapes
+# (telechargement, ecrasement sur le dataset HF, invalidation des caches
+# derives).
+#
+# IDFM et Lyon TCL sont exclus de l'application automatique (--exclude) :
+# un retraitement complet (r5py) prend plusieurs heures sur ces deux
+# reseaux, pas adapte a un runner GitHub Actions -- une mise a jour
+# detectee pour l'un des deux est seulement journalisee/signalee par mail,
+# a faire tourner en local (scripts/rafraichir_gtfs.py --include <fichier>).
+#
+# Le recalcul des indicateurs d'accessibilite lui-meme n'a JAMAIS lieu ici
+# (couteux : r5py, Overpass) -- au prochain passage dans l'app ou le
+# notebook, avec le GTFS a jour.
+#
+# Secrets requis (Settings > Secrets and variables > Actions) :
+# - HF_TOKEN : deja utilise par sync-to-hf-space.yml.
+# - MAIL_USERNAME / MAIL_PASSWORD : compte Gmail expediteur + mot de passe
+#   d'application (https://myaccount.google.com/apppasswords, PAS le mot de
+#   passe du compte).
+# - MAIL_DESTINATAIRE : adresse de reception des notifications.
+#
+# Le mail n'est envoye que s'il y a quelque chose a signaler (mise a jour
+# appliquee, reseau a traiter manuellement, dataset introuvable, erreur) --
+# cf. .github/workflows/construire_mail_gtfs.py -- pour ne pas relancer un
+# mail chaque semaine quand tout est deja a jour.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"  # tous les lundis 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  verifier:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installer les dependances
+        run: pip install -q -r requirements.txt
+
+      - name: Verifier/rafraichir les GTFS
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python scripts/rafraichir_gtfs.py \
+            --exclude IDFM-gtfs.zip Lyon_GTFS_TCL.zip \
+            --journal data/journal_maj_gtfs.csv \
+            --json-resultat resultat.json
+
+      - name: Commiter le journal si modifie
+        run: |
+          if ! git diff --quiet -- data/journal_maj_gtfs.csv; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add data/journal_maj_gtfs.csv
+            git commit -m "Journal GTFS : mise(s) a jour du $(date -u +%Y-%m-%d)"
+            git push
+          else
+            echo "Aucune mise a jour detectee cette semaine -- journal inchange."
+          fi
+
+      - name: Preparer le mail de notification
+        id: mail
+        run: python .github/workflows/construire_mail_gtfs.py
+
+      - name: Envoyer le mail
+        if: steps.mail.outputs.a_signaler == 'true'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: ${{ steps.mail.outputs.sujet }}
+          to: ${{ secrets.MAIL_DESTINATAIRE }}
+          from: Accessibility_analysis <${{ secrets.MAIL_USERNAME }}>
+          body: ${{ steps.mail.outputs.corps }}
