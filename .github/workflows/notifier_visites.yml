@@ -1,0 +1,59 @@
+name: Notification quotidienne de visites
+
+# Envoie un mail au plus une fois par jour s'il y a eu au moins une visite
+# de l'app (Space Hugging Face) depuis le dernier passage -- cf.
+# src.hf_cache.enregistrer_visite (appelé par app.py à chaque nouvelle
+# session Streamlit, dépose un marqueur horodaté sous visites/ sur le
+# dataset HF antoinechevre/accessibility-data) et
+# scripts/verifier_visites.py (compte les marqueurs, vide visites/ après
+# lecture -- pas de fenêtre de temps à gérer, "tout ce qui est dans
+# visites/" = "nouveau depuis le dernier passage").
+#
+# Le Space HF lui-même n'a pas de notification d'usage native -- ce
+# mécanisme la reconstruit avec ce que l'app a déjà sous la main (dataset
+# HF déjà utilisé comme cache partagé) plutôt que d'ajouter un outil
+# d'analytics tiers.
+#
+# Secrets requis (Settings > Secrets and variables > Actions) : les mêmes
+# que .github/workflows/rafraichir-gtfs.yml (HF_TOKEN, MAIL_USERNAME,
+# MAIL_PASSWORD, MAIL_DESTINATAIRE).
+
+on:
+  schedule:
+    - cron: "0 7 * * *"  # tous les jours à 07:00 UTC
+  workflow_dispatch:
+
+jobs:
+  verifier:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installer les dependances
+        run: pip install -q -r requirements.txt
+
+      - name: Relever et vider les visites
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: python scripts/verifier_visites.py --json-resultat resultat.json
+
+      - name: Preparer le mail de notification
+        id: mail
+        run: python scripts/construire_mail_visites.py
+
+      - name: Envoyer le mail
+        if: steps.mail.outputs.a_signaler == 'true'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: ${{ steps.mail.outputs.sujet }}
+          to: ${{ secrets.MAIL_DESTINATAIRE }}
+          from: Accessibility_analysis <${{ secrets.MAIL_USERNAME }}>
+          body: ${{ steps.mail.outputs.corps }}

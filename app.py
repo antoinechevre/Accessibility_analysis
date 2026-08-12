@@ -14,7 +14,7 @@ import streamlit as st
 
 from src.utils import charger_gtfs, obtenir_service_ids_pour_date
 from src.info_reseau import dates_service, nom_fichier_valide, nom_reseau_str, recuperer_logo_reseau
-from src.hf_cache import envoyer_vers_hf, lister_fichiers_hf, recuperer_depuis_hf
+from src.hf_cache import enregistrer_visite, envoyer_vers_hf, lister_fichiers_hf, recuperer_depuis_hf
 from src.merge_gtfs import fusionner_gtfs
 from src.transport_data_gouv import (
     associer_gtfs_a_pan,
@@ -70,6 +70,15 @@ GTFS_NOM_RESEAU_FORCE = {
 
 # Configuration de la page
 st.set_page_config(page_title="Analyse accessibilite aux différents équipements d'agglomération piéton / transport collectif (GTFS)", page_icon="🚌", layout="wide")
+
+# Enregistre une visite (un marqueur par nouvelle session, cf.
+# src.hf_cache.enregistrer_visite) pour la notification quotidienne
+# (.github/workflows/notifier_visites.yml) — dans un thread à part pour ne
+# pas retarder le premier rendu de la page avec un appel réseau best-effort.
+if "visite_enregistree" not in st.session_state:
+    st.session_state.visite_enregistree = True
+    import threading
+    threading.Thread(target=enregistrer_visite, daemon=True).start()
 
 # Titre principal
 st.title(

@@ -6,6 +6,18 @@ src/transport_data_gouv.py) : télécharge, écrase localement et pousse sur le
 dataset HF (antoinechevre/accessibility-data) ceux dont une mise à jour est
 disponible.
 
+La fraîcheur n'est PAS jugée sur la métadonnée ressource_maj de
+transport.data.gouv.fr (s'est révélée peu fiable en pratique — un producteur
+peut republier sans bouger cette date, ou l'inverse — et laissait des GTFS
+obsolètes en place sans le signaler) : chaque GTFS candidat est
+systématiquement retéléchargé et sa date_JOB effectivement calculée (même
+routine academie-aware que src/info_reseau.dates_service, utilisée par
+l'app), comparée à la date_JOB recalculée sur le fichier actuellement dans
+data/GTFS/ — même logique que update_GTFS_notebook.ipynb (dont ce script est
+la version automatisée/sans étape de relecture manuelle). Un GTFS est
+considéré obsolète si sa nouvelle date_JOB est plus récente que l'actuelle
+(ou si le fichier local est absent/illisible).
+
 Invalide aussi (supprime du dataset HF) les caches dérivés — découpage
 communal, carroyage population, extrait OSM, matrice des temps de trajet —
 d'un réseau mis à jour : sans ça, l'app continuerait à servir un résultat
@@ -34,11 +46,14 @@ import csv
 import datetime
 import json
 import os
+import shutil
 import sys
+import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.hf_cache import envoyer_vers_hf
+from src.info_reseau import dates_service
 from src.info_reseau import nom_reseau_str as calculer_nom_reseau_str
 from src.transport_data_gouv import (
     charger_provenance,
@@ -46,10 +61,10 @@ from src.transport_data_gouv import (
     nb_agences_gtfs,
     recuperer_datasets_public_transit,
     resultat_pour_page_url,
-    statut_resultat,
     telecharger_gtfs,
 )
 from src.utils import charger_gtfs
+from src.vacances_scolaires import departement_academie_zone_pour_feed
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GTFS_DIR = os.path.join(BASE_DIR, "data", "GTFS")
@@ -74,10 +89,22 @@ CHEMINS_CACHE_HF_A_INVALIDER = [
 ]
 
 
-def _nom_reseau_pour_fichier(nom_fichier, chemin_gtfs):
+def _nom_reseau_pour_feed(nom_fichier, feed):
     if nom_fichier in NOMS_RESEAU_FORCES:
         return NOMS_RESEAU_FORCES[nom_fichier]
-    return str(calculer_nom_reseau_str(charger_gtfs(chemin_gtfs)))
+    return str(calculer_nom_reseau_str(feed))
+
+
+def _date_job_best_effort(feed):
+    """date_JOB d'un feed déjà chargé (academie déterminée au mieux, cf.
+    departement_academie_zone_pour_feed — jamais bloquant : feed hors
+    métropole, API géocodage indisponible...)."""
+    try:
+        _, academie, _ = departement_academie_zone_pour_feed(feed)
+    except Exception:
+        academie = None
+    _, _, _, date_job = dates_service(feed, academie=academie)
+    return date_job
 
 
 def _invalider_caches_derives(nom_reseau, dry_run):
@@ -149,10 +176,10 @@ def main():
     )
     parser.add_argument(
         "--force", action="store_true",
-        help="Retélécharge/écrase même les GTFS déjà à jour d'après ressource_maj (cf. statut_resultat) — "
-        "pour forcer une resynchronisation complète (ex: doute sur l'exactitude du cache local/HF) plutôt "
-        "que de se fier à la comparaison de dates. cf. scripts/rafraichir_gtfs_force.py, qui appelle "
-        "juste ce script avec ce drapeau.",
+        help="Retélécharge/écrase même les GTFS dont la date_JOB recalculée n'est pas plus récente que "
+        "l'actuelle — pour forcer une resynchronisation complète (ex: doute sur l'exactitude du cache "
+        "local/HF) plutôt que de se fier à cette comparaison. cf. scripts/rafraichir_gtfs_force.py, qui "
+        "appelle juste ce script avec ce drapeau.",
     )
     args = parser.parse_args()
 
@@ -187,76 +214,95 @@ def main():
             resultats["introuvable"].append(nom_fichier)
             continue
 
-        statut, _ = statut_resultat(resultat_actuel, provenance)
-        if statut == "a_jour" and not args.force:
-            print(f"  ✓ à jour (màj source : {info.get('ressource_maj')})")
-            resultats["a_jour"].append(nom_fichier)
+        try:
+            contenu = telecharger_gtfs(resultat_actuel)
+        except Exception as e:
+            print(f"  ✗ échec téléchargement : {type(e).__name__}: {e}")
+            resultats["erreur"].append(nom_fichier)
             continue
 
-        if statut == "a_jour":
-            print(f"  ⬇ à jour d'après ressource_maj ({info.get('ressource_maj')}) mais --force : retéléchargé quand même")
-        else:
-            print(f"  ⬇ mise à jour disponible : {info.get('ressource_maj')} -> {resultat_actuel['ressource_maj']}")
-
-        if nom_fichier in args.exclude:
-            print("    ⛔ exclu du rafraîchissement automatique — à télécharger/retraiter manuellement")
+        # Même garde-fou que la recherche en barre latérale de l'app
+        # (nb_agences_gtfs, cf. app.py) : un dataset PAN peut regrouper
+        # plusieurs ressources par opérateur PLUS un "référentiel complet"
+        # qui les fusionne toutes (ex: Aix-Marseille, 17 agences) — ici,
+        # sans validation humaine au moment du téléchargement, mieux vaut
+        # refuser et signaler que d'écraser un GTFS urbain valide par un
+        # fichier que l'app ne peut pas charger.
+        nb_agences = nb_agences_gtfs(contenu)
+        if nb_agences > 4:
+            print(f"  ⛔ {nb_agences} agences dans la ressource trouvée — rejeté, à vérifier manuellement via la recherche de l'app")
             resultats["a_traiter_manuellement"].append(nom_fichier)
             lignes_journal.append({
                 "date": aujourdhui, "nom_fichier": nom_fichier, "reseau": "",
-                "statut": "a_traiter_manuellement",
-                "ancienne_maj": info.get("ressource_maj"), "nouvelle_maj": resultat_actuel["ressource_maj"],
+                "statut": f"rejete_{nb_agences}_agences",
+                "ancienne_maj": "", "nouvelle_maj": "",
             })
             continue
 
-        if args.dry_run:
-            print("    [dry-run] téléchargement/écrasement non effectué")
-            resultats["mis_a_jour"].append(nom_fichier)
-            continue
+        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
+            tmp.write(contenu)
+            chemin_temp = tmp.name
 
         try:
-            contenu = telecharger_gtfs(resultat_actuel)
-
-            # Même garde-fou que la recherche en barre latérale de l'app
-            # (nb_agences_gtfs, cf. app.py) : un dataset PAN peut regrouper
-            # plusieurs ressources par opérateur PLUS un "référentiel
-            # complet" qui les fusionne toutes (ex: Aix-Marseille, 17
-            # agences) — ici, sans validation humaine au moment du
-            # téléchargement, mieux vaut refuser et signaler que d'écraser
-            # un GTFS urbain valide par un fichier que l'app ne peut pas
-            # charger.
-            nb_agences = nb_agences_gtfs(contenu)
-            if nb_agences > 4:
-                print(f"    ⛔ {nb_agences} agences dans la ressource trouvée — rejeté, à vérifier manuellement via la recherche de l'app")
-                resultats["a_traiter_manuellement"].append(nom_fichier)
-                lignes_journal.append({
-                    "date": aujourdhui, "nom_fichier": nom_fichier, "reseau": "",
-                    "statut": f"rejete_{nb_agences}_agences",
-                    "ancienne_maj": info.get("ressource_maj"), "nouvelle_maj": resultat_actuel["ressource_maj"],
-                })
+            try:
+                feed_nouveau = charger_gtfs(chemin_temp)
+                date_job_nouveau = _date_job_best_effort(feed_nouveau)
+            except Exception as e:
+                print(f"  ✗ échec lecture/analyse du GTFS téléchargé : {type(e).__name__}: {e}")
+                resultats["erreur"].append(nom_fichier)
                 continue
 
             chemin_local = os.path.join(GTFS_DIR, nom_fichier)
+            date_job_actuel = None
+            if os.path.exists(chemin_local) and not args.force:
+                try:
+                    date_job_actuel = _date_job_best_effort(charger_gtfs(chemin_local))
+                except Exception as e:
+                    print(f"  ⚠ version locale illisible ({type(e).__name__}: {e}) — traitée comme obsolète")
+
+            obsolete = args.force or date_job_actuel is None or date_job_nouveau > date_job_actuel
+            if not obsolete:
+                print(f"  ✓ à jour (date JOB {date_job_actuel})")
+                resultats["a_jour"].append(nom_fichier)
+                continue
+
+            if date_job_actuel:
+                print(f"  ⬇ obsolète : date JOB {date_job_actuel} -> {date_job_nouveau}")
+            else:
+                print(f"  ⬇ jamais vu localement : date JOB {date_job_nouveau}")
+
+            if nom_fichier in args.exclude:
+                print("    ⛔ exclu du rafraîchissement automatique — à télécharger/retraiter manuellement")
+                resultats["a_traiter_manuellement"].append(nom_fichier)
+                lignes_journal.append({
+                    "date": aujourdhui, "nom_fichier": nom_fichier, "reseau": "",
+                    "statut": "a_traiter_manuellement",
+                    "ancienne_maj": date_job_actuel or "", "nouvelle_maj": date_job_nouveau,
+                })
+                continue
+
+            if args.dry_run:
+                print("    [dry-run] écrasement non effectué")
+                resultats["mis_a_jour"].append(nom_fichier)
+                continue
+
             os.makedirs(GTFS_DIR, exist_ok=True)
-            with open(chemin_local, "wb") as f:
-                f.write(contenu)
+            shutil.copy(chemin_temp, chemin_local)
             envoyer_vers_hf(chemin_local, f"GTFS/{nom_fichier}")
             enregistrer_provenance(nom_fichier, resultat_actuel)
             print(f"    ✓ {nom_fichier} écrasé localement + poussé sur HF (GTFS/{nom_fichier})")
 
-            nom_reseau = _nom_reseau_pour_fichier(nom_fichier, chemin_local)
+            nom_reseau = _nom_reseau_pour_feed(nom_fichier, feed_nouveau)
             print(f"    Invalidation des caches dérivés pour '{nom_reseau}'...")
             _invalider_caches_derives(nom_reseau, args.dry_run)
             lignes_journal.append({
                 "date": aujourdhui, "nom_fichier": nom_fichier, "reseau": nom_reseau,
                 "statut": "mis_a_jour",
-                "ancienne_maj": info.get("ressource_maj"), "nouvelle_maj": resultat_actuel["ressource_maj"],
+                "ancienne_maj": date_job_actuel or "", "nouvelle_maj": date_job_nouveau,
             })
-        except Exception as e:
-            print(f"    ✗ échec : {type(e).__name__}: {e}")
-            resultats["erreur"].append(nom_fichier)
-            continue
-
-        resultats["mis_a_jour"].append(nom_fichier)
+            resultats["mis_a_jour"].append(nom_fichier)
+        finally:
+            os.unlink(chemin_temp)
 
     print("\n" + "=" * 80)
     print("Résumé :")

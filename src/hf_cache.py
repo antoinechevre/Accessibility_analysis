@@ -149,6 +149,38 @@ def fusionner_et_envoyer_csv(nouvelles_lignes, nom_fichier_hf, chemin_local, col
     return tableau_final
 
 
+def enregistrer_visite():
+    """Enregistre une visite de l'app : un fichier marqueur vide, horodaté,
+    sous visites/ sur le dataset HF — sert de base à la notification
+    quotidienne (cf. scripts/verifier_visites.py, .github/workflows/
+    notifier_visites.yml). Un fichier par visite, jamais un CSV partagé
+    relu-modifié-réécrit, pour ne perdre aucune visite en cas de sessions
+    concurrentes (pas de fusion à faire, juste lister/vider visites/ au
+    prochain passage du job quotidien).
+
+    Best-effort, comme envoyer_vers_hf : ne doit jamais bloquer ni ralentir
+    le chargement de l'app (appelée dans un thread à part par l'appelant)."""
+    import datetime
+
+    try:
+        from huggingface_hub import HfApi
+    except ImportError:
+        return False
+
+    horodatage = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    try:
+        HfApi().upload_file(
+            path_or_fileobj=b"",
+            path_in_repo=f"visites/{horodatage}.marker",
+            repo_id=HF_DATA_REPO_ID,
+            repo_type="dataset",
+            token=os.environ.get("HF_TOKEN"),
+        )
+    except Exception:
+        return False
+    return True
+
+
 def lister_fichiers_hf(sous_dossier):
     """Liste les fichiers du dataset HF sous sous_dossier/ (ex: "GTFS"),
     noms de fichiers (basename, sans le préfixe de dossier) triés.
