@@ -573,18 +573,32 @@ def charger_donnees_gtfs():
             if nb_agences > 4 and not exception_valide:
                 raise TropAgencesError(nb_agences)
 
-            # Académie/zone de vacances scolaires du réseau (un seul appel de
-            # reverse géocodage sur le barycentre des arrêts, cf.
-            # src/vacances_scolaires.py) : sert à écarter les vacances
-            # scolaires du choix de date_JOB ci-dessous, et est enregistrée
-            # dans l'index gtfs_sources.json plus bas. Best-effort : ne doit
-            # jamais bloquer le chargement (feed hors métropole déjà rejeté
-            # plus loin par HorsMetropoleError le cas échéant, API
-            # géocodage indisponible...).
-            try:
-                code_departement, academie, zone_vacances = departement_academie_zone_pour_feed(feed)
-            except Exception:
-                code_departement, academie, zone_vacances = None, None, None
+            # Académie/zone de vacances scolaires du réseau : sert à écarter
+            # les vacances scolaires du choix de date_JOB ci-dessous. Un GTFS
+            # déjà indexé (upload ou catalogue précédent) réutilise
+            # l'académie déjà enregistrée dans gtfs_sources.json plutôt que
+            # de re-géocoder à chaque chargement — et surtout, si une
+            # tentative précédente avait échoué (académie absente de
+            # l'index), retente ici (reverse géocodage sur le barycentre des
+            # arrêts, cf. src/vacances_scolaires.py, avec plusieurs
+            # tentatives) et complète l'index plus bas dès que ça réussit :
+            # pas de fusion (nom_gtfs y est une concaténation, jamais une clé
+            # de l'index). Best-effort : ne doit jamais bloquer le
+            # chargement (feed hors métropole déjà rejeté plus loin par
+            # HorsMetropoleError le cas échéant, API géocodage
+            # indisponible...).
+            provenance_connue = {} if fusion else charger_provenance().get(nom_gtfs, {})
+            academie_fraichement_resolue = False
+            if provenance_connue.get("academie"):
+                code_departement = provenance_connue.get("code_departement")
+                academie = provenance_connue["academie"]
+                zone_vacances = provenance_connue.get("zone")
+            else:
+                try:
+                    code_departement, academie, zone_vacances = departement_academie_zone_pour_feed(feed)
+                except Exception:
+                    code_departement, academie, zone_vacances = None, None, None
+                academie_fraichement_resolue = academie is not None
 
             # Plage de service fiable et jour ouvré de base (dernier mardi/jeudi
             # hors vacances scolaires de l'académie si connue, cf.
@@ -654,7 +668,10 @@ def charger_donnees_gtfs():
         # Académie/zone dans l'index gtfs_sources.json (cf. plus haut) : comme
         # pour l'envoi HF ci-dessus, pas de sens pour une fusion (le nom
         # composite "A+B" ne correspond à aucun GTFS réutilisable tel quel).
-        if not fusion and academie is not None:
+        # Seulement si fraîchement résolue ici (pas déjà lue depuis l'index) :
+        # sinon, chaque chargement d'un réseau déjà connu réécrirait pour
+        # rien la même valeur sur le dataset HF.
+        if not fusion and academie_fraichement_resolue:
             try:
                 enregistrer_zone(nom_gtfs, code_departement, academie, zone_vacances)
             except Exception:

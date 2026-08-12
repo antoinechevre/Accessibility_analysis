@@ -86,6 +86,8 @@ Clermont-Ferrand,Zone A,Vacances de la Toussaint,2025-10-17,2025-11-02,2025-2026
 Clermont-Ferrand,Zone A,Vacances de Printemps,2026-04-03,2026-04-19,2025-2026
 Clermont-Ferrand,Zone A,Vacances d'Été,2026-07-03,2026-08-31,2025-2026
 Corse,Corse,Pont de l'Ascension,2026-05-14,2026-05-14,2025-2026
+Corse,Corse,Vacances de la Toussaint,2026-10-17,2026-11-01,2026-2027
+Corse,Corse,Vacances de la Toussaint,2027-10-23,2027-11-07,2027-2028
 Créteil,Zone C,Vacances de Noël,2025-12-19,2026-01-04,2025-2026
 Créteil,Zone C,Pont de l'Ascension,2026-05-13,2026-05-17,2025-2026
 Créteil,Zone C,Vacances d'Été,2026-07-03,2026-08-30,2025-2026
@@ -152,97 +154,129 @@ Aix-Marseille,Zone B,Vacances d'Hiver,2027-02-19,2027-03-07,2026-2027
 Aix-Marseille,Zone B,Vacances de Printemps,2027-04-16,2027-05-02,2026-2027
 Aix-Marseille,Zone B,Pont de l'Ascension,2027-05-06,2027-05-06,2026-2027
 Aix-Marseille,Zone B,Début des Vacances d'Été,2027-07-02,2027-07-02,2026-2027
+Aix-Marseille,Zone B,Vacances de la Toussaint,2027-10-23,2027-11-07,2027-2028
 Amiens,Zone B,Vacances de la Toussaint,2026-10-16,2026-11-01,2026-2027
 Amiens,Zone B,Vacances de Noël,2026-12-18,2027-01-03,2026-2027
 Amiens,Zone B,Vacances de Printemps,2027-04-16,2027-05-02,2026-2027
 Amiens,Zone B,Début des Vacances d'Été,2027-07-02,2027-07-02,2026-2027
+Amiens,Zone B,Vacances de la Toussaint,2027-10-23,2027-11-07,2027-2028
+Besançon,Zone A,Vacances de la Toussaint,2026-10-17,2026-11-01,2026-2027
 Besançon,Zone A,Vacances de Noël,2026-12-18,2027-01-03,2026-2027
 Besançon,Zone A,Vacances d'Hiver,2027-02-12,2027-02-28,2026-2027
 Besançon,Zone A,Début des Vacances d'Été,2027-07-02,2027-07-02,2026-2027
+Besançon,Zone A,Vacances de la Toussaint,2027-10-23,2027-11-07,2027-2028
+Bordeaux,Zone A,Vacances de la Toussaint,2026-10-17,2026-11-01,2026-2027
 Bordeaux,Zone A,Vacances de Noël,2026-12-18,2027-01-03,2026-2027
 Bordeaux,Zone A,Vacances d'Hiver,2027-02-12,2027-02-28,2026-2027
 Bordeaux,Zone A,Vacances de Printemps,2027-04-09,2027-04-25,2026-2027
 Bordeaux,Zone A,Pont de l'Ascension,2027-05-06,2027-05-06,2026-2027
 Bordeaux,Zone A,Début des Vacances d'Été,2027-07-02,2027-07-02,2026-2027
+Bordeaux,Zone A,Vacances de la Toussaint,2027-10-23,2027-11-07,2027-2028
+Clermont-Ferrand,Zone A,Vacances de la Toussaint,2026-10-17,2026-11-01,2026-2027
 Clermont-Ferrand,Zone A,Vacances de Noël,2026-12-18,2027-01-03,2026-2027
 Clermont-Ferrand,Zone A,Vacances d'Hiver,2027-02-12,2027-02-28,2026-2027
 Clermont-Ferrand,Zone A,Vacances de Printemps,2027-04-09,2027-04-25,2026-2027
 Clermont-Ferrand,Zone A,Pont de l'Ascension,2027-05-06,2027-05-06,2026-2027
 Clermont-Ferrand,Zone A,Début des Vacances d'Été,2027-07-02,2027-07-02,2026-2027
+Clermont-Ferrand,Zone A,Vacances de la Toussaint,2027-10-23,2027-11-07,2027-2028
 Créteil,Zone C,Vacances de la Toussaint,2026-10-16,2026-11-01,2026-2027
 Créteil,Zone C,Vacances de Noël,2026-12-18,2027-01-03,2026-2027
 Créteil,Zone C,Vacances d'Hiver,2027-02-05,2027-02-21,2026-2027
 Créteil,Zone C,Vacances de Printemps,2027-04-02,2027-04-18,2026-2027
 Créteil,Zone C,Pont de l'Ascension,2027-05-06,2027-05-06,2026-2027
 Créteil,Zone C,Début des Vacances d'Été,2027-07-02,2027-07-02,2026-2027
+Créteil,Zone C,Vacances de la Toussaint,2027-10-23,2027-11-07,2027-2028
 Dijon,Zone A,Vacances de la Toussaint,2026-10-16,2026-11-01,2026-2027
 Dijon,Zone A,Vacances d'Hiver,2027-02-12,2027-02-28,2026-2027
 Dijon,Zone A,Vacances de Printemps,2027-04-09,2027-04-25,2026-2027
 Dijon,Zone A,Début des Vacances d'Été,2027-07-02,2027-07-02,2026-2027
+Dijon,Zone A,Vacances de la Toussaint,2027-10-23,2027-11-07,2027-2028
 Grenoble,Zone A,Vacances de la Toussaint,2026-10-16,2026-11-01,2026-2027
 Grenoble,Zone A,Vacances de Printemps,2027-04-09,2027-04-25,2026-2027
 Grenoble,Zone A,Pont de l'Ascension,2027-05-06,2027-05-06,2026-2027
 Grenoble,Zone A,Début des Vacances d'Été,2027-07-02,2027-07-02,2026-2027
+Grenoble,Zone A,Vacances de la Toussaint,2027-10-23,2027-11-07,2027-2028
 Lille,Zone B,Vacances de la Toussaint,2026-10-16,2026-11-01,2026-2027
 Lille,Zone B,Vacances de Noël,2026-12-18,2027-01-03,2026-2027
 Lille,Zone B,Vacances d'Hiver,2027-02-19,2027-03-07,2026-2027
 Lille,Zone B,Vacances de Printemps,2027-04-16,2027-05-02,2026-2027
 Lille,Zone B,Pont de l'Ascension,2027-05-06,2027-05-06,2026-2027
+Lille,Zone B,Vacances de la Toussaint,2027-10-23,2027-11-07,2027-2028
 Limoges,Zone A,Vacances de la Toussaint,2026-10-16,2026-11-01,2026-2027
 Limoges,Zone A,Vacances d'Hiver,2027-02-12,2027-02-28,2026-2027
 Limoges,Zone A,Vacances de Printemps,2027-04-09,2027-04-25,2026-2027
 Limoges,Zone A,Pont de l'Ascension,2027-05-06,2027-05-06,2026-2027
+Limoges,Zone A,Vacances de la Toussaint,2027-10-23,2027-11-07,2027-2028
+Lyon,Zone A,Vacances de la Toussaint,2026-10-17,2026-11-01,2026-2027
 Lyon,Zone A,Vacances de Noël,2026-12-18,2027-01-03,2026-2027
 Lyon,Zone A,Vacances d'Hiver,2027-02-12,2027-02-28,2026-2027
 Lyon,Zone A,Pont de l'Ascension,2027-05-06,2027-05-06,2026-2027
 Lyon,Zone A,Début des Vacances d'Été,2027-07-02,2027-07-02,2026-2027
+Lyon,Zone A,Vacances de la Toussaint,2027-10-23,2027-11-07,2027-2028
 Montpellier,Zone C,Vacances de la Toussaint,2026-10-16,2026-11-01,2026-2027
 Montpellier,Zone C,Vacances de Noël,2026-12-18,2027-01-03,2026-2027
 Montpellier,Zone C,Pont de l'Ascension,2027-05-06,2027-05-06,2026-2027
 Montpellier,Zone C,Début des Vacances d'Été,2027-07-02,2027-07-02,2026-2027
+Montpellier,Zone C,Vacances de la Toussaint,2027-10-23,2027-11-07,2027-2028
 Nancy-Metz,Zone B,Vacances de la Toussaint,2026-10-16,2026-11-01,2026-2027
 Nancy-Metz,Zone B,Vacances d'Hiver,2027-02-19,2027-03-07,2026-2027
 Nancy-Metz,Zone B,Vacances de Printemps,2027-04-16,2027-05-02,2026-2027
 Nancy-Metz,Zone B,Pont de l'Ascension,2027-05-06,2027-05-06,2026-2027
+Nancy-Metz,Zone B,Vacances de la Toussaint,2027-10-23,2027-11-07,2027-2028
+Nantes,Zone B,Vacances de la Toussaint,2026-10-17,2026-11-01,2026-2027
 Nantes,Zone B,Vacances de Printemps,2027-04-16,2027-05-02,2026-2027
+Nantes,Zone B,Vacances de la Toussaint,2027-10-23,2027-11-07,2027-2028
 Nice,Zone B,Vacances de la Toussaint,2026-10-16,2026-11-01,2026-2027
 Nice,Zone B,Vacances d'Hiver,2027-02-19,2027-03-07,2026-2027
 Nice,Zone B,Vacances de Printemps,2027-04-16,2027-05-02,2026-2027
+Nice,Zone B,Vacances de la Toussaint,2027-10-23,2027-11-07,2027-2028
 Normandie,Zone B,Vacances de la Toussaint,2026-10-16,2026-11-01,2026-2027
 Normandie,Zone B,Vacances de Noël,2026-12-18,2027-01-03,2026-2027
 Normandie,Zone B,Vacances d'Hiver,2027-02-19,2027-03-07,2026-2027
 Normandie,Zone B,Vacances de Printemps,2027-04-16,2027-05-02,2026-2027
 Normandie,Zone B,Pont de l'Ascension,2027-05-06,2027-05-06,2026-2027
 Normandie,Zone B,Début des Vacances d'Été,2027-07-02,2027-07-02,2026-2027
+Normandie,Zone B,Vacances de la Toussaint,2027-10-23,2027-11-07,2027-2028
 Orléans-Tours,Zone B,Vacances de la Toussaint,2026-10-16,2026-11-01,2026-2027
 Orléans-Tours,Zone B,Vacances de Noël,2026-12-18,2027-01-03,2026-2027
 Orléans-Tours,Zone B,Vacances d'Hiver,2027-02-19,2027-03-07,2026-2027
 Orléans-Tours,Zone B,Pont de l'Ascension,2027-05-06,2027-05-06,2026-2027
 Orléans-Tours,Zone B,Début des Vacances d'Été,2027-07-02,2027-07-02,2026-2027
+Orléans-Tours,Zone B,Vacances de la Toussaint,2027-10-23,2027-11-07,2027-2028
 Paris,Zone C,Vacances de la Toussaint,2026-10-16,2026-11-01,2026-2027
 Paris,Zone C,Vacances de Noël,2026-12-18,2027-01-03,2026-2027
 Paris,Zone C,Vacances d'Hiver,2027-02-05,2027-02-21,2026-2027
 Paris,Zone C,Pont de l'Ascension,2027-05-06,2027-05-06,2026-2027
 Paris,Zone C,Début des Vacances d'Été,2027-07-02,2027-07-02,2026-2027
+Paris,Zone C,Vacances de la Toussaint,2027-10-23,2027-11-07,2027-2028
 Poitiers,Zone A,Vacances de la Toussaint,2026-10-16,2026-11-01,2026-2027
 Poitiers,Zone A,Vacances de Noël,2026-12-18,2027-01-03,2026-2027
 Poitiers,Zone A,Vacances d'Hiver,2027-02-12,2027-02-28,2026-2027
 Poitiers,Zone A,Pont de l'Ascension,2027-05-06,2027-05-06,2026-2027
 Poitiers,Zone A,Début des Vacances d'Été,2027-07-02,2027-07-02,2026-2027
+Poitiers,Zone A,Vacances de la Toussaint,2027-10-23,2027-11-07,2027-2028
 Reims,Zone B,Vacances de la Toussaint,2026-10-16,2026-11-01,2026-2027
 Reims,Zone B,Vacances de Noël,2026-12-18,2027-01-03,2026-2027
 Reims,Zone B,Vacances d'Hiver,2027-02-19,2027-03-07,2026-2027
 Reims,Zone B,Vacances de Printemps,2027-04-16,2027-05-02,2026-2027
 Reims,Zone B,Pont de l'Ascension,2027-05-06,2027-05-06,2026-2027
 Reims,Zone B,Début des Vacances d'Été,2027-07-02,2027-07-02,2026-2027
+Reims,Zone B,Vacances de la Toussaint,2027-10-23,2027-11-07,2027-2028
+Rennes,Zone B,Vacances de la Toussaint,2026-10-17,2026-11-01,2026-2027
 Rennes,Zone B,Vacances d'Hiver,2027-02-19,2027-03-07,2026-2027
 Rennes,Zone B,Vacances de Printemps,2027-04-16,2027-05-02,2026-2027
 Rennes,Zone B,Pont de l'Ascension,2027-05-06,2027-05-06,2026-2027
+Rennes,Zone B,Vacances de la Toussaint,2027-10-23,2027-11-07,2027-2028
+Strasbourg,Zone B,Vacances de la Toussaint,2026-10-17,2026-11-01,2026-2027
 Strasbourg,Zone B,Vacances de Noël,2026-12-18,2027-01-03,2026-2027
 Strasbourg,Zone B,Vacances de Printemps,2027-04-16,2027-05-02,2026-2027
 Strasbourg,Zone B,Pont de l'Ascension,2027-05-06,2027-05-06,2026-2027
+Strasbourg,Zone B,Vacances de la Toussaint,2027-10-23,2027-11-07,2027-2028
+Toulouse,Zone C,Vacances de la Toussaint,2026-10-17,2026-11-01,2026-2027
 Toulouse,Zone C,Vacances de Noël,2026-12-18,2027-01-03,2026-2027
 Toulouse,Zone C,Vacances d'Hiver,2027-02-05,2027-02-21,2026-2027
 Toulouse,Zone C,Début des Vacances d'Été,2027-07-02,2027-07-02,2026-2027
+Toulouse,Zone C,Vacances de la Toussaint,2027-10-23,2027-11-07,2027-2028
 Versailles,Zone C,Vacances de la Toussaint,2026-10-16,2026-11-01,2026-2027
 Versailles,Zone C,Vacances d'Hiver,2027-02-05,2027-02-21,2026-2027
+Versailles,Zone C,Vacances de la Toussaint,2027-10-23,2027-11-07,2027-2028

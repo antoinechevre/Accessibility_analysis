@@ -16,6 +16,7 @@ Données statiques dans data/ :
 """
 
 import os
+import time
 
 import pandas as pd
 import requests
@@ -51,29 +52,40 @@ def zone_pour_academie(academie):
     return lignes["zone"].iloc[0] if not lignes.empty else None
 
 
-def departement_academie_zone_pour_feed(feed, timeout=10):
+def departement_academie_zone_pour_feed(feed, timeout=10, tentatives=3):
     """Détermine (code_departement, academie, zone) d'un réseau GTFS à
-    partir du barycentre de ses arrêts — un seul appel HTTP (reverse
-    géocodage) à geo.api.gouv.fr, rapide, contrairement au géocodage complet
-    arrêt par arrêt de build_data_agglo.codes_communes_via_api (fait plus
-    tard dans le pipeline, seulement si l'analyse d'accessibilité est
-    lancée). Suffisant ici : la vraisemblance qu'un réseau urbain chevauche
-    deux académies est négligeable.
+    partir du barycentre de ses arrêts — un appel HTTP (reverse géocodage) à
+    geo.api.gouv.fr, rapide, contrairement au géocodage complet arrêt par
+    arrêt de build_data_agglo.codes_communes_via_api (fait plus tard dans le
+    pipeline, seulement si l'analyse d'accessibilité est lancée). Suffisant
+    ici : la vraisemblance qu'un réseau urbain chevauche deux académies est
+    négligeable.
 
-    (None, None, None) si hors métropole ou API injoignable (best-effort,
-    jamais bloquant pour le calcul de date_JOB — cf. dates_service)."""
+    Répète l'appel jusqu'à `tentatives` fois (courte pause entre chaque) :
+    un aléa réseau ponctuel (timeout côté Space...) sur ce seul appel ne
+    doit pas désactiver silencieusement l'évitement des vacances scolaires
+    pour tout le calcul de date_JOB qui suit (cf. dates_service).
+
+    (None, None, None) si hors métropole ou API injoignable après toutes
+    les tentatives (reste best-effort, jamais bloquant)."""
     stops = feed.stops
     lat = stops["stop_lat"].astype(float).mean()
     lon = stops["stop_lon"].astype(float).mean()
-    try:
-        reponse = requests.get(
-            "https://geo.api.gouv.fr/communes",
-            params={"lat": lat, "lon": lon, "fields": "departement"},
-            timeout=timeout,
-        )
-        reponse.raise_for_status()
-        resultats = reponse.json()
-    except requests.RequestException:
+    resultats = None
+    for essai in range(tentatives):
+        try:
+            reponse = requests.get(
+                "https://geo.api.gouv.fr/communes",
+                params={"lat": lat, "lon": lon, "fields": "departement"},
+                timeout=timeout,
+            )
+            reponse.raise_for_status()
+            resultats = reponse.json()
+            break
+        except requests.RequestException:
+            if essai < tentatives - 1:
+                time.sleep(1)
+    else:
         return None, None, None
 
     if not resultats or not resultats[0].get("departement"):
