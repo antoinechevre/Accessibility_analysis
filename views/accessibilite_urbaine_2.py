@@ -151,8 +151,8 @@ def _carte_accessibilite_45min_domaine(population_grid_agglo, land_use_data, ttm
 def _generer_cartes_domaines(population_grid_agglo, land_use_data, BPE_agglo, ttm, fond_carte, carreaux_filtre_ids, population_grid_agglo_filtre, id_session_carte):
     """Construit les cartes (45 min + pondération) des 7 domaines BPE, pour
     l'état courant des paramètres (fond de carte, filtre déciles,
-    pondération) — appelée uniquement au clic sur le bouton de génération/
-    actualisation (cf. accessibilite_urbaine_page_2), jamais à chaque rerun
+    pondération) — appelée uniquement au clic sur "✅ Valider et recalculer
+    les cartes" (cf. accessibilite_urbaine_page_2), jamais à chaque rerun
     Streamlit : ces cartes sont coûteuses (cumulative_cutoff + rendu Leaflet
     x 2 x 7) et st.tabs garde tous les onglets dans le DOM en même temps, la
     reconstruction inconditionnelle à chaque interaction (changement de fond
@@ -233,12 +233,11 @@ def accessibilite_urbaine_page_2():
         # pondération par défaut tant que rien n'est validé pour celui-ci.
         st.session_state.ponderation_custom_2 = None
         st.session_state.ponderation_custom_valeurs_2 = None
-        # Cartes générées pour l'ancien réseau obsolètes — signature_cartes_generees_2
-        # à None fait regénérer automatiquement au prochain rerun (cf. plus bas),
-        # une seule fois, sans clic requis pour ce premier affichage.
+        # Cartes générées pour l'ancien réseau obsolètes — repart sur le
+        # message "cliquez sur Valider et recalculer les cartes" ci-dessous
+        # tant que l'utilisateur n'a pas cliqué ce bouton pour ce réseau (cf.
+        # accessibilite_urbaine_page_2 : rien ne se calcule automatiquement).
         st.session_state.cartes_generees_2 = None
-        st.session_state.signature_cartes_generees_2 = None
-        st.session_state.ponderation_version_2 = st.session_state.get("ponderation_version_2", 0) + 1
 
     population_grid_agglo, land_use_data_defaut, BPE_agglo_defaut, ttm = st.session_state.pipeline_data_2
 
@@ -297,40 +296,19 @@ def accessibilite_urbaine_page_2():
     if "id_session_carte_2" not in st.session_state:
         st.session_state.id_session_carte_2 = uuid.uuid4().hex
 
-    # Génération des cartes gatée par bouton : les paramètres ci-dessus
-    # (fond de carte, filtre déciles) et la pondération (section plus bas)
-    # ne relancent PAS automatiquement le calcul des 7x2 cartes à chaque
-    # interaction Streamlit (rerun) — seul un changement de réseau (premier
-    # chargement) déclenche une génération automatique, cf.
-    # signature_cartes_generees_2 réinitialisée à None dans ce cas ci-dessus.
-    signature_actuelle = (
-        nom_reseau_str,
-        fond_carte,
-        tuple(sorted(deciles_selectionnes)),
-        st.session_state.get("ponderation_version_2", 0),
-    )
-    premiere_generation = st.session_state.get("signature_cartes_generees_2") is None
-    parametres_modifies = not premiere_generation and st.session_state.signature_cartes_generees_2 != signature_actuelle
-
-    if parametres_modifies:
-        st.info(
-            "Paramètres modifiés depuis la dernière génération (fond de carte, filtre par "
-            "décile ou pondération) — cliquez sur le bouton ci-dessous pour actualiser les "
-            "cartes avec ces nouvelles valeurs."
-        )
-
-    if st.button(
-        "🔄 Générer les cartes" if premiere_generation else "🔄 Actualiser les cartes",
-        type="primary" if (premiere_generation or parametres_modifies) else "secondary",
-    ) or premiere_generation:
-        with st.spinner("Génération des cartes (accessibilité 45 min + équipements pondérés) pour les 7 domaines..."):
-            st.session_state.cartes_generees_2 = _generer_cartes_domaines(
-                population_grid_agglo, land_use_data, BPE_agglo, ttm, fond_carte,
-                carreaux_filtre_ids, population_grid_agglo_filtre, st.session_state.id_session_carte_2,
-            )
-        st.session_state.signature_cartes_generees_2 = signature_actuelle
-
+    # Aucun calcul automatique ici : les cartes ne sont (re)générées que par
+    # le bouton "✅ Valider et recalculer les cartes" (section "Tester
+    # d'autres pondérations" plus bas), seul déclencheur — y compris pour un
+    # changement de fond de carte ou de filtre décile ci-dessus, qui ne
+    # prend donc effet sur les cartes qu'au prochain clic sur ce bouton.
+    cartes_deja_generees = st.session_state.get("cartes_generees_2") is not None
     cartes_par_domaine = st.session_state.get("cartes_generees_2") or {}
+    if not cartes_deja_generees:
+        st.info(
+            "Cliquez sur \"✅ Valider et recalculer les cartes\" (section \"Tester d'autres "
+            "pondérations\" en bas de page) pour générer les cartes ci-dessous — rien n'est "
+            "calculé automatiquement."
+        )
 
     onglets = st.tabs([f"{d} - {nom}" for d, nom in DOMAINES_BPE.items()])
     for onglet, domaine in zip(onglets, DOMAINES_BPE):
@@ -338,17 +316,28 @@ def accessibilite_urbaine_page_2():
             carte_45, carte_ponderation = cartes_par_domaine.get(domaine, (None, None))
             colonne_gauche, colonne_droite = st.columns(2)
 
+            # "Aucun carreau dans les déciles sélectionnés." seulement si des
+            # cartes ont bien été générées (carte_45/carte_ponderation à None
+            # dans ce cas précis à cause du filtre décile) — pas quand rien
+            # n'a encore été généré du tout pour ce réseau (message déjà
+            # affiché ci-dessus dans ce cas, pas la peine de le répéter par
+            # domaine avec un message qui laisserait croire à un filtre trop
+            # restrictif).
+            message_vide = "Aucun carreau dans les déciles sélectionnés." if cartes_deja_generees else None
+
             with colonne_gauche:
                 st.markdown("#### Accessibilité à 45 min")
                 if carte_45 is None:
-                    st.info("Aucun carreau dans les déciles sélectionnés.")
+                    if message_vide:
+                        st.info(message_vide)
                 else:
                     st.components.v1.html(carte_45.get_root().render(), height=520, scrolling=False)
 
             with colonne_droite:
                 st.markdown("#### Équipements pondérés")
                 if carte_ponderation is None:
-                    st.info("Aucun carreau dans les déciles sélectionnés.")
+                    if message_vide:
+                        st.info(message_vide)
                 else:
                     st.components.v1.html(carte_ponderation.get_root().render(), height=520, scrolling=False)
 
@@ -428,13 +417,18 @@ def accessibilite_urbaine_page_2():
             # avec la pondération réellement active plutôt que de toujours
             # repartir des valeurs par défaut de src/ponderation_bpe.py.
             st.session_state.ponderation_custom_valeurs_2 = (gammes_poids_par_domaine_custom, seuils_domaine_custom)
-            # signature_cartes_generees_2 à None : le bouton "Valider et
-            # recalculer les cartes" regénère les cartes tout de suite au
-            # prochain rerun (st.rerun() ci-dessous), sans exiger un second
-            # clic sur "Actualiser les cartes" — cohérent avec son libellé.
-            st.session_state.cartes_generees_2 = None
-            st.session_state.signature_cartes_generees_2 = None
-            st.session_state.ponderation_version_2 = st.session_state.get("ponderation_version_2", 0) + 1
+
+            # Seul point du fichier où les cartes sont (re)générées : avec
+            # BPE_agglo_custom/land_use_data_custom fraîchement calculés
+            # ci-dessus (pas encore dans st.session_state.ponderation_custom_2
+            # au moment où accessibilite_urbaine_page_2 a lu BPE_agglo/
+            # land_use_data plus haut) et le fond de carte/filtre décile
+            # actuellement affichés.
+            with st.spinner("Génération des cartes (accessibilité 45 min + équipements pondérés) pour les 7 domaines..."):
+                st.session_state.cartes_generees_2 = _generer_cartes_domaines(
+                    population_grid_agglo, land_use_data_custom, BPE_agglo_custom, ttm, fond_carte,
+                    carreaux_filtre_ids, population_grid_agglo_filtre, st.session_state.id_session_carte_2,
+                )
 
             os.makedirs(DOSSIER_PONDERATION_CUSTOM, exist_ok=True)
             chemin_json = os.path.join(DOSSIER_PONDERATION_CUSTOM, f"ponderation_custom_{nom_reseau_str}.json")
@@ -454,10 +448,11 @@ def accessibilite_urbaine_page_2():
         if st.button("↩️ Réinitialiser aux valeurs par défaut", use_container_width=True):
             st.session_state.ponderation_custom_2 = None
             st.session_state.ponderation_custom_valeurs_2 = None
-            # Même logique que la validation ci-dessus : regénère les cartes
-            # tout de suite avec la pondération par défaut, sans clic
-            # supplémentaire sur "Actualiser les cartes".
-            st.session_state.cartes_generees_2 = None
-            st.session_state.signature_cartes_generees_2 = None
-            st.session_state.ponderation_version_2 = st.session_state.get("ponderation_version_2", 0) + 1
+            # Ne touche pas cartes_generees_2 : les cartes affichées restent
+            # celles de la dernière validation tant que "✅ Valider et
+            # recalculer les cartes" n'est pas recliqué (avec, cette fois,
+            # les tableaux ci-dessus revenus aux valeurs par défaut) — ce
+            # bouton ne fait que réinitialiser le formulaire, il ne
+            # recalcule rien lui-même (seul "Valider et recalculer les
+            # cartes" le fait, cf. accessibilite_urbaine_page_2).
             st.rerun()
