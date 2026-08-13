@@ -73,10 +73,77 @@ def script_reajuster_si_masque(m, bounds):
                 if (entree.contentRect.width > 0 && entree.contentRect.height > 0) {{
                     carte.invalidateSize();
                     carte.fitBounds({bounds_json});
+                    // Un seul réajustement : cet observer sert uniquement à
+                    // rattraper le cadrage initial calculé sur un conteneur de
+                    // taille 0 (onglet inactif au premier rendu, cf. plus
+                    // haut). Sans ce disconnect(), il continue à réagir à
+                    // TOUT redimensionnement ultérieur du conteneur (mise en
+                    // page Streamlit, autre onglet qui s'affiche...) et
+                    // réapplique ce cadrage d'origine à chaque fois — ce qui
+                    // écrase silencieusement un zoom/déplacement manuel de
+                    // l'utilisateur sur cette carte, ou une vue reçue via
+                    // script_synchroniser_zoom.
+                    observer.disconnect();
+                    return;
                 }}
             }}
         }});
         observer.observe(carte.getContainer());
+    }});
+    </script>
+    """
+
+
+def script_synchroniser_zoom(m, canal):
+    """<script> qui synchronise le zoom/centre de cette carte Leaflet avec
+    une (ou plusieurs) autre(s) carte(s) partageant le même `canal`, via
+    BroadcastChannel.
+
+    Nécessaire (plutôt qu'un simple folium.plugins.DualMap, cf.
+    accessibilite_index.py) quand les deux cartes à synchroniser sont deux
+    documents HTML distincts, chacun rendu dans sa propre iframe
+    (st.components.v1.html) : DualMap ne synchronise que deux panneaux d'un
+    même document, pas deux cartes indépendantes. BroadcastChannel
+    fonctionne entre iframes same-origin sans passer par window.parent (que
+    l'appelant ne maîtrise pas, c'est le JS interne de Streamlit).
+
+    m: objet folium.Map à synchroniser.
+    canal: nom de canal BroadcastChannel commun aux cartes à synchroniser
+        entre elles. Doit être unique à la paire (ex: un canal par
+        onglet/domaine ET par session utilisateur) : BroadcastChannel est
+        visible par tout document same-origin, y compris d'autres onglets du
+        navigateur ou d'autres sessions Streamlit — un canal partagé entre
+        des cartes qui ne devraient pas être liées (ex: deux domaines BPE
+        différents, restés simultanément dans le DOM par onglets Streamlit,
+        cf. script_reajuster_si_masque) les synchroniserait par erreur.
+    """
+    nom_carte = m.get_name()
+    canal_json = json.dumps(canal)
+    return f"""
+    <script>
+    window.addEventListener("load", function() {{
+        // Différé à "load" pour la même raison que script_reajuster_si_masque :
+        // {nom_carte} n'existe pas encore au moment où ce <script> (ajouté via
+        // get_root().html) est injecté dans le body.
+        var carte = {nom_carte};
+        var canal = new BroadcastChannel({canal_json});
+        var enSynchronisation = false;
+
+        carte.on("moveend", function() {{
+            if (enSynchronisation) return;
+            var centre = carte.getCenter();
+            canal.postMessage({{lat: centre.lat, lng: centre.lng, zoom: carte.getZoom()}});
+        }});
+
+        canal.onmessage = function(evenement) {{
+            // setView(..., {{animate: false}}) déclenche moveend de façon
+            // synchrone (avant le retour de l'appel) : le flag posé juste
+            // avant suffit à empêcher la carte réceptrice de rediffuser à son
+            // tour l'état qu'elle vient de recevoir (boucle infinie sinon).
+            enSynchronisation = true;
+            carte.setView([evenement.data.lat, evenement.data.lng], evenement.data.zoom, {{animate: false}});
+            enSynchronisation = false;
+        }};
     }});
     </script>
     """

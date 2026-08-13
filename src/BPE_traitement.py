@@ -4,7 +4,7 @@ import folium
 import geopandas as gpd
 import requests
 
-from src.cartographie import script_legende_en_bas, script_reajuster_si_masque
+from src.cartographie import script_legende_en_bas, script_reajuster_si_masque, script_synchroniser_zoom
 from src.hf_cache import recuperer_depuis_hf
 
 
@@ -126,8 +126,29 @@ def filtre_BPE_actifs (population_grid_agglo,land_use_data):
 # carreau (population_grid_cda) — pas l'accessibilité en temps de trajet, juste
 # la donnée d'offre brute (land_use_data_domaine).
 
-def carte_ponderation_domaine(DOMAINES_BPE,population_grid_agglo,BPE_agglo,land_use_data,domaine,tiles="CartoDB positron"):
-    """Carte interactive de la pondération cumulée par gamme d'un domaine BPE, par carreau."""
+def carte_ponderation_domaine(DOMAINES_BPE,population_grid_agglo,BPE_agglo,land_use_data,domaine,tiles="CartoDB positron", canal_sync=None, bounds=None):
+    """Carte interactive de la pondération cumulée par gamme d'un domaine BPE, par carreau.
+
+    canal_sync : si fourni, synchronise le zoom/centre de cette carte avec
+    toute autre carte utilisant le même canal (cf.
+    src.cartographie.script_synchroniser_zoom) — utilisé par
+    views/accessibilite_urbaine_2.py pour lier cette carte à celle
+    d'accessibilité 45 min du même domaine ; None (défaut) pour un usage
+    autonome (ex: views/ponderation_equipements.py), pas de synchronisation.
+
+    bounds : [[miny, minx], [maxy, maxx]] à utiliser pour le cadrage initial
+    (script_reajuster_si_masque) au lieu de le calculer à partir de
+    `population_grid_agglo` — utilisé par views/accessibilite_urbaine_2.py
+    pour partager le MÊME cadrage que la carte 45 min du même domaine.
+    population_grid_agglo (tous les carreaux de l'agglomération, y compris
+    ceux hors de la zone couverte par la matrice de temps de trajet) donne
+    en effet un total_bounds bien plus large que celui de la carte 45 min
+    (limitée aux carreaux d'origine de cette matrice) : sans ce partage, les
+    deux cartes démarrent sur des cadrages différents, indépendamment de
+    canal_sync (qui ne synchronise que les déplacements/zooms ultérieurs,
+    pas le cadrage initial de chaque carte). None (défaut) : calcule le
+    cadrage localement, comme avant — comportement inchangé pour un usage
+    autonome (ex: views/ponderation_equipements.py)."""
     nom_domaine = DOMAINES_BPE.get(domaine, domaine)
     grille = population_grid_agglo[["id", "geometry"]].merge(land_use_data_domaine(BPE_agglo, land_use_data, domaine), on="id")
 
@@ -156,11 +177,16 @@ def carte_ponderation_domaine(DOMAINES_BPE,population_grid_agglo,BPE_agglo,land_
         prefer_canvas=True,
     )
 
-    minx, miny, maxx, maxy = grille.to_crs(epsg=4326).total_bounds
+    if bounds is None:
+        minx, miny, maxx, maxy = grille.to_crs(epsg=4326).total_bounds
+        bounds = [[miny, minx], [maxy, maxx]]
     carte.get_root().html.add_child(
-        folium.Element(script_reajuster_si_masque(carte, [[miny, minx], [maxy, maxx]]))
+        folium.Element(script_reajuster_si_masque(carte, bounds))
     )
     carte.get_root().html.add_child(folium.Element(script_legende_en_bas()))
+
+    if canal_sync:
+        carte.get_root().html.add_child(folium.Element(script_synchroniser_zoom(carte, canal_sync)))
 
     return carte
 
