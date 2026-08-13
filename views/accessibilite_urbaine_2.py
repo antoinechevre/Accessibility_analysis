@@ -27,8 +27,8 @@ from src.cartographie import echelle_continue_html, script_reajuster_si_masque, 
 from src.pipeline_donnees import DOMAINES_BPE, HorsMetropoleError
 from src.ponderation_bpe import GAMMES_POIDS_PAR_DOMAINE, SEUILS_DOMAINE
 from src.ponderation_bpe_2 import reponderer_bpe_2
-from src.utilitaires_matrix import cumulative_cutoff, deciles_niveau_vie
-from views.accessibilite_index import _construire_pipeline
+from src.utilitaires_matrix import cumulative_cutoff, deciles_niveau_vie, moyenne_ponderee_pct_poles, pct_poles_atteignables_par_carreau
+from views.accessibilite_index import CUTOFFS_PCT_MOYEN_POLES, _construire_pipeline, _courbe_pct_moyen_poles
 
 FONDS_CARTE = {
     "OpenStreetMap": "OpenStreetMap",
@@ -148,16 +148,16 @@ def _carte_accessibilite_45min_domaine(population_grid_agglo, land_use_data, ttm
     return carte, bounds
 
 
-def _generer_cartes_domaines(population_grid_agglo, land_use_data, BPE_agglo, ttm, fond_carte, carreaux_filtre_ids, population_grid_agglo_filtre, id_session_carte):
-    """Construit les cartes (45 min + pondération) des 7 domaines BPE, pour
-    l'état courant des paramètres (fond de carte, filtre déciles,
-    pondération) — appelée uniquement au clic sur "✅ Valider et recalculer
-    les cartes" (cf. accessibilite_urbaine_page_2), jamais à chaque rerun
-    Streamlit : ces cartes sont coûteuses (cumulative_cutoff + rendu Leaflet
-    x 2 x 7) et st.tabs garde tous les onglets dans le DOM en même temps, la
-    reconstruction inconditionnelle à chaque interaction (changement de fond
-    de carte, de filtre décile...) serait donc refaite 7x2 fois pour rien à
-    chaque clic.
+def _generer_cartes_domaines(population_grid_agglo, land_use_data, BPE_agglo, ttm, fond_carte, carreaux_filtre_ids, population_grid_agglo_filtre, id_session_carte, niveau_vie):
+    """Construit les cartes (45 min + pondération) et le tableau par décile
+    des 7 domaines BPE, pour l'état courant des paramètres (fond de carte,
+    filtre déciles, pondération) — appelée uniquement au clic sur "✅ Valider
+    et recalculer les cartes" (cf. accessibilite_urbaine_page_2), jamais à
+    chaque rerun Streamlit : ces cartes sont coûteuses (cumulative_cutoff +
+    rendu Leaflet x 2 x 7) et st.tabs garde tous les onglets dans le DOM en
+    même temps, la reconstruction inconditionnelle à chaque interaction
+    (changement de fond de carte, de filtre décile...) serait donc refaite
+    7x2 fois pour rien à chaque clic.
 
     canal_sync (un par domaine ET par session, cf.
     src.cartographie.script_synchroniser_zoom) lie la carte 45 min et la
@@ -168,9 +168,17 @@ def _generer_cartes_domaines(population_grid_agglo, land_use_data, BPE_agglo, tt
     (calculé sur une étendue plus large, cf. carte_ponderation_domaine) qu'à
     la première interaction de l'utilisateur, pas dès le chargement.
 
-    Retourne {domaine: (carte_45 ou None, carte_ponderation ou None)}.
+    Le tableau par décile (% moyen de pôles atteignables, une colonne par
+    durée de CUTOFFS_PCT_MOYEN_POLES) n'est PAS filtré par
+    carreaux_filtre_ids/population_grid_agglo_filtre — décliner par décile
+    EST le filtre, un filtre décile supplémentaire n'aurait pas de sens ici
+    (cf. views.accessibilite_index, même logique).
+
+    Retourne {domaine: (carte_45 ou None, carte_ponderation ou None,
+    tableau_decile_poles)}.
     """
     cartes = {}
+    deciles = sorted(niveau_vie["decile_niveau_vie"].unique())
     for domaine in DOMAINES_BPE:
         canal_sync = f"zoom_{id_session_carte}_{domaine}"
 
@@ -187,13 +195,35 @@ def _generer_cartes_domaines(population_grid_agglo, land_use_data, BPE_agglo, tt
                 tiles=FONDS_CARTE[fond_carte], canal_sync=canal_sync, bounds=bounds_45,
             )
 
-        cartes[domaine] = (carte_45, carte_ponderation)
+        # Un seul calcul de pct_poles_atteignables_par_carreau par
+        # (domaine, cutoff), réutilisé pour les 10 déciles (cf. docstring de
+        # pct_poles_atteignables_par_carreau : filtrer ttm est le plus coûteux).
+        pct_par_cutoff = {
+            cutoff: pct_poles_atteignables_par_carreau(land_use_data, ttm, domaine, cutoff)
+            for cutoff in CUTOFFS_PCT_MOYEN_POLES
+        }
+        lignes_decile = [
+            {
+                "Décile": int(decile),
+                **{
+                    f"{cutoff} min": moyenne_ponderee_pct_poles(
+                        pct_par_cutoff[cutoff],
+                        carreaux_ids=niveau_vie.loc[niveau_vie["decile_niveau_vie"] == decile, "id"],
+                    )
+                    for cutoff in CUTOFFS_PCT_MOYEN_POLES
+                },
+            }
+            for decile in deciles
+        ]
+        tableau_decile_poles = pd.DataFrame(lignes_decile).set_index("Décile")
+
+        cartes[domaine] = (carte_45, carte_ponderation, tableau_decile_poles)
 
     return cartes
 
 
 def accessibilite_urbaine_page_2():
-    st.header("Accessibilité urbaine — 45 min & équipements pondérés")
+    st.header("test sur les pondérations équipements")
     st.caption("🚌 Bus · 🚊 Tramway · 🚇 Métro · ⛴️ Ferry · 🚶 Piétons")
 
     if st.session_state.get("feed") is None:
@@ -313,7 +343,7 @@ def accessibilite_urbaine_page_2():
     onglets = st.tabs([f"{d} - {nom}" for d, nom in DOMAINES_BPE.items()])
     for onglet, domaine in zip(onglets, DOMAINES_BPE):
         with onglet:
-            carte_45, carte_ponderation = cartes_par_domaine.get(domaine, (None, None))
+            carte_45, carte_ponderation, _ = cartes_par_domaine.get(domaine, (None, None, None))
             colonne_gauche, colonne_droite = st.columns(2)
 
             # "Aucun carreau dans les déciles sélectionnés." seulement si des
@@ -428,6 +458,7 @@ def accessibilite_urbaine_page_2():
                 st.session_state.cartes_generees_2 = _generer_cartes_domaines(
                     population_grid_agglo, land_use_data_custom, BPE_agglo_custom, ttm, fond_carte,
                     carreaux_filtre_ids, population_grid_agglo_filtre, st.session_state.id_session_carte_2,
+                    niveau_vie,
                 )
 
             os.makedirs(DOSSIER_PONDERATION_CUSTOM, exist_ok=True)
@@ -456,3 +487,28 @@ def accessibilite_urbaine_page_2():
             # recalcule rien lui-même (seul "Valider et recalculer les
             # cartes" le fait, cf. accessibilite_urbaine_page_2).
             st.rerun()
+
+    st.markdown("### Répartition par décile de niveau de vie")
+    st.caption(
+        "Pour chaque domaine, % moyen de pôles d'équipements majeurs atteignables (pondéré "
+        "par la population du décile), par décile de niveau de vie (D1 = plus modeste, D10 = "
+        "plus aisé) et par durée de trajet — même graphique que l'onglet Accessibilité de "
+        "l'application complète."
+    )
+
+    onglets_decile = st.tabs([f"{d} - {nom}" for d, nom in DOMAINES_BPE.items()])
+    for onglet, domaine in zip(onglets_decile, DOMAINES_BPE):
+        with onglet:
+            _, _, tableau_decile_poles = cartes_par_domaine.get(domaine, (None, None, None))
+            if tableau_decile_poles is None:
+                st.info(
+                    "Cliquez sur \"✅ Valider et recalculer les cartes\" ci-dessus pour générer "
+                    "ce graphique."
+                )
+            else:
+                _courbe_pct_moyen_poles(
+                    tableau_decile_poles,
+                    f"% moyen de pôles atteignables par décile de niveau de vie – {DOMAINES_BPE[domaine]}",
+                    "Décile (D1=modeste, D10=aisé)",
+                    cmap="viridis",
+                )
