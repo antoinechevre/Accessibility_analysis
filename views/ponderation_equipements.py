@@ -98,6 +98,11 @@ def ponderation_equipements_page():
     # dans un nouvel onglet — la page INSEE ciblée, servie en pièce jointe
     # (content-disposition), se téléchargeait sinon comme un fichier.
     st.link_button(
+        "Si tu veux tester les effets des pondérations des équipements",
+        "https://huggingface.co/spaces/antoinechevre/Jeu_Ponderation_Equipement",
+        icon=":material/open_in_new:",
+    )
+    st.link_button(
         "description des différents équipements",
         "https://www.insee.fr/fr/metadonnees/source/fichier/BPE25_liste_hierarchisee_TYPEQU.html",
         icon=":material/open_in_new:",
