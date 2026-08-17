@@ -130,9 +130,17 @@ def fusionner_et_envoyer_csv(nouvelles_lignes, nom_fichier_hf, chemin_local, col
     Les lignes existantes où colonne_cle == valeur_cle sont retirées avant
     d'ajouter nouvelles_lignes (une relance remplace plutôt que duplique).
     Sauvegarde en local puis renvoie vers HF (best-effort, cf.
-    envoyer_vers_hf — un échec d'envoi n'empêche pas la sauvegarde locale).
+    envoyer_vers_hf — un échec d'envoi n'empêche pas la sauvegarde locale,
+    mais DOIT être signalé à l'appelant : contrairement à recuperer_depuis_hf/
+    envoyer_vers_hf pour l'OSM/la matrice de trajets, où un échec silencieux
+    ne fait que retomber sur un recalcul complet au prochain déploiement, un
+    échec silencieux ici laisse croire que la ligne est bien partagée alors
+    qu'elle ne l'est que localement sur cette instance — perdue au prochain
+    redémarrage d'un Space sans stockage persistant. Observé en pratique :
+    l'app affichait "✓ enregistré" pour un réseau resté invisible sur HF.
 
-    Retourne le DataFrame fusionné (celui effectivement écrit en local).
+    Retourne (DataFrame fusionné, succès de l'envoi HF) — à l'appelant
+    d'avertir l'utilisateur si le deuxième élément est False.
     """
     import pandas as pd
 
@@ -145,8 +153,8 @@ def fusionner_et_envoyer_csv(nouvelles_lignes, nom_fichier_hf, chemin_local, col
 
     os.makedirs(os.path.dirname(chemin_local), exist_ok=True)
     tableau_final.to_csv(chemin_local, index=False)
-    envoyer_vers_hf(chemin_local, nom_fichier_hf)
-    return tableau_final
+    succes_envoi = envoyer_vers_hf(chemin_local, nom_fichier_hf)
+    return tableau_final, succes_envoi
 
 
 def enregistrer_visite():

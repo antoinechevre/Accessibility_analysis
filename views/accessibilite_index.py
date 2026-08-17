@@ -887,7 +887,7 @@ def accessibilite_index_page():
                     tableau_benchmark.insert(0, "date_run", datetime.datetime.now().strftime("%Y-%m-%d %H:%M"))
                     tableau_benchmark.insert(0, "reseau", nom_reseau_str)
 
-                    tableau_benchmark_complet = fusionner_et_envoyer_csv(
+                    tableau_benchmark_complet, succes_envoi_benchmark = fusionner_et_envoyer_csv(
                         tableau_benchmark,
                         "benchmark/index_benchmark_reseaux.csv",
                         chemin_local_benchmark,
@@ -900,6 +900,12 @@ def accessibilite_index_page():
                     f"(ville principale : {ville_principale_reseau}) — "
                     f"{tableau_benchmark_complet['reseau'].nunique()} réseau(x) au total dans l'index."
                 )
+                if not succes_envoi_benchmark:
+                    st.warning(
+                        "⚠ Enregistré en local sur ce Space uniquement — l'envoi vers Hugging Face a "
+                        "échoué, ce réseau restera invisible des autres déploiements/onglets Benchmark "
+                        "tant qu'il n'aura pas été renvoyé (bouton ci-dessus pour réessayer)."
+                    )
 
     st.markdown("### % moyen de pôles d'équipements majeurs atteignables (pondéré par la population)")
     st.caption(
