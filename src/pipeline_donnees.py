@@ -38,6 +38,14 @@ PREFIXES_DEPARTEMENTS_HORS_METROPOLE = ("971", "972", "973", "974", "975", "976"
 BASE_DIR = os.getcwd()
 DATA_DIR = os.path.join(BASE_DIR, "data")
 MEMORY_CSV_AGGLO_DIR = os.path.join(DATA_DIR, "memory_csv_agglo")
+# Mêmes sous-dossiers que le dataset HF distant (memory_gpkg/, memory_pbf/,
+# memory_ttm/, cf. recuperer_depuis_hf/envoyer_vers_hf dans ce module et dans
+# views/accessibilite_index.py) : la structure locale correspond ainsi
+# exactement à la structure distante, plus de fichiers par réseau éparpillés
+# à la racine de data/.
+MEMORY_GPKG_DIR = os.path.join(DATA_DIR, "memory_gpkg")
+MEMORY_PBF_DIR = os.path.join(DATA_DIR, "memory_pbf")
+MEMORY_TTM_DIR = os.path.join(DATA_DIR, "memory_ttm")
 BPE_PATH = os.path.join(DATA_DIR, "BPE25.parquet")
 BPE_XLS_PATH = os.path.join(DATA_DIR, "BPE_gammes_equipements_2025.xlsx")
 
@@ -99,13 +107,36 @@ RESEAUX_GRILLE_1KM = {"IDFM"}
 RESEAUX_EXCLUS_BENCHMARK = {"IDFM"}
 
 def chemins_reseau(nom_reseau_str):
-    """Chemins de cache disque (par réseau) utilisés par le pipeline."""
+    """Chemins de cache disque (par réseau) utilisés par le pipeline — sous
+    les mêmes sous-dossiers que le dataset HF distant (memory_gpkg/,
+    memory_pbf/, memory_ttm/, cf. recuperer_depuis_hf/envoyer_vers_hf plus
+    bas et dans views/accessibilite_index.py), pour que la structure locale
+    corresponde à la structure distante plutôt que d'éparpiller des fichiers
+    par réseau à la racine de data/.
+
+    decoupage_csv/decoupage_geojson restent à part, dans data/decoupage_agglo/
+    (pas memory_csv_agglo/, qui n'a pourtant l'air redondant qu'en apparence) :
+    ce sont des fichiers de TRAVAIL reconstruits à chaque run depuis le GTFS
+    (cf. plus bas), distincts de decoupage_reference_path/chemin_memoire_decoupage
+    (le cache persistant réellement synchronisé avec HF, dans
+    MEMORY_CSV_AGGLO_DIR) — mêmes réseau et "decoupage_agglo" dans le nom,
+    mais pas le même rôle ni le même contenu (chemin_memoire_decoupage est un
+    export reformaté de ce fichier de travail, pas une simple copie). Leur
+    donner le même chemin ferait que la référence téléchargée depuis HF au
+    tout début de construire_donnees_bpe() serait aussitôt (mé)prise pour le
+    résultat déjà construit pour CE run, sautant la (re)construction depuis
+    le GTFS.
+    """
+    for dossier in (MEMORY_GPKG_DIR, MEMORY_PBF_DIR, MEMORY_TTM_DIR):
+        os.makedirs(dossier, exist_ok=True)
+    dossier_decoupage_travail = os.path.join(DATA_DIR, "decoupage_agglo")
+    os.makedirs(dossier_decoupage_travail, exist_ok=True)
     return {
-        "decoupage_csv": os.path.join(DATA_DIR, f"decoupage_agglo_{nom_reseau_str}.csv"),
-        "decoupage_geojson": os.path.join(DATA_DIR, f"decoupage_agglo_{nom_reseau_str}.geojson"),
-        "osm_pbf": os.path.join(DATA_DIR, f"agglo_{nom_reseau_str}.osm.pbf"),
-        "gpkg": os.path.join(DATA_DIR, f"population_grid_agglo_{nom_reseau_str}.gpkg"),
-        "ttm": os.path.join(DATA_DIR, f"ttm_{nom_reseau_str}.parquet"),
+        "decoupage_csv": os.path.join(dossier_decoupage_travail, f"decoupage_agglo_{nom_reseau_str}.csv"),
+        "decoupage_geojson": os.path.join(dossier_decoupage_travail, f"decoupage_agglo_{nom_reseau_str}.geojson"),
+        "osm_pbf": os.path.join(MEMORY_PBF_DIR, f"agglo_osm_pbf_{nom_reseau_str}.osm.pbf"),
+        "gpkg": os.path.join(MEMORY_GPKG_DIR, f"population_grid_agglo_{nom_reseau_str}.gpkg"),
+        "ttm": os.path.join(MEMORY_TTM_DIR, f"ttm_{nom_reseau_str}.parquet"),
     }
 
 
