@@ -451,6 +451,53 @@ def _telecharger_tuile_overpass(bbox, output_path, session, overpass_url, timeou
         f.write(response.content)
 
 
+def _ways_avec_geometrie_cassee(pbf_path):
+    """Vérifie l'intégrité référentielle du .osm.pbf produit par osmium
+    extract : repère les ways taggés highway=* auxquels il ne reste, une
+    fois les nœuds manquants exclus, plus qu'au maximum 1 nœud résolvable —
+    donc plus aucune géométrie exploitable (une ligne a besoin d'au moins 2
+    points).
+
+    Un way highway=* avec quelques nœuds manquants (simple clip au bord
+    d'une tuile Overpass, cf. commentaire (._;>;) plus haut) reste
+    inoffensif : osmium le tolère et r5py aussi tant qu'il reste au moins 2
+    nœuds pour tracer un segment — vérifié sur l'extrait de TAM (en
+    production), dont le pire way affecté retombe à 4 nœuds résolvables.
+    Mais quand Overpass tronque sa réponse sur une tuile, un way peut perdre
+    la quasi-totalité de ses nœuds : observé sur le GTFS d'IDELIS (Pau), où
+    2 ways highway (dont une highway=primary) étaient réduits à 1 seul nœud
+    résolvable sur 11 à 19 déclarés. C'est ce genre de way à la géométrie
+    dégénérée que le lecteur OSM de r5py rejette avec "Writer thread
+    failed", pas le simple clip de bord toléré par ailleurs.
+
+    Retourne la liste des identifiants de way (str) concernés, vide si le
+    fichier est utilisable tel quel.
+    """
+    verif = subprocess.run(
+        ["osmium", "check-refs", "-i", str(pbf_path)],
+        capture_output=True, text=True,
+    )
+    manquants_par_way = {}
+    for ligne in verif.stdout.splitlines():
+        if " in w" not in ligne:
+            continue
+        way_id = ligne.split(" in w", 1)[1].strip()
+        manquants_par_way[way_id] = manquants_par_way.get(way_id, 0) + 1
+
+    ways_casses = []
+    for way_id, nb_manquants in manquants_par_way.items():
+        opl = subprocess.run(
+            ["osmium", "getid", str(pbf_path), f"w{way_id}", "-f", "opl"],
+            capture_output=True, text=True,
+        ).stdout.strip()
+        if "highway=" not in opl or " N" not in opl:
+            continue
+        nb_total = len(opl.split(" N", 1)[1].strip().split(","))
+        if nb_total - nb_manquants < 2:
+            ways_casses.append(way_id)
+    return ways_casses
+
+
 def osm_pbf_creator(
     decoupage_agglo_path,
     output_pbf_path=None,
@@ -458,6 +505,7 @@ def osm_pbf_creator(
     overpass_url="https://overpass-api.de/api/interpreter",
     timeout=180,
     pause=1.0,
+    max_essais=3,
 ):
     """Build agglo.osm.pbf: données OSM découpées sur l'emprise de decoupage_agglo_path.
 
@@ -485,6 +533,10 @@ def osm_pbf_creator(
     overpass_url: instance Overpass à utiliser (changer en cas de limitation de débit
         sur l'instance publique par défaut, ex. "https://overpass.kumi.systems/api/interpreter").
     timeout: timeout Overpass par tuile, en secondes.
+    max_essais: nombre de tentatives si l'extrait produit s'avère corrompu
+        (cf. _ways_avec_geometrie_cassee) — chaque nouvel essai retélécharge
+        avec des tuiles deux fois plus petites, pour réduire le risque
+        qu'Overpass tronque à nouveau sa réponse au même endroit.
     """
     output_dir = pathlib.Path(decoupage_agglo_path).parent
     if output_pbf_path is None:
@@ -506,54 +558,81 @@ def osm_pbf_creator(
     boundary.to_file(BOUNDARY_GEOJSON, driver="GeoJSON")
     print(f"wrote {BOUNDARY_GEOJSON}, bounds: {boundary.total_bounds}")
 
-    # 2. Télécharger les données OSM couvrant l'emprise via Overpass, tuile par tuile —
-    # ne dépend d'aucun découpage régional préexistant, marche pour n'importe quelle zone
-    min_lon, min_lat, max_lon, max_lat = boundary.total_bounds
-    tuiles = _tuiles_bbox(min_lon, min_lat, max_lon, max_lat, tile_size_deg)
-    print(f"emprise découpée en {len(tuiles)} tuile(s) de {tile_size_deg}° pour Overpass")
+    # 2-3. Télécharger les données OSM couvrant l'emprise via Overpass, tuile par
+    # tuile (ne dépend d'aucun découpage régional préexistant, marche pour
+    # n'importe quelle zone), fusionner puis découper précisément sur le contour
+    # réel de l'agglo (les tuiles Overpass sont rectangulaires, plus larges que le
+    # contour). Recommencé jusqu'à max_essais fois si l'extrait obtenu s'avère
+    # corrompu (cf. _ways_avec_geometrie_cassee) — Overpass tronque parfois sa
+    # réponse sur une tuile sans erreur HTTP, laissant des ways à la géométrie
+    # trouée qu'osmium tolère mais que r5py rejette plus loin dans le pipeline.
+    ways_casses = []
+    for essai in range(1, max_essais + 1):
+        min_lon, min_lat, max_lon, max_lat = boundary.total_bounds
+        tuiles = _tuiles_bbox(min_lon, min_lat, max_lon, max_lat, tile_size_deg)
+        print(
+            f"emprise découpée en {len(tuiles)} tuile(s) de {tile_size_deg}° "
+            f"pour Overpass (essai {essai}/{max_essais})"
+        )
 
-    fichiers_tuiles = []
-    with session_avec_retries(methods=("GET", "POST"), total=8, backoff_factor=2) as session:
-        for i, bbox in enumerate(tuiles, start=1):
-            tuile_path = output_dir / f"agglo_tuile_{i}.osm"
-            print(f"téléchargement tuile {i}/{len(tuiles)} (bbox {bbox}) ...")
-            _telecharger_tuile_overpass(bbox, tuile_path, session, overpass_url, timeout)
-            fichiers_tuiles.append(tuile_path)
-            time.sleep(pause)
+        fichiers_tuiles = []
+        with session_avec_retries(methods=("GET", "POST"), total=8, backoff_factor=2) as session:
+            for i, bbox in enumerate(tuiles, start=1):
+                tuile_path = output_dir / f"agglo_tuile_{i}.osm"
+                print(f"téléchargement tuile {i}/{len(tuiles)} (bbox {bbox}) ...")
+                _telecharger_tuile_overpass(bbox, tuile_path, session, overpass_url, timeout)
+                fichiers_tuiles.append(tuile_path)
+                time.sleep(pause)
 
-    # 3. Fusionner les tuiles (si plusieurs) puis découper précisément sur le contour
-    # réel de l'agglo (les tuiles Overpass sont rectangulaires, plus larges que le contour)
-    if len(fichiers_tuiles) > 1:
-        fusion_path = output_dir / "agglo_fusion.osm.pbf"
+        if len(fichiers_tuiles) > 1:
+            fusion_path = output_dir / "agglo_fusion.osm.pbf"
+            subprocess.run(
+                ["osmium", "merge", *fichiers_tuiles, "-o", fusion_path, "--overwrite"],
+                check=True,
+            )
+            print(f"wrote {fusion_path} (fusion de {len(fichiers_tuiles)} tuiles)")
+        else:
+            fusion_path = fichiers_tuiles[0]
+
         subprocess.run(
-            ["osmium", "merge", *fichiers_tuiles, "-o", fusion_path, "--overwrite"],
+            [
+                "osmium",
+                "extract",
+                "-p",
+                BOUNDARY_GEOJSON,
+                "-o",
+                OUTPUT_PBF,
+                "--overwrite",
+                fusion_path,
+            ],
             check=True,
         )
-        print(f"wrote {fusion_path} (fusion de {len(fichiers_tuiles)} tuiles)")
+        print(f"wrote {OUTPUT_PBF}")
+
+        # Fichiers intermédiaires de CET essai, plus utiles qu'il ait réussi ou
+        # non — à ne pas laisser traîner ni réutiliser par erreur à l'essai suivant
+        for f in fichiers_tuiles:
+            pathlib.Path(f).unlink()
+        if len(fichiers_tuiles) > 1:
+            pathlib.Path(fusion_path).unlink()
+
+        ways_casses = _ways_avec_geometrie_cassee(OUTPUT_PBF)
+        if not ways_casses:
+            break
+        print(
+            f"⚠ extrait OSM avec {len(ways_casses)} way(s) routier(s) à la géométrie "
+            f"dégénérée (id : {', '.join(ways_casses[:10])}"
+            f"{', ...' if len(ways_casses) > 10 else ''}) — probable troncature "
+            f"Overpass sur une tuile, nouvel essai avec des tuiles plus petites"
+        )
+        tile_size_deg = tile_size_deg / 2
     else:
-        fusion_path = fichiers_tuiles[0]
-
-    subprocess.run(
-        [
-            "osmium",
-            "extract",
-            "-p",
-            BOUNDARY_GEOJSON,
-            "-o",
-            OUTPUT_PBF,
-            "--overwrite",
-            fusion_path,
-        ],
-        check=True,
-    )
-    print(f"wrote {OUTPUT_PBF}")
-
-    # 4. Clean up the intermediate files, no longer needed
-    for f in fichiers_tuiles:
-        pathlib.Path(f).unlink()
-    if len(fichiers_tuiles) > 1:
-        pathlib.Path(fusion_path).unlink()
-    print("removed intermediate OSM files")
+        raise RuntimeError(
+            f"Extrait OSM toujours corrompu après {max_essais} essai(s) : "
+            f"{len(ways_casses)} way(s) routier(s) à la géométrie dégénérée "
+            f"(id : {', '.join(ways_casses)}) — probablement une troncature "
+            f"systématique d'Overpass sur cette zone plutôt qu'un aléa ponctuel."
+        )
 
 
 
