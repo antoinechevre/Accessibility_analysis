@@ -78,6 +78,48 @@ def _aplatir_zip_gtfs(zip_path):
     return zip_path
 
 
+def _retirer_tabulations_finales_du_zip(zip_path):
+    """Retire les tabulations parasites en fin de ligne (en-tête compris) de
+    chaque table texte du zip GTFS zip_path (réécrit en place si besoin).
+
+    Observé sur le GTFS d'IDELIS (Pau) : routes.txt et trips.txt ont chacun
+    une colonne en trop côté export (probablement une colonne vide dans le
+    tableur source), qui se traduit par des tabulations en fin de chaque
+    ligne — y compris l'en-tête, où la dernière colonne s'appelle
+    littéralement "bikes_allowed\t\t\t\t\t\t\t\t\t" au lieu de
+    "bikes_allowed". Un champ CSV n'étant délimité que par des virgules, ces
+    tabulations restent collées à la dernière valeur : gtfs_kit/pandas
+    tolèrent ce bruit (ignoré par un strip() en aval), mais le lecteur GTFS
+    de r5py (Conveyal/OneBusAway) échoue à parser bikes_allowed comme entier
+    et lève NumberParseError sur chaque ligne de trips.txt.
+    """
+    zip_path = pathlib.Path(zip_path)
+    with zipfile.ZipFile(zip_path) as z:
+        noms_a_nettoyer = []
+        contenu = {}
+        for nom in z.namelist():
+            with z.open(nom) as f:
+                texte = io.TextIOWrapper(f, "utf-8", errors="ignore").read() if nom.endswith(".txt") else None
+            if texte is None:
+                contenu[nom] = z.read(nom)
+                continue
+            lignes = texte.splitlines()
+            nettoyees = [ligne.rstrip("\t") for ligne in lignes]
+            if nettoyees != lignes:
+                noms_a_nettoyer.append(nom)
+                contenu[nom] = ("\n".join(nettoyees) + "\n").encode("utf-8")
+            else:
+                contenu[nom] = z.read(nom)
+
+    if not noms_a_nettoyer:
+        return
+
+    print(f"Tabulations en fin de ligne retirées de {', '.join(noms_a_nettoyer)} dans {zip_path.name}")
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zout:
+        for nom, data in contenu.items():
+            zout.writestr(nom, data)
+
+
 def _retirer_table_vide_du_zip(zip_path, nom_fichier):
     """Retire nom_fichier du zip GTFS zip_path (réécrit en place) s'il est
     présent mais vide (en-tête seul, aucune ligne de données).
@@ -164,6 +206,7 @@ def charger_gtfs(zip_path):
         feed: gtfs_kit Feed object
     """
     _aplatir_zip_gtfs(zip_path)
+    _retirer_tabulations_finales_du_zip(zip_path)
     _retirer_table_vide_du_zip(zip_path, "calendar_dates.txt")
     _nettoyer_espaces_dates_du_zip(zip_path, "calendar.txt", ["start_date", "end_date"])
     _nettoyer_espaces_dates_du_zip(zip_path, "calendar_dates.txt", ["date"])
