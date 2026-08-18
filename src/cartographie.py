@@ -38,7 +38,7 @@ def titre_carte_html(titre):
 
 def script_reajuster_si_masque(m, bounds):
     """<script> qui réajuste une carte Leaflet (invalidateSize + fitBounds)
-    quand son conteneur redevient visible.
+    une fois son conteneur stabilisé en taille.
 
     Cas concret : dans un onglet Streamlit (st.tabs), le script Python
     s'exécute une seule fois et rend TOUS les onglets dans le DOM, seul
@@ -48,6 +48,17 @@ def script_reajuster_si_masque(m, bounds):
     zoom 1) qu'on obtient à l'affichage — et il ne la recalcule jamais tout
     seul une fois l'onglet effectivement affiché. Un ResizeObserver sur le
     conteneur de la carte permet de détecter ce moment et de la rafraîchir.
+
+    Même un onglet actif dès le premier rendu n'est pas épargné : l'iframe
+    (st.components.v1.html) n'a pas de largeur fixée, donc sa largeur réelle
+    dépend de la mise en page Streamlit (colonnes, onglets, polices...) qui
+    se stabilise en plusieurs passes après le premier paint. Réagir au tout
+    premier redimensionnement (comme avant) applique la correction sur une
+    largeur encore provisoire, avec une animation de zoom Leaflet visible à
+    chaque nouvelle passe : la carte semblait "trembler" pendant la
+    stabilisation de la page (signalé sur Chrome desktop). D'où le debounce
+    ci-dessous : n'appliquer la correction, sans animation, qu'une fois les
+    redimensionnements retombés au calme pendant DEBOUNCE_MS.
 
     m: objet folium.Map (dont l'un des volets m1/m2 d'un DualMap).
     bounds: [[miny, minx], [maxy, maxx]] (mêmes coordonnées que fit_bounds).
@@ -68,22 +79,30 @@ def script_reajuster_si_masque(m, bounds):
         // lèverait une ReferenceError, {nom_carte} n'existe pas encore à ce
         // stade du parsing.
         var carte = {nom_carte};
+        var DEBOUNCE_MS = 250;
+        var minuteur = null;
         var observer = new ResizeObserver(function(entries) {{
             for (var entree of entries) {{
                 if (entree.contentRect.width > 0 && entree.contentRect.height > 0) {{
-                    carte.invalidateSize();
-                    carte.fitBounds({bounds_json});
-                    // Un seul réajustement : cet observer sert uniquement à
-                    // rattraper le cadrage initial calculé sur un conteneur de
-                    // taille 0 (onglet inactif au premier rendu, cf. plus
-                    // haut). Sans ce disconnect(), il continue à réagir à
-                    // TOUT redimensionnement ultérieur du conteneur (mise en
-                    // page Streamlit, autre onglet qui s'affiche...) et
-                    // réapplique ce cadrage d'origine à chaque fois — ce qui
-                    // écrase silencieusement un zoom/déplacement manuel de
-                    // l'utilisateur sur cette carte, ou une vue reçue via
-                    // script_synchroniser_zoom.
-                    observer.disconnect();
+                    // Redémarre le délai à chaque redimensionnement : tant que
+                    // la mise en page bouge encore, on attend — la correction
+                    // ne part qu'une fois DEBOUNCE_MS écoulées sans nouveau
+                    // redimensionnement (mise en page réellement stabilisée).
+                    clearTimeout(minuteur);
+                    minuteur = setTimeout(function() {{
+                        carte.invalidateSize({{animate: false}});
+                        carte.fitBounds({bounds_json}, {{animate: false}});
+                        // Un seul réajustement : cet observer sert uniquement à
+                        // rattraper le cadrage initial calculé sur un conteneur
+                        // pas encore à sa taille finale. Sans ce disconnect(),
+                        // il continuerait à réagir à TOUT redimensionnement
+                        // ultérieur du conteneur (autre onglet qui s'affiche...)
+                        // et réappliquerait ce cadrage d'origine à chaque fois —
+                        // ce qui écraserait silencieusement un zoom/déplacement
+                        // manuel de l'utilisateur sur cette carte, ou une vue
+                        // reçue via script_synchroniser_zoom.
+                        observer.disconnect();
+                    }}, DEBOUNCE_MS);
                     return;
                 }}
             }}
