@@ -128,7 +128,11 @@ st.markdown(
    disparaît -> largeur réaugmente -> etc. Observé sur PC Windows (jamais
    sur Mac) : les cartes "tremblent" en continu sans jamais se stabiliser,
    la scrollbar-gutter figée coupe cette boucle à la racine. */
-html {
+html,
+body,
+[data-testid="stAppViewContainer"],
+[data-testid="stMain"],
+section.main {
     scrollbar-gutter: stable;
 }
 .stButton button {

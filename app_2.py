@@ -57,7 +57,18 @@ st.set_page_config(page_title="Accessibilité urbaine — 45 min & équipements 
 # cartes de cette page "tremblent" en continu sans jamais se stabiliser — la
 # scrollbar-gutter figée coupe cette boucle à la racine. Même règle que
 # app.py (page distincte, pas de CSS partagé entre les deux).
-st.markdown("<style>html { scrollbar-gutter: stable; }</style>", unsafe_allow_html=True)
+st.markdown(
+    """<style>
+    html,
+    body,
+    [data-testid="stAppViewContainer"],
+    [data-testid="stMain"],
+    section.main {
+        scrollbar-gutter: stable;
+    }
+    </style>""",
+    unsafe_allow_html=True,
+)
 
 # Enregistre une visite (même dataset HF, même digest quotidien que app.py —
 # cf. .github/workflows/notifier_visites.yml) dans un thread à part pour ne
