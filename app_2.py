@@ -45,6 +45,20 @@ GTFS_DATA_DIR = os.path.join(os.getcwd(), "data", "GTFS")
 
 st.set_page_config(page_title="Accessibilité urbaine — 45 min & équipements pondérés", page_icon="🚌", layout="wide")
 
+# Réserve en permanence la place de la scrollbar verticale, affichée ou non :
+# sur Windows/Chrome (scrollbar "classique", qui réduit la largeur du
+# contenu quand elle apparaît — contrairement à macOS où elle flotte en
+# overlay sans impact sur la largeur), une page dont la hauteur oscille tout
+# juste autour du seuil d'apparition de la scrollbar entre dans une boucle :
+# scrollbar apparaît -> largeur du contenu réduite -> les cartes
+# (st.components.v1.html sans width= fixe, cf. cartographie.py) se
+# redimensionnent en réponse -> repasse sous le seuil -> scrollbar disparaît
+# -> largeur réaugmente -> etc. Observé sur PC Windows (jamais sur Mac) : les
+# cartes de cette page "tremblent" en continu sans jamais se stabiliser — la
+# scrollbar-gutter figée coupe cette boucle à la racine. Même règle que
+# app.py (page distincte, pas de CSS partagé entre les deux).
+st.markdown("<style>html { scrollbar-gutter: stable; }</style>", unsafe_allow_html=True)
+
 # Enregistre une visite (même dataset HF, même digest quotidien que app.py —
 # cf. .github/workflows/notifier_visites.yml) dans un thread à part pour ne
 # pas retarder le premier rendu de la page avec un appel réseau best-effort.

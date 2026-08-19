@@ -117,6 +117,20 @@ st.title(
 st.markdown(
     """
 <style>
+/* Réserve en permanence la place de la scrollbar verticale, affichée ou
+   non : sur Windows/Chrome (scrollbar "classique", qui réduit la largeur
+   du contenu quand elle apparaît — contrairement à macOS où elle flotte en
+   overlay sans impact sur la largeur), une page dont la hauteur oscille
+   tout juste autour du seuil d'apparition de la scrollbar entre dans une
+   boucle : scrollbar apparaît -> largeur du contenu réduite -> les cartes
+   (st.components.v1.html sans width= fixe, cf. cartographie.py) se
+   redimensionnent en response -> repasse sous le seuil -> scrollbar
+   disparaît -> largeur réaugmente -> etc. Observé sur PC Windows (jamais
+   sur Mac) : les cartes "tremblent" en continu sans jamais se stabiliser,
+   la scrollbar-gutter figée coupe cette boucle à la racine. */
+html {
+    scrollbar-gutter: stable;
+}
 .stButton button {
     width: 100% !important;
     margin: 0 !important;
