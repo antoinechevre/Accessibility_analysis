@@ -60,6 +60,18 @@ def script_reajuster_si_masque(m, bounds):
     ci-dessous : n'appliquer la correction, sans animation, qu'une fois les
     redimensionnements retombés au calme pendant DEBOUNCE_MS.
 
+    carte._reajustementEnCours, posé pendant l'appel invalidateSize/
+    fitBounds : signal lu par script_synchroniser_zoom pour ne PAS
+    rediffuser ce recadrage correctif aux cartes synchronisées avec elle. Un
+    fitBounds()/invalidateSize() déclenche "moveend" même avec animate:false
+    — sans ce signal, une paire de cartes synchronisées (cf.
+    accessibilite_urbaine_2._carte_accessibilite_45min_domaine, qui applique
+    les deux scripts à la même carte) se rediffusaient l'une à l'autre leur
+    propre recadrage correctif au chargement, chacune écrasant le cadrage
+    tout juste reçu de l'autre avec le sien — un aller-retour qui produisait
+    exactement le même symptôme de tremblement que le debounce ci-dessus est
+    censé éliminer, mais entre deux cartes plutôt qu'au sein d'une seule.
+
     m: objet folium.Map (dont l'un des volets m1/m2 d'un DualMap).
     bounds: [[miny, minx], [maxy, maxx]] (mêmes coordonnées que fit_bounds).
         Accepte des numpy.float64 (ex: issus de .total_bounds) : castés en
@@ -90,8 +102,14 @@ def script_reajuster_si_masque(m, bounds):
                     // redimensionnement (mise en page réellement stabilisée).
                     clearTimeout(minuteur);
                     minuteur = setTimeout(function() {{
+                        carte._reajustementEnCours = true;
                         carte.invalidateSize({{animate: false}});
                         carte.fitBounds({bounds_json}, {{animate: false}});
+                        // setTimeout(0) plutôt qu'une remise à false immédiate :
+                        // laisse le temps à "moveend" de se déclencher (synchrone
+                        // avec animate:false chez Leaflet) et d'être vu par
+                        // script_synchroniser_zoom avant de lever le signal.
+                        setTimeout(function() {{ carte._reajustementEnCours = false; }}, 0);
                         // Un seul réajustement : cet observer sert uniquement à
                         // rattraper le cadrage initial calculé sur un conteneur
                         // pas encore à sa taille finale. Sans ce disconnect(),
@@ -149,7 +167,14 @@ def script_synchroniser_zoom(m, canal):
         var enSynchronisation = false;
 
         carte.on("moveend", function() {{
-            if (enSynchronisation) return;
+            // carte._reajustementEnCours (posé par script_reajuster_si_masque
+            // pendant son propre invalidateSize/fitBounds correctif au
+            // chargement) : ce moveend-là n'est pas un déplacement de
+            // l'utilisateur, ne pas le rediffuser — sinon deux cartes
+            // synchronisées se renvoient chacune leur recadrage correctif au
+            // chargement, chacune écrasant le cadrage tout juste reçu de
+            // l'autre (effet de tremblement).
+            if (enSynchronisation || carte._reajustementEnCours) return;
             var centre = carte.getCenter();
             canal.postMessage({{lat: centre.lat, lng: centre.lng, zoom: carte.getZoom()}});
         }});
