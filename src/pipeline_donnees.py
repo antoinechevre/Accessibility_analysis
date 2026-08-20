@@ -104,7 +104,13 @@ RESEAUX_GRILLE_1KM = {"IDFM"}
 # (~11 millions d'habitants) est sur une échelle de population sans commune
 # mesure avec les autres réseaux du fichier (Lyon ~1M, Toulouse ~1M...) et
 # écraserait les nuages de points comparatifs de l'onglet "Benchmark réseaux".
-RESEAUX_EXCLUS_BENCHMARK = {"IDFM"}
+# 51-Marne (index_accessibility_notebook_51.ipynb) : même logique mais pour
+# une raison différente — c'est un département entier (GTFS Grand Est
+# restreint à la Marne, cf. src/extraire_gtfs_departement.py), pas une seule
+# agglomération urbaine comme tous les autres réseaux du fichier ; la
+# comparer directement fausserait le benchmark (zones rurales étendues,
+# vitesses/fréquences moyennes très différentes d'un réseau urbain).
+RESEAUX_EXCLUS_BENCHMARK = {"IDFM", "51-Marne"}
 
 def chemins_reseau(nom_reseau_str):
     """Chemins de cache disque (par réseau) utilisés par le pipeline — sous
