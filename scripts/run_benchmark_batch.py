@@ -62,9 +62,16 @@ LOG_DIR = os.path.join(BASE_DIR, "output", "batch_logs")
 #   à l'occasion — le pipeline les rejette de toute façon en quelques
 #   secondes (bounding box, cf. src/build_data_agglo.py), mais autant ne
 #   pas les inclure dans le batch.
+# - 51_REGION_GRANDEST.gtfs.zip : réseau départemental (Marne, 51), lancé à
+#   part (index_accessibility_notebook_51.ipynb, nom de réseau forcé à
+#   "51-Marne" — cf. GTFS_NOM_RESEAU_FORCE dans app.py/app_2.py) — même
+#   raison qu'IDFM : déjà exclu du benchmark lui-même (RESEAUX_EXCLUS_BENCHMARK
+#   dans src/pipeline_donnees.py), pas la peine de dépenser le pipeline
+#   complet ici pour un résultat qui ne sera jamais écrit dans l'index.
 EXCLUS = {
     "Lyon_GTFS_TCL.zip",
     "IDFM-gtfs.zip",
+    "51_REGION_GRANDEST.gtfs.zip",
     "Chicago_google_transit.zip",
     "NYC_gtfs_b.zip",
     "Barcelona_mdb-3232-202607230126.zip",
