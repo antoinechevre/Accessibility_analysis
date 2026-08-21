@@ -9,6 +9,27 @@ import os
 import mimetypes
 
 from src.i18n import t
+from src.insee_carreaux import ajouter_couche_carreaux_insee
+
+
+def _bbox_robuste(lons, lats, percentile=1):
+    """Bbox (minx, miny, maxx, maxy) à partir des percentiles [percentile,
+    100-percentile] des coordonnées plutôt que du min/max brut : quelques
+    arrêts mal géocodés dans stops.txt (coordonnées aberrantes, loin du
+    reste du réseau) peuvent sinon faire exploser la zone interrogée pour
+    la couche de densité de population INSEE (des centaines de Mo de
+    GeoJSON embarqué pour une zone qui devrait rester locale au réseau,
+    jusqu'à dépasser la limite de message de Streamlit). Sans effet sur
+    l'affichage des arrêts/lignes eux-mêmes, seulement sur l'étendue de la
+    couche carreaux."""
+    lons = np.asarray(lons, dtype=float)
+    lats = np.asarray(lats, dtype=float)
+    return (
+        float(np.percentile(lons, percentile)),
+        float(np.percentile(lats, percentile)),
+        float(np.percentile(lons, 100 - percentile)),
+        float(np.percentile(lats, 100 - percentile)),
+    )
 
 
 def titre_carte_html(titre):
@@ -309,7 +330,7 @@ def carte_population_infracommunale(population_grid_agglo, tiles="CartoDB positr
     return carte
 
 
-def create_carte_arrets(df, nom_reseau_str,date_service_str, date_analyse, zip_path, output_path, chemin_logo=None, lang="fr"):
+def create_carte_arrets(df, nom_reseau_str,date_service_str, date_analyse, zip_path, output_path, chemin_logo=None, lang="fr", active_service_ids=None):
     # Carte des arrêts avec leur nombre de passages
 
     # Définir les seuils pour les couleurs : 5 classes de même effectif
@@ -333,12 +354,29 @@ def create_carte_arrets(df, nom_reseau_str,date_service_str, date_analyse, zip_p
         zoom_start=12,
         width="100%",
         height="1000px",
-        tiles="cartodbpositron",
+        tiles=None,
     )
+    # Fonds de carte empilés (rasters opaques) : le dernier ajouté est celui
+    # visible par défaut, donc CartoDB Positron en dernier pour garder le
+    # même rendu par défaut qu'avant l'ajout de ces alternatives.
+    folium.TileLayer("OpenStreetMap", name="OpenStreetMap").add_to(m)
+    folium.TileLayer("CartoDB dark_matter", name="CartoDB Dark Matter").add_to(m)
+    folium.TileLayer("CartoDB positron", name="CartoDB Positron").add_to(m)
+
+    # Couche optionnelle (décochée par défaut, cf. contrôle des couches
+    # ajouté plus bas) de densité de population par carreau INSEE 200m.
+    bbox_reseau = _bbox_robuste(df["stop_lon"], df["stop_lat"])
+    ajouter_couche_carreaux_insee(m, bbox_reseau, lang=lang)
 
     # --- Ajout des lignes GTFS sur la même carte ---
     feed = gk.read_feed(zip_path, dist_units="km")
-    active_trips = feed.get_trips(date=date_analyse)
+    # active_service_ids : déjà calculé par l'appelant si fourni (peut
+    # inclure un repli d'offre pour une agence), sinon dérivé de
+    # date_analyse via feed.get_trips(date=...) comme avant.
+    if active_service_ids is not None:
+        active_trips = feed.trips[feed.trips["service_id"].isin(active_service_ids)]
+    else:
+        active_trips = feed.get_trips(date=date_analyse)
     trips_routes = active_trips.merge(feed.routes, on='route_id')
 
     if feed.shapes is not None and not feed.shapes.empty:
@@ -621,6 +659,7 @@ def creer_carte_troncons(gdf_bus, gdf_tram,gdf_metro, gdf_trolley, gdf_ferry, gd
             all_coords.extend(gdf["lat_depart_parent"].dropna().tolist())
             all_coords.extend(gdf["lat_arrivee_parent"].dropna().tolist())
 
+    bbox_reseau = None
     if not all_coords:
         center_lat, center_lon = 45.75, 4.85  # Lyon par défaut
     else:
@@ -631,14 +670,22 @@ def creer_carte_troncons(gdf_bus, gdf_tram,gdf_metro, gdf_trolley, gdf_ferry, gd
                 all_lons.extend(gdf["lon_depart_parent"].dropna().tolist())
                 all_lons.extend(gdf["lon_arrivee_parent"].dropna().tolist())
         center_lon = np.mean(all_lons)
+        bbox_reseau = _bbox_robuste(all_lons, all_coords)
 
-    # Créer la carte de base (fond de carte en nuances de gris par défaut)
-    m = folium.Map(
-        location=[center_lat, center_lon], zoom_start=12, tiles="cartodbpositron"
-    )
-    # Ajouter des fonds de carte alternatifs
+    # Créer la carte de base, fonds de carte alternatifs sélectionnables
+    # via le contrôle des couches (CartoDB Positron par défaut)
+    m = folium.Map(location=[center_lat, center_lon], zoom_start=12, tiles=None)
+    # Fonds de carte empilés (rasters opaques) : le dernier ajouté est celui
+    # visible par défaut, donc CartoDB Positron en dernier pour garder le
+    # même rendu par défaut qu'avant l'ajout de ces alternatives.
     folium.TileLayer("OpenStreetMap", name="OpenStreetMap").add_to(m)
-    folium.TileLayer("cartodbdark_matter", name="Carto Dark").add_to(m)
+    folium.TileLayer("CartoDB dark_matter", name="CartoDB Dark Matter").add_to(m)
+    folium.TileLayer("CartoDB positron", name="CartoDB Positron").add_to(m)
+
+    # Couche optionnelle (décochée par défaut) de densité de population par
+    # carreau INSEE 200m — cf. create_carte_arrets pour le même mécanisme.
+    if bbox_reseau is not None:
+        ajouter_couche_carreaux_insee(m, bbox_reseau, lang=lang)
 
     # Légende des échelles de couleur (construite au fil des blocs bus/tram
     # ci-dessous, affichée en bas de carte)

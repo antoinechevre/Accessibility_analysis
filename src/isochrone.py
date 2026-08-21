@@ -15,6 +15,8 @@ import folium
 import pandas as pd
 import requests
 
+from src.insee_carreaux import ajouter_couche_carreaux_insee
+
 GEOPF_ISOCHRONE_URL = "https://data.geopf.fr/navigation/isochrone"
 GEOPF_MAX_REQ_PER_SEC = 5  # limite documentée de l'API Géoplateforme
 GEOPF_MAX_STOPS_CALLED = 150  # au-delà, repli sur un cercle approximatif (pas d'appel API)
@@ -179,6 +181,24 @@ def build_map(origine, arrets: pd.DataFrame, buffers: dict, budget_min: int, ray
     folium.TileLayer("OpenStreetMap", name="OpenStreetMap", cross_origin=True).add_to(m)
     folium.TileLayer("CartoDB dark_matter", name="CartoDB Dark Matter", cross_origin=True).add_to(m)
     folium.TileLayer("CartoDB positron", name="CartoDB Positron", cross_origin=True).add_to(m)
+
+    # Couche optionnelle (décochée par défaut) de densité de population par
+    # carreau INSEE 200m — même mécanisme que create_carte_arrets/
+    # creer_carte_troncons (src/cartographie.py). Bbox des arrêts atteints
+    # si non vide, sinon une petite marge autour du seul point de départ.
+    if not arrets.empty:
+        bbox_isochrone = (
+            min(arrets["stop_lon"].min(), origine["stop_lon"]),
+            min(arrets["stop_lat"].min(), origine["stop_lat"]),
+            max(arrets["stop_lon"].max(), origine["stop_lon"]),
+            max(arrets["stop_lat"].max(), origine["stop_lat"]),
+        )
+    else:
+        bbox_isochrone = (
+            origine["stop_lon"] - 0.02, origine["stop_lat"] - 0.02,
+            origine["stop_lon"] + 0.02, origine["stop_lat"] + 0.02,
+        )
+    ajouter_couche_carreaux_insee(m, bbox_isochrone)
 
     if not arrets.empty:
         colormap = folium.StepColormap(

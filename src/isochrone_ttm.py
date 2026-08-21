@@ -26,7 +26,7 @@ import geopandas as gpd
 from shapely.geometry import Point, box
 
 from src.hf_cache import recuperer_depuis_hf
-from src.insee_carreaux import INSEE_CARREAUX_HF_PATH, INSEE_CARREAUX_LOCAL_PATH
+from src.insee_carreaux import INSEE_CARREAUX_HF_PATH, INSEE_CARREAUX_LOCAL_PATH, ajouter_couche_carreaux_insee
 from src.isochrone import DUREE_COLOR_BANDES, DUREE_COLOR_SEUILS
 
 TTM_HF_DIR = "memory_ttm"
@@ -115,6 +115,19 @@ def build_map_carreaux(origine, gdf_carreaux, budget_min, legende_duree="Temps d
     folium.TileLayer("OpenStreetMap", name="OpenStreetMap", cross_origin=True).add_to(m)
     folium.TileLayer("CartoDB dark_matter", name="CartoDB Dark Matter", cross_origin=True).add_to(m)
     folium.TileLayer("CartoDB positron", name="CartoDB Positron", cross_origin=True).add_to(m)
+
+    # Couche optionnelle (décochée par défaut) de densité de population par
+    # carreau INSEE 200m — même mécanisme que create_carte_arrets/
+    # creer_carte_troncons (src/cartographie.py). Bbox des carreaux
+    # atteignables si non vide, sinon une petite marge autour du départ.
+    if not gdf_carreaux.empty:
+        bbox_isochrone = gdf_carreaux.to_crs("EPSG:4326").total_bounds
+    else:
+        bbox_isochrone = (
+            origine["stop_lon"] - 0.02, origine["stop_lat"] - 0.02,
+            origine["stop_lon"] + 0.02, origine["stop_lat"] + 0.02,
+        )
+    ajouter_couche_carreaux_insee(m, bbox_isochrone)
 
     if not gdf_carreaux.empty:
         colormap = cm.StepColormap(
