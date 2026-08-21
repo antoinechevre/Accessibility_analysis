@@ -120,6 +120,27 @@ TRANSLATIONS = {
         "arrets.header_carte": "🗺️ Carte des Arrêts",
         "arrets.telecharger_csv": "📥 Télécharger les résultats CSV",
 
+        # --- views/isochrone.py ---
+        "isochrone.erreur_arrets": "Erreur lors du calcul des arrêts : {erreur}",
+        "isochrone.intro": "Arrêts atteignables en transport collectif depuis un arrêt de départ, à une heure de pointe donnée, sur le jour ouvré de base (JOB) du réseau. Correspondances au même arrêt uniquement (pas de correspondance piétonne entre arrêts distincts). Chaque arrêt atteint est habillé d'un isochrone piéton (API Isochrone/Isodistance de la Géoplateforme IGN).",
+        "isochrone.label_arret_depart": "Arrêt de départ",
+        "isochrone.passages_suffix": "passages",
+        "isochrone.label_heure": "Heure de pointe",
+        "isochrone.label_budget": "Budget de trajet (minutes)",
+        "isochrone.label_correspondances": "Correspondances max",
+        "isochrone.aide_correspondances": "Plafonné à 2 pour contenir le temps de calcul.",
+        "isochrone.label_marche": "Isochrone piéton autour de chaque arrêt atteint (min à pied)",
+        "isochrone.aide_marche": "0 = afficher uniquement les arrêts (sans zone de marche).",
+        "isochrone.bouton_calculer": "🚀 Calculer l'isochrone",
+        "isochrone.spinner_calcul": "Calcul des arrêts atteignables...",
+        "isochrone.attente_calcul": "Réglez les paramètres puis cliquez sur \"Calculer l'isochrone\".",
+        "isochrone.aucun_atteignable": "Aucun arrêt atteignable avec ces paramètres (pas de service à cette heure, budget trop court...).",
+        "isochrone.metric_atteints": "Arrêts atteints",
+        "isochrone.metric_duree_mediane": "Durée médiane",
+        "isochrone.metric_avec_correspondance": "Avec correspondance",
+        "isochrone.note_limite_geopf": "Plus de {n} arrêts atteints : au-delà, les zones de marche sont approximées par un cercle plutôt qu'un appel à l'API Géoplateforme (limite de {req} requêtes/s).",
+        "isochrone.legende_duree": "Durée de trajet depuis l'arrêt de départ (min)",
+
         # --- views/troncons.py ---
         "troncons.warning_limitations": """
     ⚠️ Cette analyse a été debuggée sur plusieurs GTFS en mentionnant les modes bus / tram / metro / trolley / ferry
@@ -293,6 +314,27 @@ TRANSLATIONS = {
         "arrets.header_fiche": "📄 Statistics sheet",
         "arrets.header_carte": "🗺️ Stop map",
         "arrets.telecharger_csv": "📥 Download CSV results",
+
+        # --- views/isochrone.py ---
+        "isochrone.erreur_arrets": "Error while computing stops: {erreur}",
+        "isochrone.intro": "Stops reachable by public transport from a departure stop, at a given peak hour, on the network's base weekday (JOB). Transfers at the same stop only (no walking transfer between distinct stops). Each reached stop is wrapped in a walking isochrone (IGN Géoplateforme Isochrone/Isodistance API).",
+        "isochrone.label_arret_depart": "Departure stop",
+        "isochrone.passages_suffix": "passages",
+        "isochrone.label_heure": "Peak hour",
+        "isochrone.label_budget": "Travel budget (minutes)",
+        "isochrone.label_correspondances": "Max transfers",
+        "isochrone.aide_correspondances": "Capped at 2 to keep computation time reasonable.",
+        "isochrone.label_marche": "Walking isochrone around each reached stop (minutes)",
+        "isochrone.aide_marche": "0 = show stops only (no walking area).",
+        "isochrone.bouton_calculer": "🚀 Compute isochrone",
+        "isochrone.spinner_calcul": "Computing reachable stops...",
+        "isochrone.attente_calcul": "Set the parameters then click \"Compute isochrone\".",
+        "isochrone.aucun_atteignable": "No stop reachable with these parameters (no service at this time, budget too short...).",
+        "isochrone.metric_atteints": "Stops reached",
+        "isochrone.metric_duree_mediane": "Median duration",
+        "isochrone.metric_avec_correspondance": "With transfer",
+        "isochrone.note_limite_geopf": "More than {n} stops reached: beyond that, walking areas are approximated by a circle rather than a Géoplateforme API call (limit of {req} requests/s).",
+        "isochrone.legende_duree": "Travel duration from the departure stop (min)",
 
         # --- views/troncons.py ---
         "troncons.warning_limitations": """

@@ -6,7 +6,7 @@ Calcule pour chaque arrêt : nombre de passages, premier et dernier départ
 import pandas as pd
 
 
-def calculer_indicateurs_arrets(feed, date_str: str):
+def calculer_indicateurs_arrets(feed, date_str: str, active_service_ids=None):
     """
     Calcule les indicateurs pour chaque arrêt :
     - Nombre de lignes desservies
@@ -16,13 +16,20 @@ def calculer_indicateurs_arrets(feed, date_str: str):
     - Amplitude horaire
     - Temps d'attente moyen, min et max
 
+    Args:
+        active_service_ids : liste de service_id à considérer actifs, si
+            déjà calculée par l'appelant (ex : obtenir_service_ids_pour_date
+            plus repli d'offre pour une agence) — sinon dérivée de date_str
+            via feed.get_trips(date=...) comme avant.
+
     Returns:
         Panda Dataframe avec une ligne d'indicateurs par arrêt.
     """
     print(f"\nCalcul des indicateurs aux arrêts...")
 
-    active_trips = feed.get_trips(date=date_str)
-    active_service_ids = active_trips['service_id'].unique().tolist()
+    if active_service_ids is None:
+        active_trips = feed.get_trips(date=date_str)
+        active_service_ids = active_trips['service_id'].unique().tolist()
 
     if not active_service_ids:
         print("⚠ Aucun service actif pour cette date")

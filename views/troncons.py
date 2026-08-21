@@ -207,6 +207,8 @@ def troncons_page(lang="fr"):
 
         st.info(t("commun.plage_info", lang, plage=date_service_str, job=date_JOB_text))
 
+        st.warning(t("troncons.warning_limitations", lang))
+
         st.markdown("---")
 
         MODES = modes_pour_reseau(st.session_state.nom_reseau_str)
@@ -256,6 +258,7 @@ def troncons_page(lang="fr"):
                         st.error(t("troncons.erreur_indicateurs", lang, erreur=e))
                         return
             conteneur_progression.empty()
+            st.success(t("troncons.succes", lang))
 
         if st.session_state.indicateurs_par_mode is not None:
 

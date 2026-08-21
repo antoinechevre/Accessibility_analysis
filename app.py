@@ -35,6 +35,8 @@ from views.cartographie_insee import cartographie_insee_page
 from views.benchmark_reseaux import benchmark_reseaux_page
 from views.arrets import arrets_page
 from views.troncons import troncons_page
+from views.isochrone import isochrone_page
+from views.isochrone_ttm_test import isochrone_ttm_test_page
 
 
 class TropAgencesError(Exception):
@@ -271,7 +273,7 @@ if "selected_page" not in st.session_state:
 GROUPES_NAV = {
     "Accueil": ["Accueil"],
     "Analyse du réseau": ["Accessibilité", "Pondération équipements", "Cartographie INSEE"],
-    "Analyse réseau (GTFS)": ["Arrêts", "Tronçons", "Explications GTFS"],
+    "Analyse réseau (GTFS)": ["Arrêts", "Tronçons", "Isochrone", "Isochrone TTM", "Explications GTFS"],
     "Benchmark": ["Benchmark Villes Françaises"],
 }
 LIBELLES_GROUPE = {
@@ -286,6 +288,8 @@ LIBELLES_PAGE = {
     "Cartographie INSEE": "🗺️ Carte population par déciles",
     "Arrêts": "📍 Arrêts",
     "Tronçons": "🛤️ Lignes",
+    "Isochrone": "⏱️ Isochrone arrêts",
+    "Isochrone TTM": "🧪 Isochrone carreaux",
     "Explications GTFS": "📖 Explications",
 }
 GROUPE_DE_LA_PAGE = {page: groupe for groupe, pages in GROUPES_NAV.items() for page in pages}
@@ -761,6 +765,10 @@ elif st.session_state.selected_page == "Arrêts":
     arrets_page()
 elif st.session_state.selected_page == "Tronçons":
     troncons_page()
+elif st.session_state.selected_page == "Isochrone":
+    isochrone_page()
+elif st.session_state.selected_page == "Isochrone TTM":
+    isochrone_ttm_test_page()
 elif st.session_state.selected_page == "Explications GTFS":
     st.markdown("---")
     explications_analyse_gtfs()

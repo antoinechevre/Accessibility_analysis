@@ -16,6 +16,37 @@ from src.hf_cache import charger_ou_calculer_avec_cache_hf
 from src.i18n import t
 
 
+def obtenir_indicateurs_arrets(lang="fr"):
+    """
+    Calcule les indicateurs par arrêt pour le GTFS chargé, ou les recharge
+    depuis le cache (disque local puis dataset Hugging Face) s'ils y ont
+    déjà été calculés pour ce réseau, et les stocke dans
+    st.session_state.indicateurs_arrets. Partagé entre la page Arrêts et la
+    page Isochrone (cf. views/isochrone.py, qui a besoin de la liste des
+    arrêts et de leur nombre de passages pour présélectionner l'arrêt le
+    plus fréquenté) — évite un recalcul si l'une a déjà été visitée.
+
+    Suppose st.session_state.feed et .active_service_ids déjà chargés
+    (vérifié par l'appelant). Lève toute exception du calcul plutôt que de
+    l'avaler, pour que l'appelant choisisse comment l'afficher.
+    """
+    if st.session_state.indicateurs_arrets is None:
+        nom_fichier = "indicateurs_arrets.csv"
+        nom_reseau = st.session_state.nom_reseau_str
+        chemin_cache = os.path.join("data", "memory_troncons", nom_reseau, nom_fichier)
+        nom_fichier_hf = f"memory_troncons/{nom_reseau}/{nom_fichier}"
+        st.session_state.indicateurs_arrets = charger_ou_calculer_avec_cache_hf(
+            chemin_cache,
+            nom_fichier_hf,
+            lambda: calculer_indicateurs_arrets(
+                st.session_state.feed,
+                st.session_state.date_str,
+                active_service_ids=st.session_state.active_service_ids,
+            ),
+        )
+    return st.session_state.indicateurs_arrets
+
+
 def arrets_page(lang="fr"):
     st.markdown("---")
 
@@ -47,22 +78,11 @@ def arrets_page(lang="fr"):
         if st.session_state.indicateurs_arrets is None:
             with st.spinner(t("arrets.spinner_indicateurs", lang)):
                 try:
-                    nom_fichier = "indicateurs_arrets.csv"
-                    nom_reseau = st.session_state.nom_reseau_str
-                    chemin_cache = os.path.join("data", "memory_troncons", nom_reseau, nom_fichier)
-                    nom_fichier_hf = f"memory_troncons/{nom_reseau}/{nom_fichier}"
-                    indicateurs = charger_ou_calculer_avec_cache_hf(
-                        chemin_cache,
-                        nom_fichier_hf,
-                        lambda: calculer_indicateurs_arrets(
-                            st.session_state.feed,
-                            st.session_state.date_str,
-                        ),
-                    )
-                    st.session_state.indicateurs_arrets = indicateurs
+                    obtenir_indicateurs_arrets(lang)
                 except Exception as e:
                     st.error(t("arrets.erreur_indicateurs", lang, erreur=e))
                     return
+            st.success(t("arrets.succes", lang))
 
         if st.session_state.indicateurs_arrets is not None:
             indicateurs = st.session_state.indicateurs_arrets
