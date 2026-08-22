@@ -12,8 +12,11 @@ cf. views/isochrone.py) plutôt que de les recharger indépendamment.
 import time
 
 import folium
+import geopandas as gpd
 import pandas as pd
 import requests
+from shapely.geometry import Point, shape
+from shapely.ops import unary_union
 
 from src.insee_carreaux import ajouter_couche_carreaux_insee
 
@@ -173,6 +176,61 @@ def recuperer_buffers_marche(arrets: pd.DataFrame, minutes: float, cache: dict) 
     return buffers
 
 
+def _ne_garder_que_polygones(geom):
+    """Filtre un résultat de différence/union shapely aux seules parties
+    polygonales : une différence entre polygones peut renvoyer une
+    GeometryCollection contenant en plus des restes dégénérés (points,
+    segments) là où les bords se touchent tangentiellement, invalides pour
+    un rendu GeoJson."""
+    if geom is None or geom.is_empty:
+        return None
+    if geom.geom_type in ("Polygon", "MultiPolygon"):
+        return geom
+    if geom.geom_type == "GeometryCollection":
+        polygones = [g for g in geom.geoms if g.geom_type in ("Polygon", "MultiPolygon")]
+        return unary_union(polygones) if polygones else None
+    return None
+
+
+def zones_marche_tronquees(arrets: pd.DataFrame, buffers: dict, rayon_marche_min: int) -> gpd.GeoDataFrame:
+    """Géométrie de la zone de marche de chaque arrêt atteint (isochrone
+    piéton API si disponible, cf. buffers/recuperer_buffers_marche, sinon
+    cercle de rayon_marche_min*80 mètres), tronquée de la portion déjà
+    couverte par un arrêt plus rapide : là où deux zones se chevauchent,
+    l'arrêt le plus proche en durée "gagne" la zone commune plutôt que de
+    superposer les couleurs. Retourne un GeoDataFrame [colonnes de arrets +
+    geometry] en EPSG:4326, trié du plus lent au plus rapide (ordre correct
+    pour l'ajout à la carte : le plus rapide, ajouté en dernier, se
+    retrouve visuellement au-dessus)."""
+    arrets_croissant = arrets.sort_values("duree_min", ascending=True).reset_index(drop=True)
+
+    geometries = [
+        shape(buffers[stop_id]) if buffers.get(stop_id) is not None else Point(lon, lat)
+        for stop_id, lon, lat in zip(arrets_croissant["stop_id"], arrets_croissant["stop_lon"], arrets_croissant["stop_lat"])
+    ]
+    gdf = gpd.GeoDataFrame(arrets_croissant, geometry=geometries, crs="EPSG:4326")
+
+    # Web Mercator (mètres) pour un rayon de cercle et des opérations de
+    # troncature corrects — reprojeté en EPSG:4326 avant retour pour le
+    # rendu GeoJson/Leaflet.
+    gdf_m = gdf.to_crs(epsg=3857)
+    sans_geometrie_api = gdf.geometry.geom_type == "Point"
+    gdf_m.loc[sans_geometrie_api, "geometry"] = gdf_m.loc[sans_geometrie_api, "geometry"].buffer(
+        rayon_marche_min * 80  # ~80 m/min à pied, repli grossier si l'API a échoué pour cet arrêt
+    )
+
+    deja_couvert = None
+    geometries_tronquees = []
+    for geom in gdf_m.geometry:
+        visible = _ne_garder_que_polygones(geom.difference(deja_couvert)) if deja_couvert is not None else geom
+        geometries_tronquees.append(visible)
+        deja_couvert = geom if deja_couvert is None else unary_union([deja_couvert, geom])
+
+    gdf_m["geometry"] = geometries_tronquees
+    # Le plus lent en premier (dessous), le plus rapide en dernier (dessus)
+    return gdf_m[gdf_m.geometry.notna()].to_crs(epsg=4326).iloc[::-1]
+
+
 def build_map(origine, arrets: pd.DataFrame, buffers: dict, budget_min: int, rayon_marche_min: int, legende_duree="Durée de trajet depuis l'arrêt de départ (min)") -> folium.Map:
     center = [origine["stop_lat"], origine["stop_lon"]]
     m = folium.Map(location=center, zoom_start=13, tiles=None, prefer_canvas=True, control_scale=True)
@@ -208,25 +266,24 @@ def build_map(origine, arrets: pd.DataFrame, buffers: dict, budget_min: int, ray
         )
         colormap.add_to(m)
 
+        # Tri décroissant par durée avant d'ajouter les couches : les
+        # éléments ajoutés en dernier se retrouvent visuellement au-dessus
+        # (empilement SVG/Leaflet par ordre d'ajout), donc les zones/arrêts
+        # les plus rapides (verts) ajoutés en dernier passent devant les
+        # plus lents (orange, puis rouge) là où ils se chevauchent.
+        arrets_du_plus_lent_au_plus_rapide = arrets.sort_values("duree_min", ascending=False)
+
         buffers_layer = folium.FeatureGroup(name="Zones de marche autour des arrêts atteints")
-        for _, arret in arrets.iterrows():
-            geometry = buffers.get(arret["stop_id"])
-            couleur = colormap(arret["duree_min"])
-            if geometry is not None:
-                folium.GeoJson(
-                    geometry,
-                    style_function=lambda _f, c=couleur: {"fillColor": c, "color": c, "weight": 1, "fillOpacity": 0.35},
-                ).add_to(buffers_layer)
-            else:
-                folium.Circle(
-                    [arret["stop_lat"], arret["stop_lon"]],
-                    radius=rayon_marche_min * 80,  # ~80 m/min à pied, repli grossier si l'API échoue
-                    color=couleur, weight=1, dash_array="4", fill=True, fillColor=couleur, fillOpacity=0.25,
-                ).add_to(buffers_layer)
+        for _, zone in zones_marche_tronquees(arrets, buffers, rayon_marche_min).iterrows():
+            couleur = colormap(zone["duree_min"])
+            folium.GeoJson(
+                zone["geometry"].__geo_interface__,
+                style_function=lambda _f, c=couleur: {"fillColor": c, "color": c, "weight": 1, "fillOpacity": 0.35},
+            ).add_to(buffers_layer)
         buffers_layer.add_to(m)
 
         arrets_layer = folium.FeatureGroup(name="Arrêts atteints")
-        for _, arret in arrets.iterrows():
+        for _, arret in arrets_du_plus_lent_au_plus_rapide.iterrows():
             folium.CircleMarker(
                 [arret["stop_lat"], arret["stop_lon"]],
                 radius=4,

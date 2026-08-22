@@ -206,6 +206,9 @@ TRANSLATIONS = {
         "carto.popup_passages": "Passages:",
         "carto.popup_vitesse": "Vitesse moy.:",
         "carto.popup_distance": "Distance:",
+        "carto.couche_densite_pop": "🟥 Densité de population (carreaux INSEE 200m)",
+        "carto.legende_densite_pop": "Densité de population (hab/km²)",
+        "carto.tooltip_densite_pop": "Densité (hab/km²) :",
     },
     "en": {
         # --- app.py ---
@@ -401,6 +404,9 @@ TRANSLATIONS = {
         "carto.popup_passages": "Passages:",
         "carto.popup_vitesse": "Avg. speed:",
         "carto.popup_distance": "Distance:",
+        "carto.couche_densite_pop": "🟥 Population density (INSEE 200m grid)",
+        "carto.legende_densite_pop": "Population density (inhab/km²)",
+        "carto.tooltip_densite_pop": "Density (inhab/km²):",
     },
 }
 
