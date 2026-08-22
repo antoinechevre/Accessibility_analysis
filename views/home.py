@@ -9,16 +9,18 @@ import streamlit as st
 def home_page():
     st.markdown(
         """
-    ## Projet personnel 2026
 
-    Ce projet a été développé pour un contexte français par Antoine Chevre (et claude.ai...) en s'inspirant des travaux -Introduction to urban accessibility- et plus spécifiquement -3 Calculating accessibility estimates in R
+    Ce projet a été développé comme projet personnel pour un contexte français par Antoine Chevre (et claude.ai...) en s'inspirant: 
+    - des travaux -Introduction to urban accessibility- et plus spécifiquement -3 Calculating accessibility estimates in R
     de Rafael H. M. Pereira et Daniel Herszenhut de Ipea - Institute for Applied Economic Research.
+    - des travaux du Cerema lors du Hackathon TSNI 2025 sur l'analyse GTFS (arrêts / tronçons)
 
     **Concepteur :** Antoine Chèvre 🐐 (et claude.ai....)
 
     Cette application regroupe deux types d'analyses se basant sur le même jeu de données GTFS :
     l'analyse d'accessibilité urbaine aux équipements en transport collectif / piéton, et l'analyse
     du réseau de transport collectif en lui-même.
+    
     """
     )
 
@@ -36,8 +38,8 @@ def home_page():
         - en mode piéton/transports collectifs en JOB à l'heure de pointe
         - des équipements issus de la base BPE à 30 min de l'agglomération concernée
         - selon un carroyage de 200x200 m de l'INSEE
-    - **Exporter des cartes HTML et PNG géolocalisées** d'accessibilité transport collectif et piétons à 30 min, par domaine d'équipement
-    - **Proposer à la fois des scripts utilisables en local**, une interface web conviviale (via Streamlit) pour les utilisateurs non-techniques, et un notebook d'exemple pour tester / explorer les résultats
+    - **Exporter des cartes HTML et PNG géolocalisées** d'accessibilité transport collectif et piétons à 30 min et 45 min, par domaine d'équipement
+    - **Proposer un benchmark entre villes française** en comparant les indicateurs d'accessibilité aux équipements par domaine et par décile de population  
     """
         )
 
@@ -46,10 +48,10 @@ def home_page():
 
         st.markdown(
             "1. Construit le réseau multimodal piéton + transport collectif (`r5py`) à partir du GTFS "
-            "pour une date JOB indiquée et le réseau viaire pour les cheminements piétons"
+            "pour une date JOB indiquée, calculer automatiquement hors période vacances scolaires et le réseau viaire pour les cheminements piétons"
         )
         st.markdown(
-            "2. Récupère le carroyage population INSEE 200x200 2019 incluant les catégories socio "
+            "2. Récupère le carroyage population INSEE 200x200 2019 incluant les catégories socio des individus au sens fiscal du termes "
             "économiques (Filosofi) et la Base Permanente des Équipements (BPE, INSEE)"
         )
 
@@ -141,7 +143,7 @@ def home_page():
     st.markdown("---")
     st.markdown(
         """
-    Contributeur Antoine Chèvre [@antoine.chevre](https://github.com/antoinechevre) 🐐
+    Antoine Chèvre [@antoine.chevre](https://github.com/antoinechevre) 🐐
     In we goat we trust
     """
     )
@@ -169,7 +171,7 @@ def explications_analyse_gtfs():
     Analyse des données GTFS (General Transit Feed Specification) pour extraire des indicateurs clés
     sur les transports en commun — indépendamment de l'analyse d'accessibilité aux équipements ci-dessus.
     Détermine la plage temporelle sur laquelle le GTFS est actif et identifie un JOB (jour ouvré de base,
-    mardi ou jeudi le plus loin dans le temps sur cette plage).
+    mardi ou jeudi le plus loin dans le temps sur cette plage). A cela a été ajouté deux types d'isochrones : isochrone d'arrêt à arrêt et isochrone de tronçon à tronçon.
 
     #### 📍 Analyse par arrêts
     - Nombre de passages par arrêt
@@ -182,7 +184,20 @@ def explications_analyse_gtfs():
     - Nombre de passages par tronçon (bus, tram, métro, trolley, ferry...)
     - Calcul des vitesses moyennes
     - Carte interactive des tronçons
+    
+    #### 🛤️ Isochrone d'arrêt à arrêt 
+    - Carte interactive des isochrones d'arrêt à arrêt à partir d'un arrêt sélectionné en sélectionnanr le temps de trajet souhaité (ex : 15 min, 30 min, 45 min)
+    
+    #### 🛤️ Isochrone de carreaux 200x200 m 
+    - Carte interactive des isochrones de carreaux 200x200 m à partir d'un carreau sélectionné en sélectionnant le temps de trajet souhaité (ex : 15 min, 30 min, 45 min)
+    
+    
+    
     """
+    
+    
+    
+    
         )
 
     with onglet_liens_gtfs:
