@@ -185,10 +185,10 @@ def explications_analyse_gtfs():
     - Calcul des vitesses moyennes
     - Carte interactive des tronçons
     
-    #### 🛤️ Isochrone d'arrêt à arrêt 
+    #### ⏱️ Isochrone d'arrêt à arrêt
     - Carte interactive des isochrones d'arrêt à arrêt à partir d'un arrêt sélectionné en sélectionnanr le temps de trajet souhaité (ex : 15 min, 30 min, 45 min)
-    
-    #### 🛤️ Isochrone de carreaux 200x200 m 
+
+    #### 🧪 Isochrone de carreaux 200x200 m
     - Carte interactive des isochrones de carreaux 200x200 m à partir d'un carreau sélectionné en sélectionnant le temps de trajet souhaité (ex : 15 min, 30 min, 45 min)
     
     

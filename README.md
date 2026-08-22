@@ -13,7 +13,7 @@ pinned: false
 Cette application regroupe deux analyses indépendantes basées sur le même jeu de données GTFS :
 
 1. **Analyse d'accessibilité urbaine** aux équipements en transport collectif / piéton (< 30 min), à partir d'un GTFS et d'un découpage communal français quelconque.
-2. **Analyse réseau** (arrêts / tronçons) : indicateurs de fréquentation par arrêt et par tronçon, indépendants de l'analyse d'accessibilité — fonctionne avec n'importe quel GTFS, français ou non.
+2. **Analyse réseau** (arrêts / tronçons / isochrones) : indicateurs de fréquentation par arrêt et par tronçon, cartes isochrones depuis un arrêt choisi — indépendants de l'analyse d'accessibilité, fonctionne avec n'importe quel GTFS, français ou non.
 
 Le projet s'inspire des travaux du livre *Introduction to urban accessibility* (Rafael H. M. Pereira et Daniel Herszenhut, Ipea - Institute for Applied Economic Research), notamment le chapitre [Calculating accessibility estimates in R](https://ipeagit.github.io/intro_access_book/3_calculando_acesso.en.html), réadaptés ici en Python pour un contexte français (carroyage INSEE, Base Permanente des Équipements).
 
@@ -56,16 +56,20 @@ Le projet s'inspire des travaux du livre *Introduction to urban accessibility* (
   7.2 % opportunités/équipements pour un temps de trajet moyen de 30 min, 45 min, 60 min, 75 min  
 
 
-## Analyse réseau (arrêts / tronçons)
+## Analyse réseau (arrêts / tronçons / isochrones)
 
-Deuxième analyse proposée par l'application, indépendante de l'analyse d'accessibilité ci-dessus (pas besoin de découpage communal, de carroyage INSEE ni de BPE — seul le GTFS est nécessaire, ce qui la rend utilisable pour un réseau hors de France). Développée lors du [Hackathon TSNI 2025 du Cerema](https://colab.research.google.com/github/CEREMA/hackathon-gtfs/blob/main/gtfs_notebook.ipynb) (équipe Cerema : Patrick Gendre, Hugo De Luca et Maxence Liogier), reprise et adaptée ici par Antoine Chèvre (et Claude.ai). Application dédiée de référence : [GTFS_analyse_fr](https://huggingface.co/spaces/antoinechevre/GTFS_analyse_fr).
+Deuxième analyse proposée par l'application, indépendante de l'analyse d'accessibilité ci-dessus (pas besoin de découpage communal, de carroyage INSEE ni de BPE — seul le GTFS est nécessaire, ce qui la rend utilisable pour un réseau hors de France). Développée lors du [Hackathon TSNI 2025 du Cerema](https://colab.research.google.com/github/CEREMA/hackathon-gtfs/blob/main/gtfs_notebook.ipynb) (équipe Cerema : Patrick Gendre, Hugo De Luca et Maxence Liogier), reprise et adaptée ici par Antoine Chèvre (et Claude.ai). Application dédiée de référence, tenue en parallèle : [GTFS_analyse_fr](https://huggingface.co/spaces/antoinechevre/GTFS_analyse_fr) ([code source](https://github.com/antoinechevre/GTFS_analysis_fr)).
 
-Détermine la plage de service fiable du GTFS et un jour ouvré de base (JOB, mardi ou jeudi tiré au hasard dans cette plage), puis calcule :
+Détermine la plage de service fiable du GTFS et un jour ouvré de base (JOB, mardi ou jeudi le plus loin dans le temps sur cette plage, hors vacances scolaires de l'académie du réseau si connue), puis calcule :
 
 - **Par arrêts** : nombre de passages par arrêt, carte interactive, statistiques détaillées (fiche exportable en HTML), export CSV.
 - **Par tronçons** (bus / tram / métro / trolley / ferry, et train pour les réseaux avec agences dédiées comme IDFM — RER/Transilien/TER) : nombre de passages par tronçon, vitesse moyenne, carte interactive par mode avec couches superposables, export CSV par mode.
+- **Isochrone d'arrêt à arrêt** (`views/isochrone.py`, `src/isochrone.py`) : accessibilité en transport collectif depuis un arrêt choisi, à une heure de pointe donnée (RAPTOR simplifié limité aux correspondances au même arrêt), habillée d'un isochrone piéton par arrêt atteint (API Isochrone/Isodistance de la Géoplateforme IGN, avec repli en cercle si l'API échoue) ; les zones de marche qui se chevauchent sont tronquées pour que l'arrêt le plus rapide l'emporte visuellement.
+- **Isochrone de carreaux 200m** (`views/isochrone_ttm_test.py`, `src/isochrone_ttm.py`, expérimental) : même principe mais à partir de la matrice de temps de trajet r5py carreau à carreau déjà calculée par ce projet pour le réseau (`memory_ttm/ttm_<réseau>.parquet`, cf. section Déploiement) — correspondances et temps de marche réels plutôt qu'approximés, mais horaire de départ figé à celui du calcul du ttm (14h en JOB) et disponible seulement pour les réseaux déjà traités par l'analyse d'accessibilité.
 
-Dans l'app, ces deux pages vivent sous l'onglet "Analyse réseau" (sous-pages "Arrêts" et "Tronçons"), avec une troisième sous-page "Explications" reprenant ce même texte.
+Toutes les cartes de cette section (Arrêts, Tronçons, Isochrones) partagent le même sélecteur de fond de carte (OpenStreetMap / CartoDB Positron / CartoDB Dark Matter) et une couche optionnelle, décochée par défaut, de densité de population par carreau INSEE 200m (`src/insee_carreaux.py`).
+
+Dans l'app, ces pages vivent sous l'onglet "Analyse réseau" (sous-pages "Arrêts", "Tronçons", "Isochrone", "Isochrone TTM"), avec une dernière sous-page "Explications" reprenant ce même texte.
 
 ## Structure du dépôt
 
@@ -76,20 +80,24 @@ views/                                    # pages de l'app Streamlit
   accessibilite_index.py, ponderation_equipements.py, cartographie_insee.py, benchmark_reseaux.py
   home.py                                 # page Accueil (accessibilité + analyse réseau)
   arrets.py, troncons.py                  # analyse réseau (arrêts / tronçons), cf. section dédiée
+  isochrone.py, isochrone_ttm_test.py     # analyse réseau (isochrones), cf. section dédiée
 src/
   build_data_agglo.py                     # découpage communal, grille, extraction OSM
+  extraire_gtfs_departement.py            # extrait un sous-GTFS départemental d'un GTFS régional agrégé
   BPE_traitement.py                       # filtrage/pondération BPE, cartes par domaine
   utilitaires_matrix.py                   # cumulative_cutoff, cost_to_closest, gravity, 2SFCA
   utils.py                                # chargement GTFS, exports CSV/GeoJSON, dir_tree
   info_reseau.py, i18n.py, ...            # utilitaires réseau / traductions app
   arrets.py, create_troncons_uniques.py, indicateurs_troncons.py   # calculs analyse réseau
+  isochrone.py, isochrone_ttm.py          # calculs isochrones (RAPTOR simplifié, et via ttm r5py)
+  insee_carreaux.py                       # couche densité de population (carreaux INSEE 200m)
   cartographie.py, export_html.py         # cartes Folium et fiches HTML (arrêts, accessibilité et réseau)
 data/                                      # GTFS, carroyage INSEE, BPE, fichiers générés (non versionné)
 output/                                    # cartes et images exportées (non versionné)
 requirements.txt
 ```
 
-> ⚠️ `app.py` est fonctionnel : `views/accessibilite_index.py` (pipeline complet + r5py) et `views/ponderation_equipements.py` (cartes de pondération BPE, sans r5py) sont toutes deux implémentées, de même que `views/arrets.py` et `views/troncons.py` (analyse réseau). Le notebook reste la référence de calcul en cas de doute pour l'analyse d'accessibilité.
+> ⚠️ `app.py` est fonctionnel : `views/accessibilite_index.py` (pipeline complet + r5py) et `views/ponderation_equipements.py` (cartes de pondération BPE, sans r5py) sont toutes deux implémentées, de même que `views/arrets.py`, `views/troncons.py`, `views/isochrone.py` et `views/isochrone_ttm_test.py` (analyse réseau). Le notebook reste la référence de calcul en cas de doute pour l'analyse d'accessibilité.
 
 ## Déploiement
 
@@ -113,6 +121,7 @@ requirements.txt
   - **IDFM (Île-de-France)** : Paris + petite couronne, nettement plus grand que Lyon ; même 800m ne suffisait pas ("Memory limit exceeded" à 32 Go sur le Space, y compris avec un lot réduit pour `calculer_ttm_par_lots`). Passage en carreaux de 1km sur la base INSEE correspondante (carroyage Filosofi 1km, déjà le grillage publié par l'INSEE — pas de grille théorique à reconstruire ni de fusion à faire, contrairement au 200m) : ~8000 carreaux sur toute l'Île-de-France au lieu de plusieurs centaines de milliers à 200m. Fichier `Filosofi2017_carreaux_1km_met.gpkg` récupéré depuis le cache Hugging Face (`assurer_carreaux_1km_local`) ou à télécharger manuellement depuis insee.fr si absent des deux côtés (pas d'URL directe stable identifiée, contrairement au 200m). Contrepartie : résolution spatiale fixe à 1km (pas de palier intermédiaire), et millésime Filosofi 2017 (le 200m est peut-être plus récent) — décalage temporel mineur avec le BPE 2025.
 - **Garde-fou "max 4 agences" et exceptions nommées (`GTFS_NOM_RESEAU_FORCE`, `app.py`)** : un GTFS national/régional regroupant de nombreuses agences ferait exploser les temps de calcul et n'a pas de sens pour les indicateurs proposés ici — bloqué par défaut (`TropAgencesError`), sauf pour les GTFS listés explicitement dans `GTFS_NOM_RESEAU_FORCE` (actuellement IDFM et Aix_Marseille_mamp_GTFS.zip), avec un nom de réseau forcé plutôt que dérivé automatiquement des agences (`nom_reseau_str()` concatène tous les noms d'agence avec " / ", ce qui donnerait une chaîne de plusieurs centaines de caractères pour IDFM — invalide comme nom de fichier).
 - **Fusion de plusieurs GTFS (`src/merge_gtfs.py`, upload multi-fichiers dans `app.py`)** : certaines agglomérations ne sont pas couvertes par un seul GTFS (ex: **Aix-Marseille-Provence**, dont le GTFS "Marseille" ne couvre que le réseau RTM, pas celui d'Aix-en-Provence). La barre latérale accepte plusieurs fichiers à la fois (upload et/ou catalogue existant) : au-delà d'un seul fichier sélectionné, ils sont fusionnés (`fusionner_gtfs` — concaténation simple, identifiants préfixés par feed pour éviter les collisions, pas de déduplication d'entités qui se recouvriraient) avant d'entrer dans le pipeline standard. Un champ optionnel permet de forcer le nom du réseau fusionné (ex: `Aix_Marseille`), pour éviter le même problème de nom à rallonge que IDFM si on laisse `nom_reseau_str()` concaténer les agences des GTFS fusionnés.
+- **Réseau départemental extrait d'un GTFS régional agrégé (`src/extraire_gtfs_departement.py`)** : à l'inverse du cas précédent, un GTFS régional (ex: Fluo Grand Est) peut regrouper des dizaines d'agences sur un territoire bien plus grand qu'un seul réseau urbain. Ce script restreint le GTFS aux seuls trips ayant au moins un arrêt dans un département donné (`gtfs_kit.Feed.restrict_to_area` sur le contour du département, dissous depuis les communes de geo.api.gouv.fr) — TER, réseaux Fluo et urbains locaux inclus automatiquement puisque le filtre est géographique, pas une liste d'agences à maintenir à la main. Utilisé pour la Marne (51), traitée à part via `index_accessibility_notebook_51.ipynb` (nom de réseau forcé à `51-Marne`, extrait OSM téléchargé directement depuis l'extrait département déjà découpé d'openstreetmap.fr plutôt que reconstruit via Overpass) et exclue du benchmark inter-réseaux (`RESEAUX_EXCLUS_BENCHMARK`) comme IDFM — un département entier n'est pas comparable à une agglomération urbaine.
 
 ## Installation
 

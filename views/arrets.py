@@ -29,9 +29,22 @@ def obtenir_indicateurs_arrets(lang="fr"):
     Suppose st.session_state.feed et .active_service_ids déjà chargés
     (vérifié par l'appelant). Lève toute exception du calcul plutôt que de
     l'avaler, pour que l'appelant choisisse comment l'afficher.
+
+    Nom de fichier daté par date_str (== date_JOB, cf. app.py) plutôt que
+    fixe : sans ça, un GTFS rafraîchi (nouveaux stop_id, service modifié)
+    reste indéfiniment associé aux indicateurs de l'ANCIENNE version,
+    jamais invalidés (charger_ou_calculer_avec_cache_hf ne vérifie que la
+    présence du fichier, pas sa fraîcheur). Le stop_id du plus fréquenté
+    dans ce cache périmé peut ne plus correspondre à rien dans le feed
+    frais rechargé à côté — observé concrètement sur Reims (rafraîchi
+    entre-temps) : l'onglet Isochrone (qui recombine ce stop_id avec le
+    feed frais pour le calcul RAPTOR) tombait sur "aucun arrêt atteignable"
+    faute de correspondre encore au feed courant, alors qu'Arrêts/Tronçons
+    (qui n'utilisent le cache que pour l'affichage, jamais recombiné à un
+    feed séparé) ne laissaient rien paraître.
     """
     if st.session_state.indicateurs_arrets is None:
-        nom_fichier = "indicateurs_arrets.csv"
+        nom_fichier = f"indicateurs_arrets_{st.session_state.date_str}.csv"
         nom_reseau = st.session_state.nom_reseau_str
         chemin_cache = os.path.join("data", "memory_troncons", nom_reseau, nom_fichier)
         nom_fichier_hf = f"memory_troncons/{nom_reseau}/{nom_fichier}"
