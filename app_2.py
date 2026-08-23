@@ -39,6 +39,7 @@ GTFS_NOM_RESEAU_FORCE = {
     "IDFM-gtfs_metro-rer-bus-tram_paris-petite-couronne.zip": "IDFM",
     "IDFM-gtfs.zip": "IDFM",
     "Aix_Marseille_mamp_GTFS.zip": "Aix_Marseille",
+    "51_REGION_GRANDEST.gtfs.zip": "51-Marne",
 }
 
 GTFS_DATA_DIR = os.path.join(os.getcwd(), "data", "GTFS")

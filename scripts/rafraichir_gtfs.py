@@ -76,6 +76,7 @@ NOMS_RESEAU_FORCES = {
     "IDFM-gtfs_metro-rer-bus-tram_paris-petite-couronne.zip": "IDFM",
     "IDFM-gtfs.zip": "IDFM",
     "Aix_Marseille_mamp_GTFS.zip": "Aix_Marseille",
+    "51_REGION_GRANDEST.gtfs.zip": "51-Marne",
 }
 
 # Caches dérivés à invalider sur le dataset HF pour un réseau mis à jour

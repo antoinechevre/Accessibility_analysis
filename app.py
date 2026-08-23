@@ -67,6 +67,12 @@ GTFS_NOM_RESEAU_FORCE = {
     # 4 agences comme IDFM — même besoin de nom forcé pour éviter la
     # concaténation à rallonge de nom_reseau_str().
     "Aix_Marseille_mamp_GTFS.zip": "Aix_Marseille",
+    # Réseau départemental Marne (51), extrait du GTFS régional Grand Est par
+    # src/extraire_gtfs_departement.py : regroupe toutes les agences du
+    # département, comme IDFM/Aix-Marseille — nom forcé vers "51-Marne" pour
+    # retrouver le cache existant (memory_ttm/ttm_51-Marne.parquet, etc.)
+    # déjà calculé via index_accessibility_notebook_51.ipynb.
+    "51_REGION_GRANDEST.gtfs.zip": "51-Marne",
 }
 
 
