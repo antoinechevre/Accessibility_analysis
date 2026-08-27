@@ -668,7 +668,7 @@ def accessibilite_index_page():
         niveau_vie = deciles_niveau_vie(population_grid_agglo)
 
     fond_carte = st.selectbox(
-        "Fond de carte", options=list(FONDS_CARTE.keys()), index=list(FONDS_CARTE.keys()).index("CartoDB Positron")
+        "Fond de carte", options=list(FONDS_CARTE.keys()), index=list(FONDS_CARTE.keys()).index("OpenStreetMap")
     )
 
     if not st.session_state.analyse_detaillee:

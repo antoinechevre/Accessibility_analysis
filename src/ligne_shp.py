@@ -26,7 +26,7 @@ def trace_lignes_gtfs(zip_path, date_analyse):
         on='shape_id'
     )
 
-    m = folium.Map(location=[46.1603, -1.1511], zoom_start=13, tiles="CartoDB positron")
+    m = folium.Map(location=[46.1603, -1.1511], zoom_start=13, tiles="OpenStreetMap")
 
     for _, row in geo_shapes.iterrows():
         coords = [(lat, lon) for lon, lat in row.geometry.coords]

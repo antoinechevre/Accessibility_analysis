@@ -284,7 +284,7 @@ def accessibilite_urbaine_page_2():
     st.success(f"✓ {len(population_grid_agglo)} carreaux actifs — matrice des temps de trajet prête.")
 
     fond_carte = st.selectbox(
-        "Fond de carte", options=list(FONDS_CARTE.keys()), index=list(FONDS_CARTE.keys()).index("CartoDB Positron")
+        "Fond de carte", options=list(FONDS_CARTE.keys()), index=list(FONDS_CARTE.keys()).index("OpenStreetMap")
     )
 
     niveau_vie = deciles_niveau_vie(population_grid_agglo)
