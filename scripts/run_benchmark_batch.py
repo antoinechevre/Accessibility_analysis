@@ -5,6 +5,14 @@ explicites, cf. EXCLUS ci-dessous), pour constituer un benchmark multi-agglos
 (cf. cellule "#sauvegarde index" du notebook, qui alimente ce CSV — partagé
 avec l'app via le dataset HF, cf. src/hf_cache.fusionner_et_envoyer_csv).
 
+Ne scanne QUE data/GTFS/ (GTFS_DIR ci-dessous) : les GTFS "modifiés pour
+étude" (extraits d'un GTFS agrégé plus large — SQY.zip, Lannion_Guingamp_gtfs.zip,
+51_REGION_GRANDEST.gtfs.zip... cf. src/extraire_gtfs_agence.py,
+src/extraire_gtfs_epci.py, src/extraire_gtfs_departement.py, et le sélecteur
+"GTFS modifié pour étude" dans app.py) vivent dans data/GTFS_agrege/, un
+dossier différent — jamais inclus dans ce batch, structurellement, sans
+avoir besoin de les lister dans EXCLUS.
+
 Chaque GTFS est exécuté dans un noyau Jupyter frais et indépendant (pas de
 fuite d'état entre réseaux, chaque run repart de zéro) : le notebook source
 n'est jamais modifié sur disque, une copie en mémoire a sa cellule
@@ -64,10 +72,10 @@ LOG_DIR = os.path.join(BASE_DIR, "output", "batch_logs")
 #   pas les inclure dans le batch.
 # - 51_REGION_GRANDEST.gtfs.zip : réseau départemental (Marne, 51), lancé à
 #   part (index_accessibility_notebook_51.ipynb, nom de réseau forcé à
-#   "51-Marne" — cf. GTFS_NOM_RESEAU_FORCE dans app.py/app_2.py) — même
-#   raison qu'IDFM : déjà exclu du benchmark lui-même (RESEAUX_EXCLUS_BENCHMARK
-#   dans src/pipeline_donnees.py), pas la peine de dépenser le pipeline
-#   complet ici pour un résultat qui ne sera jamais écrit dans l'index.
+#   "51-Marne" — cf. GTFS_NOM_RESEAU_FORCE dans app.py/app_2.py) — vit
+#   maintenant dans data/GTFS_agrege/ (cf. note en tête de fichier), donc
+#   déjà hors de portée de ce batch ; gardé quand même dans EXCLUS en filet
+#   de sécurité si jamais redéposé dans data/GTFS/ par erreur.
 EXCLUS = {
     "Lyon_GTFS_TCL.zip",
     "IDFM-gtfs.zip",

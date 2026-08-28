@@ -2,7 +2,7 @@
 Extrait, depuis un GTFS régional agrégé (plusieurs opérateurs/agences), les
 seuls trips ayant au moins un arrêt dans un département donné.
 
-Cas d'usage : data/GTFS_agrégé/REGION_GRANDEST.gtfs.zip agrège une
+Cas d'usage : data/GTFS_Régionaux/REGION_GRANDEST.gtfs.zip agrège une
 cinquantaine d'agences (TER, réseaux Fluo par département, réseaux urbains
 Reims/Châlons-en-Champagne/Épernay/Nancy/Strasbourg...) sur toute la région
 Grand Est — beaucoup trop volumineux et hétérogène pour être traité tel
@@ -110,17 +110,18 @@ def extraire_gtfs_departement(chemin_zip_entree, code_departement, chemin_zip_so
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--gtfs", default="REGION_GRANDEST.gtfs.zip", help="Nom du fichier dans data/GTFS_agrégé/")
+    parser.add_argument("--gtfs", default="REGION_GRANDEST.gtfs.zip", help="Nom du fichier dans data/GTFS_Régionaux/")
     parser.add_argument("--departement", default="51", help="Code INSEE du département (ex: 51 pour la Marne)")
     parser.add_argument(
-        "--dossier-sortie", default="GTFS_agrégé",
-        help="Sous-dossier de data/ où écrire le GTFS extrait (défaut : GTFS_agrégé — multi-agences, "
-        "pas encore prêt pour le pipeline tel quel ; passer GTFS pour l'y déposer directement).",
+        "--dossier-sortie", default="GTFS_agrege",
+        help="Sous-dossier de data/ où écrire le GTFS extrait (défaut : GTFS_agrege — extraits prêts à "
+        "l'étude, cf. app.py \"GTFS modifié pour étude\" ; passer GTFS pour le déposer directement dans "
+        "le catalogue principal).",
     )
     parser.add_argument("--sortie", default=None, help="Chemin complet du GTFS extrait (prioritaire sur --dossier-sortie)")
     args = parser.parse_args()
 
-    chemin_entree = os.path.join(BASE_DIR, "data", "GTFS_agrégé", args.gtfs)
+    chemin_entree = os.path.join(BASE_DIR, "data", "GTFS_Régionaux", args.gtfs)
     chemin_sortie = args.sortie or os.path.join(
         BASE_DIR, "data", args.dossier_sortie, f"{args.departement}_{os.path.splitext(args.gtfs)[0]}.zip"
     )

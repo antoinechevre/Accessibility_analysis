@@ -77,6 +77,31 @@ def _log(message):
 # d'ensemble par domaine + déclinaison par décile de niveau de vie).
 CUTOFFS_PCT_MOYEN_POLES = [15, 30, 45, 60]
 
+# Seuils (min, max) non standard pour la carte "Pôles d'équipements
+# accessibles" (cf. _carte_poles_accessibles_domaine) de certains GTFS
+# "modifié pour étude" (cf. app.py — extraits d'un GTFS agrégé plus large) :
+# réseaux ruraux/peu denses où 30 min capte trop peu, contrairement à un
+# réseau dense comme SQY (Île-de-France) qui reste sur les seuils standard
+# 30/45 malgré son statut d'extrait — même logique que la section 9.2 de
+# index_accessibility_notebook_Lannion.ipynb/_51.ipynb. Clé = nom de fichier
+# GTFS tel que sélectionné dans "GTFS modifié pour étude".
+CUTOFFS_NON_STANDARD = {
+    "Lannion_Guingamp_gtfs.zip": (45, 60),
+    "51_REGION_GRANDEST.gtfs.zip": (45, 60),
+}
+
+
+def _cutoffs_poles_accessibles():
+    """(min, max) en minutes pour _carte_poles_accessibles_domaine — (30, 45)
+    par défaut, ou l'entrée de CUTOFFS_NON_STANDARD si le GTFS actuellement
+    chargé (st.session_state.last_uploaded_name, éventuellement une fusion
+    "fichier1+fichier2") en fait partie."""
+    noms_charges = st.session_state.get("last_uploaded_name", "").split("+")
+    for nom, cutoffs in CUTOFFS_NON_STANDARD.items():
+        if nom in noms_charges:
+            return cutoffs
+    return (30, 45)
+
 # r5py est importé paresseusement (cf. _assurer_r5py_pret ci-dessous), pas au
 # chargement du module : app.py importe ce module de façon inconditionnelle
 # au démarrage (pour toutes les pages), et importer r5py démarre sa JVM
@@ -389,18 +414,25 @@ def _carte_temps_acces_pole_domaine(
     return carte
 
 
-def _carte_poles_accessibles_domaine(population_grid_agglo, land_use_data, ttm, domaine, fond_carte, carreaux_filtre_ids=None):
-    """Carte HTML interactive (DualMap 30 min / 45 min) du nombre de pôles
-    d'équipements accessibles pour un domaine BPE donné, restreint aux
-    carreaux "pôles" pole_equipements_{domaine}. Équivalent de la section
-    9.2 du notebook.
+def _carte_poles_accessibles_domaine(population_grid_agglo, land_use_data, ttm, domaine, fond_carte, carreaux_filtre_ids=None, cutoffs=(30, 45)):
+    """Carte HTML interactive (DualMap cutoffs[0] min / cutoffs[1] min) du
+    nombre de pôles d'équipements accessibles pour un domaine BPE donné,
+    restreint aux carreaux "pôles" pole_equipements_{domaine}. Équivalent de
+    la section 9.2 du notebook.
 
     carreaux_filtre_ids: si fourni, restreint les carreaux AFFICHÉS à cet
     ensemble d'id (ex: filtre par décile de niveau de vie) — la légende
     (limite_commune) reste calculée sur tous les carreaux, pour une échelle
     de couleur comparable quel que soit le filtre. Retourne None si le
     filtre ne laisse aucun carreau.
+
+    cutoffs: paire (min, max) en minutes — (30, 45) par défaut, (45, 60)
+    pour un GTFS "modifié pour étude" (cf. accessibilite_index_page :
+    réseaux extraits d'un GTFS agrégé plus large, souvent plus ruraux/moins
+    denses, où 30 min capte trop peu — même logique que
+    index_accessibility_notebook_Lannion.ipynb, section 9.2).
     """
+    cutoff_min, cutoff_max = cutoffs
     nom_domaine = DOMAINES_BPE.get(domaine, domaine)
     print(f"[carte_poles {domaine}] début, {len(population_grid_agglo)} carreaux dans la grille", flush=True)
 
@@ -408,21 +440,21 @@ def _carte_poles_accessibles_domaine(population_grid_agglo, land_use_data, ttm, 
         columns={f"pole_equipements_{domaine}": domaine}
     )
 
-    cum_30 = cumulative_cutoff(ttm, land_use_data=poles_domaine, opportunity=domaine, travel_cost="travel_time", cutoff=30)
-    cum_45 = cumulative_cutoff(ttm, land_use_data=poles_domaine, opportunity=domaine, travel_cost="travel_time", cutoff=45)
-    print(f"[carte_poles {domaine}] cumulative_cutoff (30/45) terminé", flush=True)
+    cum_min = cumulative_cutoff(ttm, land_use_data=poles_domaine, opportunity=domaine, travel_cost="travel_time", cutoff=cutoff_min)
+    cum_max = cumulative_cutoff(ttm, land_use_data=poles_domaine, opportunity=domaine, travel_cost="travel_time", cutoff=cutoff_max)
+    print(f"[carte_poles {domaine}] cumulative_cutoff ({cutoff_min}/{cutoff_max}) terminé", flush=True)
 
-    limite_commune = max(cum_30[domaine].max(), cum_45[domaine].max())
+    limite_commune = max(cum_min[domaine].max(), cum_max[domaine].max())
 
-    carte_30 = population_grid_agglo[["id", "geometry"]].merge(cum_30, on="id")
-    carte_45 = population_grid_agglo[["id", "geometry"]].merge(cum_45, on="id")
+    carte_min = population_grid_agglo[["id", "geometry"]].merge(cum_min, on="id")
+    carte_max = population_grid_agglo[["id", "geometry"]].merge(cum_max, on="id")
     if carreaux_filtre_ids is not None:
-        carte_30 = carte_30[carte_30["id"].isin(carreaux_filtre_ids)]
-        carte_45 = carte_45[carte_45["id"].isin(carreaux_filtre_ids)]
-    if carte_30.empty or carte_45.empty:
+        carte_min = carte_min[carte_min["id"].isin(carreaux_filtre_ids)]
+        carte_max = carte_max[carte_max["id"].isin(carreaux_filtre_ids)]
+    if carte_min.empty or carte_max.empty:
         return None
 
-    print(f"[carte_poles {domaine}] .explore() x2 sur {len(carte_30)}/{len(carte_45)} carreaux...", flush=True)
+    print(f"[carte_poles {domaine}] .explore() x2 sur {len(carte_min)}/{len(carte_max)} carreaux...", flush=True)
     # prefer_canvas : sans ça, Leaflet rend chaque carreau en SVG et laisse un
     # fin liseré visible entre deux carreaux adjacents (antialiasing des bords,
     # même à weight=0 dans les .explore() ci-dessous) — flagrant sur les
@@ -436,7 +468,7 @@ def _carte_poles_accessibles_domaine(population_grid_agglo, land_use_data, ttm, 
     # premier match seulement) — le second colorbar s'empile dans le premier
     # au lieu de s'afficher sur son propre panneau. Légendes maison à la
     # place (cf. echelle_continue_html ci-dessous), une par côté.
-    carte_30.explore(
+    carte_min.explore(
         column=domaine,
         cmap="inferno",
         vmin=0,
@@ -445,7 +477,7 @@ def _carte_poles_accessibles_domaine(population_grid_agglo, land_use_data, ttm, 
         style_kwds={"weight": 0, "opacity": 0},
         m=dual_map.m1,
     )
-    carte_45.explore(
+    carte_max.explore(
         column=domaine,
         cmap="inferno",
         vmin=0,
@@ -459,19 +491,19 @@ def _carte_poles_accessibles_domaine(population_grid_agglo, land_use_data, ttm, 
     # dessus (contrairement à .explore() sans m=, qui fait un fit_bounds
     # automatique) : DualMap() démarre donc sur sa vue par défaut ([0, 0],
     # zoom 1) sans ce fit_bounds explicite sur les deux volets.
-    minx, miny, maxx, maxy = carte_30.to_crs(epsg=4326).total_bounds
+    minx, miny, maxx, maxy = carte_min.to_crs(epsg=4326).total_bounds
     bounds = [[miny, minx], [maxy, maxx]]
     dual_map.m1.fit_bounds(bounds)
     dual_map.m2.fit_bounds(bounds)
 
     dual_map.get_root().html.add_child(
-        folium.Element(titre_carte_html(f"Pôles d'équipements accessibles – {nom_domaine} (30 min / 45 min)"))
+        folium.Element(titre_carte_html(f"Pôles d'équipements accessibles – {nom_domaine} ({cutoff_min} min / {cutoff_max} min)"))
     )
     dual_map.get_root().html.add_child(
-        folium.Element(echelle_continue_html(0, limite_commune, "inferno", f"{nom_domaine} (pôles) – 30 min", cote="gauche"))
+        folium.Element(echelle_continue_html(0, limite_commune, "inferno", f"{nom_domaine} (pôles) – {cutoff_min} min", cote="gauche"))
     )
     dual_map.get_root().html.add_child(
-        folium.Element(echelle_continue_html(0, limite_commune, "inferno", f"{nom_domaine} (pôles) – 45 min", cote="droite"))
+        folium.Element(echelle_continue_html(0, limite_commune, "inferno", f"{nom_domaine} (pôles) – {cutoff_max} min", cote="droite"))
     )
     dual_map.get_root().html.add_child(folium.Element(script_reajuster_si_masque(dual_map.m1, bounds)))
     dual_map.get_root().html.add_child(folium.Element(script_reajuster_si_masque(dual_map.m2, bounds)))
@@ -497,7 +529,8 @@ def _courbe_pct_moyen_poles(tableau, titre, titre_legende, cmap=None):
 
 
 def accessibilite_index_page():
-    st.header("Accessibilité aux équipements (30 min / 45 min)")
+    cutoff_min, cutoff_max = _cutoffs_poles_accessibles()
+    st.header(f"Accessibilité aux équipements ({cutoff_min} min / {cutoff_max} min)")
     st.caption("🚌 Bus · 🚊 Tramway · 🚇 Métro · ⛴️ Ferry · 🚶 Piétons")
 
     if st.session_state.get("feed") is None:
@@ -718,15 +751,16 @@ def accessibilite_index_page():
     onglets = st.tabs([f"{d} - {nom}" for d, nom in domaines_a_afficher.items()])
     for onglet, domaine in zip(onglets, domaines_a_afficher):
         with onglet:
-            st.markdown("#### Pôles d'équipements accessibles (30 min vs 45 min)")
+            st.markdown(f"#### Pôles d'équipements accessibles ({cutoff_min} min vs {cutoff_max} min)")
             st.caption(
-                "Pôles majeurs d'équipements accessible depuis chaque carreau à 30 min et 45 min "
+                f"Pôles majeurs d'équipements accessible depuis chaque carreau à {cutoff_min} min et {cutoff_max} min "
                 "(cf onglet pondérations équipements pour comprendre l'analyse des équipements)."
             )
             with st.spinner(f"Calcul des pôles accessibles {domaine}..."):
                 carte_poles = _carte_poles_accessibles_domaine(
                     population_grid_agglo, land_use_data, ttm, domaine, fond_carte,
                     carreaux_filtre_ids=carreaux_filtre_ids,
+                    cutoffs=(cutoff_min, cutoff_max),
                 )
             if carte_poles is None:
                 st.info("Aucun carreau dans les déciles sélectionnés.")

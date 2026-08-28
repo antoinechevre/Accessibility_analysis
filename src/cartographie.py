@@ -40,6 +40,23 @@ def fond_carte_kwargs(tiles):
     return {"tiles": url, "attr": _CARTODB_ATTR}
 
 
+def source_contextily_cartodb(variant="light_all"):
+    """Source pour contextily.add_basemap (cartes PNG statiques, ex: notebooks
+    — ctx.add_basemap(ax, source=..., crs="EPSG:3857")), même logique de clé
+    CARTO que fond_carte_kwargs mais indépendante (contextily n'utilise pas
+    les alias de folium, ni le sous-domaine {s}/le suffixe retina {r}).
+
+    Retourne l'URL avec CARTO_API_KEY si disponible, sinon None — dans ce cas
+    l'appelant doit retomber sur un fond sans clé (ex: ctx.providers.OpenStreetMap.Mapnik)
+    plutôt que d'afficher les tuiles filigranées "API KEY REQUIRED".
+
+    variant : "light_all" (Positron) ou "dark_all" (Dark Matter).
+    """
+    if not CARTO_API_KEY:
+        return None
+    return f"https://basemaps.cartocdn.com/{variant}/{{z}}/{{x}}/{{y}}.png?key={CARTO_API_KEY}"
+
+
 def tile_layer_cartodb(tiles, name, **kwargs):
     """folium.TileLayer équivalent pour un contrôle de couches (cf.
     create_carte_arrets / isochrone.build_map) : même logique de repli que

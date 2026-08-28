@@ -34,6 +34,16 @@ from src.transport_data_gouv import (
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GTFS_DIR = os.path.join(BASE_DIR, "data", "GTFS")
 
+# GTFS extraits manuellement d'une seule agence depuis un GTFS agrégé plus
+# large (cf. src/extraire_gtfs_agence.py — ex: SQY.zip, extrait de
+# IDFM-gtfs.zip) : jamais à associer à un dataset PAN, même si agency.txt
+# partage une agence avec le GTFS source complet — ça les lierait au jeu de
+# données AGRÉGÉ (SQY.zip -> IDFM), que rafraichir_gtfs.py écraserait alors
+# par erreur avec le GTFS complet au lieu du sous-ensemble extrait. Protégé
+# aussi de fait par le garde-fou "max 4 agences" d'associer_gtfs_a_pan (IDFM
+# en a 64) mais gardé explicite ici pour ne pas en dépendre implicitement.
+EXCLUS_ASSOCIATION_PAN = {"SQY.zip"}
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -43,7 +53,10 @@ def main():
 
     provenance = charger_provenance()
     fichiers_locaux = sorted(f for f in os.listdir(GTFS_DIR) if f.lower().endswith(".zip"))
-    a_traiter = [f for f in fichiers_locaux if not provenance.get(f, {}).get("page_url")]
+    a_traiter = [
+        f for f in fichiers_locaux
+        if not provenance.get(f, {}).get("page_url") and f not in EXCLUS_ASSOCIATION_PAN
+    ]
     if args.include is not None:
         a_traiter = [f for f in a_traiter if f in args.include]
 

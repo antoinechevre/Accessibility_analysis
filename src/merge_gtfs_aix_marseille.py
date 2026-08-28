@@ -2,7 +2,7 @@
 Force un nom d'agence unique sur le GTFS agrégé de la Métropole
 Aix-Marseille-Provence (MAMP).
 
-data/GTFS_agrégé/Metropole_Aix_Marseille_mamp.gtfs 2.zip agrège les feeds
+data/GTFS_Régionaux/Metropole_Aix_Marseille_mamp.gtfs 2.zip agrège les feeds
 de 17 opérateurs distincts (Aix lebus, RTM/Marseille, SNCF/TER, Aubagne,
 La Ciotat...), chacun avec son propre agency_id/agency_name dans
 agency.txt. src.info_reseau.nom_reseau() concatène tous les agency_name
@@ -34,7 +34,7 @@ from src.utils import charger_gtfs
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 GTFS_ZIP_PATH_MAMP = os.path.join(
-    BASE_DIR, "data", "GTFS_agrégé", "Metropole_Aix_Marseille_mamp.gtfs 2.zip"
+    BASE_DIR, "data", "GTFS_Régionaux", "Metropole_Aix_Marseille_mamp.gtfs 2.zip"
 )
 GTFS_ZIP_PATH_SORTIE = os.path.join(
     BASE_DIR, "data", "GTFS", "Metropole_Aix_Marseille_mamp.gtfs.zip"

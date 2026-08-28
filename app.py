@@ -391,7 +391,26 @@ gtfs_locaux_choisis = st.sidebar.multiselect(
     key="gtfs_locaux_choisis",
 )
 
-nb_sources_gtfs = len(uploaded_files) + len(gtfs_locaux_choisis)
+# GTFS "modifié pour étude" : extraits manuels d'un GTFS agrégé plus large
+# (agence unique ou zone géographique — cf. src/extraire_gtfs_agence.py,
+# src/extraire_gtfs_epci.py), déposés dans data/GTFS_agrege/ plutôt que
+# data/GTFS/ pour rester distincts du catalogue principal (téléchargements
+# bruts, prêts tels quels sans découpage). Même logique disque ∪ HF que
+# gtfs_locaux ci-dessus, préfixe GTFS_agrege/ sur le dataset HF.
+GTFS_AGREGE_DIR = os.path.join(os.getcwd(), "data", "GTFS_agrege")
+gtfs_modifies_disque = sorted(
+    f for f in os.listdir(GTFS_AGREGE_DIR) if f.lower().endswith(".zip")
+) if os.path.isdir(GTFS_AGREGE_DIR) else []
+gtfs_modifies_hf = sorted(f for f in lister_fichiers_hf("GTFS_agrege") if f.lower().endswith(".zip"))
+gtfs_modifies = sorted(set(gtfs_modifies_disque) | set(gtfs_modifies_hf))
+
+gtfs_modifies_choisis = st.sidebar.multiselect(
+    "GTFS modifié pour étude",
+    options=gtfs_modifies,
+    key="gtfs_modifies_choisis",
+)
+
+nb_sources_gtfs = len(uploaded_files) + len(gtfs_locaux_choisis) + len(gtfs_modifies_choisis)
 
 
 # st.cache_data : la liste complète (775 datasets mi-2026) ne change pas
@@ -533,13 +552,21 @@ def charger_donnees_gtfs():
     # (ex: un GTFS uploadé + un GTFS du catalogue) : concaténés en une seule
     # liste de sources plutôt que traités comme deux chemins exclusifs.
     sources = [(f.name, f.read) for f in uploaded_files]
-    for nom in gtfs_locaux_choisis:
-        chemin_gtfs_local = os.path.join(GTFS_DATA_DIR, nom)
+    # gtfs_locaux_choisis (catalogue principal, préfixe HF "GTFS") et
+    # gtfs_modifies_choisis (extraits agence/zone, préfixe HF "GTFS_agrege")
+    # se résolvent de la même façon, juste avec un dossier local et un
+    # préfixe HF différents.
+    for nom, base_dir, prefixe_hf in [
+        *((nom, GTFS_DATA_DIR, "GTFS") for nom in gtfs_locaux_choisis),
+        *((nom, GTFS_AGREGE_DIR, "GTFS_agrege") for nom in gtfs_modifies_choisis),
+    ]:
+        chemin_gtfs_local = os.path.join(base_dir, nom)
         # recuperer_depuis_hf() ne fait rien si déjà présent en local (cas
-        # gtfs_locaux_disque) : pas besoin de distinguer les deux sources ici.
+        # gtfs_locaux_disque/gtfs_modifies_disque) : pas besoin de distinguer
+        # les deux sources ici.
         if not os.path.exists(chemin_gtfs_local):
             with st.spinner(f"Récupération de {nom} depuis Hugging Face..."):
-                if not recuperer_depuis_hf(f"GTFS/{nom}", chemin_gtfs_local):
+                if not recuperer_depuis_hf(f"{prefixe_hf}/{nom}", chemin_gtfs_local):
                     st.error(f"Impossible de récupérer {nom} depuis Hugging Face.")
                     return False
         sources.append((nom, lambda chemin=chemin_gtfs_local: open(chemin, "rb").read()))
