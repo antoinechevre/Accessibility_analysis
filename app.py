@@ -633,8 +633,18 @@ def charger_donnees_gtfs():
             # (IDFM, Aix-Marseille...), donc pas de risque à l'appliquer aussi au
             # premier upload d'un de ces fichiers précis.
             nb_agences = len(feed.agency)
-            exception_valide = not fusion and nom_gtfs in GTFS_NOM_RESEAU_FORCE
-            if nb_agences > 4 and not exception_valide:
+            nom_force_valide = not fusion and nom_gtfs in GTFS_NOM_RESEAU_FORCE
+            # GTFS "modifié pour étude" (cf. gtfs_modifies_choisis, sidebar "GTFS
+            # modifié pour étude") : déjà découpé à une zone précise (une seule
+            # agence, ou quelques EPCI voisins — cf. src/extraire_gtfs_agence.py,
+            # src/extraire_gtfs_epci.py), donc peut légitimement regrouper
+            # plusieurs agences (TER + cars interurbains + réseaux urbains
+            # locaux, cf. Lannion_Guingamp_gtfs.zip : 5 agences) sans être pour
+            # autant un GTFS régional disproportionné — le garde-fou "max 4
+            # agences" (pensé pour un upload/recherche non maîtrisé) ne
+            # s'applique pas ici.
+            gtfs_modifie_selectionne = not fusion and nom_gtfs in gtfs_modifies_choisis
+            if nb_agences > 4 and not nom_force_valide and not gtfs_modifie_selectionne:
                 raise TropAgencesError(nb_agences)
 
             # Académie/zone de vacances scolaires du réseau : sert à écarter
@@ -693,7 +703,7 @@ def charger_donnees_gtfs():
             # long) > dérivé automatiquement des agences.
             if nom_reseau_force_saisi:
                 reseau_str = nom_fichier_valide(nom_reseau_force_saisi)
-            elif exception_valide:
+            elif nom_force_valide:
                 reseau_str = GTFS_NOM_RESEAU_FORCE[nom_gtfs]
             else:
                 reseau_str = str(nom_reseau_str(feed))
