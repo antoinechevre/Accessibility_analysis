@@ -18,6 +18,7 @@ import requests
 from shapely.geometry import Point, shape
 from shapely.ops import unary_union
 
+from src.cartographie import tile_layer_cartodb
 from src.insee_carreaux import ajouter_couche_carreaux_insee
 
 GEOPF_ISOCHRONE_URL = "https://data.geopf.fr/navigation/isochrone"
@@ -235,12 +236,12 @@ def build_map(origine, arrets: pd.DataFrame, buffers: dict, budget_min: int, ray
     center = [origine["stop_lat"], origine["stop_lon"]]
     m = folium.Map(location=center, zoom_start=13, tiles=None, prefer_canvas=True, control_scale=True)
     # Fonds de carte empilés (rasters opaques) : le dernier ajouté est celui
-    # visible par défaut. CartoDB exige désormais une clé API (tuiles
-    # filigranées sans elle) : OpenStreetMap en dernier pour rester le fond
-    # par défaut, sans clé.
-    folium.TileLayer("CartoDB dark_matter", name="CartoDB Dark Matter", cross_origin=True).add_to(m)
-    folium.TileLayer("CartoDB positron", name="CartoDB Positron", cross_origin=True).add_to(m)
+    # visible par défaut. tile_layer_cartodb retombe sur OpenStreetMap si
+    # CARTO_API_KEY n'est pas définie (cf. fond_carte_kwargs) — CartoDB
+    # Positron en dernier pour rester le fond par défaut dans le cas normal.
     folium.TileLayer("OpenStreetMap", name="OpenStreetMap", cross_origin=True).add_to(m)
+    tile_layer_cartodb("CartoDB dark_matter", "CartoDB Dark Matter", cross_origin=True).add_to(m)
+    tile_layer_cartodb("CartoDB positron", "CartoDB Positron", cross_origin=True).add_to(m)
 
     # Couche optionnelle (décochée par défaut) de densité de population par
     # carreau INSEE 200m — même mécanisme que create_carte_arrets/

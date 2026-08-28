@@ -2,6 +2,8 @@ import gtfs_kit as gk
 import pandas as pd
 import folium
 
+from src.cartographie import fond_carte_kwargs
+
 
 def trace_lignes_gtfs(zip_path, date_analyse):
 
@@ -26,7 +28,7 @@ def trace_lignes_gtfs(zip_path, date_analyse):
         on='shape_id'
     )
 
-    m = folium.Map(location=[46.1603, -1.1511], zoom_start=13, tiles="OpenStreetMap")
+    m = folium.Map(location=[46.1603, -1.1511], zoom_start=13, **fond_carte_kwargs("CartoDB positron"))
 
     for _, row in geo_shapes.iterrows():
         coords = [(lat, lon) for lon, lat in row.geometry.coords]

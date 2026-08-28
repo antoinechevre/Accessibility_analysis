@@ -4,7 +4,7 @@ import folium
 import geopandas as gpd
 import requests
 
-from src.cartographie import script_legende_en_bas, script_reajuster_si_masque, script_synchroniser_zoom
+from src.cartographie import fond_carte_kwargs, script_legende_en_bas, script_reajuster_si_masque, script_synchroniser_zoom
 from src.hf_cache import recuperer_depuis_hf
 
 
@@ -126,7 +126,7 @@ def filtre_BPE_actifs (population_grid_agglo,land_use_data):
 # carreau (population_grid_cda) — pas l'accessibilité en temps de trajet, juste
 # la donnée d'offre brute (land_use_data_domaine).
 
-def carte_ponderation_domaine(DOMAINES_BPE,population_grid_agglo,BPE_agglo,land_use_data,domaine,tiles="OpenStreetMap", canal_sync=None, bounds=None):
+def carte_ponderation_domaine(DOMAINES_BPE,population_grid_agglo,BPE_agglo,land_use_data,domaine,tiles="CartoDB positron", canal_sync=None, bounds=None):
     """Carte interactive de la pondération cumulée par gamme d'un domaine BPE, par carreau.
 
     canal_sync : si fourni, synchronise le zoom/centre de cette carte avec
@@ -167,7 +167,7 @@ def carte_ponderation_domaine(DOMAINES_BPE,population_grid_agglo,BPE_agglo,land_
         cmap="inferno",
         scheme="NaturalBreaks",
         k=5,
-        tiles=tiles,
+        **fond_carte_kwargs(tiles),
         legend=True,
         legend_kwds={"caption": f"{nom_domaine} (pondéré)"},
         style_kwds={"weight": 0, "opacity": 0},

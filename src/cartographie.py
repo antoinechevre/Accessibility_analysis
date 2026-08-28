@@ -11,6 +11,43 @@ import mimetypes
 from src.i18n import t
 from src.insee_carreaux import ajouter_couche_carreaux_insee
 
+# CARTO a coupé l'accès anonyme à ses fonds de carte (Positron / Dark
+# Matter) : sans clé API, les tuiles sont servies filigranées "API KEY
+# REQUIRED" (cf. https://carto.com/basemaps/apikey/). CARTO_API_KEY (var
+# d'env, définie en secret côté déploiement) réactive le rendu normal ;
+# sans elle, fond_carte_kwargs retombe sur OpenStreetMap.
+CARTO_API_KEY = os.environ.get("CARTO_API_KEY")
+
+_CARTODB_VARIANTS = {"CartoDB positron": "light_all", "CartoDB dark_matter": "dark_all"}
+_CARTODB_ATTR = (
+    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> '
+    'contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+)
+
+
+def fond_carte_kwargs(tiles):
+    """kwargs tiles=/attr= prêts pour folium.Map/.explore()/DualMap, à partir
+    d'un nom de fond de carte ("CartoDB positron", "CartoDB dark_matter",
+    "OpenStreetMap"...). Construit l'URL CartoDB avec CARTO_API_KEY si
+    disponible ; sinon retombe sur OpenStreetMap plutôt que d'afficher les
+    tuiles filigranées "API KEY REQUIRED"."""
+    variant = _CARTODB_VARIANTS.get(tiles)
+    if variant is None:
+        return {"tiles": tiles}
+    if not CARTO_API_KEY:
+        return {"tiles": "OpenStreetMap"}
+    url = f"https://{{s}}.basemaps.cartocdn.com/{variant}/{{z}}/{{x}}/{{y}}{{r}}.png?key={CARTO_API_KEY}"
+    return {"tiles": url, "attr": _CARTODB_ATTR}
+
+
+def tile_layer_cartodb(tiles, name, **kwargs):
+    """folium.TileLayer équivalent pour un contrôle de couches (cf.
+    create_carte_arrets / isochrone.build_map) : même logique de repli que
+    fond_carte_kwargs, sous forme de TileLayer prêt à .add_to(m). kwargs
+    (ex: cross_origin=True) transmis tels quels au TileLayer."""
+    fond = fond_carte_kwargs(tiles)
+    return folium.TileLayer(fond["tiles"], name=name, attr=fond.get("attr"), **kwargs)
+
 
 def _bbox_robuste(lons, lats, percentile=1):
     """Bbox (minx, miny, maxx, maxy) à partir des percentiles [percentile,
@@ -290,7 +327,7 @@ def script_legende_en_bas():
     """
 
 
-def carte_population_infracommunale(population_grid_agglo, tiles="OpenStreetMap", carreaux_filtre_ids=None):
+def carte_population_infracommunale(population_grid_agglo, tiles="CartoDB positron", carreaux_filtre_ids=None):
     """Carte HTML interactive de la population par carreau (carroyage INSEE
     200x200, Filosofi 2019) — offre brute de données, pas d'accessibilité.
     Partagée entre le notebook (cellule "Retourne différentes dates") et
@@ -311,7 +348,7 @@ def carte_population_infracommunale(population_grid_agglo, tiles="OpenStreetMap"
     carte = grille.explore(
         "population",
         cmap="Reds",
-        tiles=tiles,
+        **fond_carte_kwargs(tiles),
         style_kwds={
             "style_function": lambda x: {
                 "fillOpacity": 0 if x["properties"]["population"] == 0 else 0.7,
@@ -357,13 +394,12 @@ def create_carte_arrets(df, nom_reseau_str,date_service_str, date_analyse, zip_p
         tiles=None,
     )
     # Fonds de carte empilés (rasters opaques) : le dernier ajouté est celui
-    # visible par défaut. CartoDB (Positron/Dark Matter) exige désormais une
-    # clé API (tuiles filigranées "API KEY REQUIRED" sans elle) : ajouté en
-    # premier comme alternative, OpenStreetMap en dernier pour rester le
-    # fond par défaut, sans clé.
-    folium.TileLayer("CartoDB dark_matter", name="CartoDB Dark Matter").add_to(m)
-    folium.TileLayer("CartoDB positron", name="CartoDB Positron").add_to(m)
+    # visible par défaut. tile_layer_cartodb retombe sur OpenStreetMap si
+    # CARTO_API_KEY n'est pas définie (cf. fond_carte_kwargs) — CartoDB
+    # Positron en dernier pour rester le fond par défaut dans le cas normal.
     folium.TileLayer("OpenStreetMap", name="OpenStreetMap").add_to(m)
+    tile_layer_cartodb("CartoDB dark_matter", "CartoDB Dark Matter").add_to(m)
+    tile_layer_cartodb("CartoDB positron", "CartoDB Positron").add_to(m)
 
     # Couche optionnelle (décochée par défaut, cf. contrôle des couches
     # ajouté plus bas) de densité de population par carreau INSEE 200m.
@@ -675,16 +711,15 @@ def creer_carte_troncons(gdf_bus, gdf_tram,gdf_metro, gdf_trolley, gdf_ferry, gd
         bbox_reseau = _bbox_robuste(all_lons, all_coords)
 
     # Créer la carte de base, fonds de carte alternatifs sélectionnables
-    # via le contrôle des couches (OpenStreetMap par défaut)
+    # via le contrôle des couches (CartoDB Positron par défaut)
     m = folium.Map(location=[center_lat, center_lon], zoom_start=12, tiles=None)
     # Fonds de carte empilés (rasters opaques) : le dernier ajouté est celui
-    # visible par défaut. CartoDB (Positron/Dark Matter) exige désormais une
-    # clé API (tuiles filigranées "API KEY REQUIRED" sans elle) : ajouté en
-    # premier comme alternative, OpenStreetMap en dernier pour rester le
-    # fond par défaut, sans clé.
-    folium.TileLayer("CartoDB dark_matter", name="CartoDB Dark Matter").add_to(m)
-    folium.TileLayer("CartoDB positron", name="CartoDB Positron").add_to(m)
+    # visible par défaut. tile_layer_cartodb retombe sur OpenStreetMap si
+    # CARTO_API_KEY n'est pas définie (cf. fond_carte_kwargs) — CartoDB
+    # Positron en dernier pour rester le fond par défaut dans le cas normal.
     folium.TileLayer("OpenStreetMap", name="OpenStreetMap").add_to(m)
+    tile_layer_cartodb("CartoDB dark_matter", "CartoDB Dark Matter").add_to(m)
+    tile_layer_cartodb("CartoDB positron", "CartoDB Positron").add_to(m)
 
     # Couche optionnelle (décochée par défaut) de densité de population par
     # carreau INSEE 200m — cf. create_carte_arrets pour le même mécanisme.

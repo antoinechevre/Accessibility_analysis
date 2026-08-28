@@ -23,7 +23,7 @@ import pandas as pd
 import streamlit as st
 
 from src.BPE_traitement import carte_ponderation_domaine
-from src.cartographie import echelle_continue_html, script_reajuster_si_masque, script_synchroniser_zoom, titre_carte_html
+from src.cartographie import echelle_continue_html, fond_carte_kwargs, script_reajuster_si_masque, script_synchroniser_zoom, titre_carte_html
 from src.pipeline_donnees import DOMAINES_BPE, HorsMetropoleError
 from src.ponderation_bpe import GAMMES_POIDS_PAR_DOMAINE, SEUILS_DOMAINE
 from src.ponderation_bpe_2 import reponderer_bpe_2
@@ -123,7 +123,7 @@ def _carte_accessibilite_45min_domaine(population_grid_agglo, land_use_data, ttm
         cmap="inferno",
         vmin=0,
         vmax=max_valeur,
-        tiles=FONDS_CARTE[fond_carte],
+        **fond_carte_kwargs(FONDS_CARTE[fond_carte]),
         legend=False,  # légende maison ci-dessous (cf. echelle_continue_html)
         style_kwds={"weight": 0, "opacity": 0},
         prefer_canvas=True,
@@ -284,7 +284,7 @@ def accessibilite_urbaine_page_2():
     st.success(f"✓ {len(population_grid_agglo)} carreaux actifs — matrice des temps de trajet prête.")
 
     fond_carte = st.selectbox(
-        "Fond de carte", options=list(FONDS_CARTE.keys()), index=list(FONDS_CARTE.keys()).index("OpenStreetMap")
+        "Fond de carte", options=list(FONDS_CARTE.keys()), index=list(FONDS_CARTE.keys()).index("CartoDB Positron")
     )
 
     niveau_vie = deciles_niveau_vie(population_grid_agglo)

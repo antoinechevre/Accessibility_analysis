@@ -17,7 +17,7 @@ from folium.plugins import DualMap
 
 from src.BPE_traitement import land_use_data_domaine
 from src.build_data_agglo import osm_pbf_creator, surface_km2_decoupage, ville_principale
-from src.cartographie import echelle_continue_html, script_reajuster_si_masque, titre_carte_html
+from src.cartographie import echelle_continue_html, fond_carte_kwargs, script_reajuster_si_masque, titre_carte_html
 from src.hf_cache import envoyer_vers_hf, fusionner_et_envoyer_csv, recuperer_depuis_hf
 from src.pipeline_donnees import (
     MEMORY_CSV_AGGLO_DIR,
@@ -357,7 +357,7 @@ def _carte_temps_acces_pole_domaine(
     carte = carte_temps.explore(
         column="travel_time_plafonne",
         cmap="cividis_r",
-        tiles=FONDS_CARTE[fond_carte],
+        **fond_carte_kwargs(FONDS_CARTE[fond_carte]),
         legend=False,  # légende maison ci-dessous (cf. echelle_continue_html)
         style_kwds={"weight": 0, "opacity": 0},
         # prefer_canvas : argument direct de .explore() (pas dans map_kwds,
@@ -430,7 +430,7 @@ def _carte_poles_accessibles_domaine(population_grid_agglo, land_use_data, ttm, 
     # hachures sur toute la carte. Le rendu canvas rasterise les polygones
     # plutôt que de composer des tracés vectoriels séparés, ce qui élimine ces
     # liserés. DualMap transmet ses kwargs à ses deux Map internes (m1/m2).
-    dual_map = DualMap(tiles=FONDS_CARTE[fond_carte], layout="horizontal", prefer_canvas=True)
+    dual_map = DualMap(**fond_carte_kwargs(FONDS_CARTE[fond_carte]), layout="horizontal", prefer_canvas=True)
     # legend=False sur les deux : branca cible tous les colorbars de la page
     # via un sélecteur CSS non isolé par carte (d3.select(".legend.leaflet-control"),
     # premier match seulement) — le second colorbar s'empile dans le premier
@@ -668,7 +668,7 @@ def accessibilite_index_page():
         niveau_vie = deciles_niveau_vie(population_grid_agglo)
 
     fond_carte = st.selectbox(
-        "Fond de carte", options=list(FONDS_CARTE.keys()), index=list(FONDS_CARTE.keys()).index("OpenStreetMap")
+        "Fond de carte", options=list(FONDS_CARTE.keys()), index=list(FONDS_CARTE.keys()).index("CartoDB Positron")
     )
 
     if not st.session_state.analyse_detaillee:

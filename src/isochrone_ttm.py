@@ -25,6 +25,7 @@ import folium
 import geopandas as gpd
 from shapely.geometry import Point, box
 
+from src.cartographie import tile_layer_cartodb
 from src.hf_cache import recuperer_depuis_hf
 from src.insee_carreaux import INSEE_CARREAUX_HF_PATH, INSEE_CARREAUX_LOCAL_PATH, ajouter_couche_carreaux_insee
 from src.isochrone import DUREE_COLOR_BANDES, DUREE_COLOR_SEUILS
@@ -111,12 +112,12 @@ def build_map_carreaux(origine, gdf_carreaux, budget_min, legende_duree="Temps d
     center = [origine["stop_lat"], origine["stop_lon"]]
     m = folium.Map(location=center, zoom_start=12, tiles=None, prefer_canvas=True, control_scale=True)
     # Fonds de carte empilés (rasters opaques) : le dernier ajouté est celui
-    # visible par défaut. CartoDB exige désormais une clé API (tuiles
-    # filigranées sans elle) : OpenStreetMap en dernier pour rester le fond
-    # par défaut, sans clé.
-    folium.TileLayer("CartoDB dark_matter", name="CartoDB Dark Matter", cross_origin=True).add_to(m)
-    folium.TileLayer("CartoDB positron", name="CartoDB Positron", cross_origin=True).add_to(m)
+    # visible par défaut. tile_layer_cartodb retombe sur OpenStreetMap si
+    # CARTO_API_KEY n'est pas définie (cf. fond_carte_kwargs) — CartoDB
+    # Positron en dernier pour rester le fond par défaut dans le cas normal.
     folium.TileLayer("OpenStreetMap", name="OpenStreetMap", cross_origin=True).add_to(m)
+    tile_layer_cartodb("CartoDB dark_matter", "CartoDB Dark Matter", cross_origin=True).add_to(m)
+    tile_layer_cartodb("CartoDB positron", "CartoDB Positron", cross_origin=True).add_to(m)
 
     # Couche optionnelle (décochée par défaut) de densité de population par
     # carreau INSEE 200m — même mécanisme que create_carte_arrets/
