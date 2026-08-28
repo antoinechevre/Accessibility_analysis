@@ -635,6 +635,125 @@ def osm_pbf_creator(
         )
 
 
+# slug (region, département) sur download.openstreetmap.fr pour les
+# départements déjà rencontrés dans ce projet — à compléter au besoin en
+# repérant le bon slug dans l'arborescence :
+# https://download.openstreetmap.fr/extracts/europe/france/ (dossier =
+# région, ancien découpage pré-2016 ; fichier = <departement_slug>-latest.osm.pbf).
+DEPARTEMENTS_OSMFR = {
+    "22": ("bretagne", "cotes_d_armor"),
+}
+
+
+def _telecharger_departement_osmfr(code_departement, dossier_cache, session=None):
+    """Télécharge (si pas déjà en cache local) l'extrait département
+    download.openstreetmap.fr de code_departement (code INSEE, cf.
+    DEPARTEMENTS_OSMFR), et renvoie son chemin local.
+
+    Alternative à osm_pbf_creator (Overpass, tuile par tuile) : un seul
+    fichier déjà pré-découpé au contour du département par OSM France
+    (mis à jour quotidiennement), sans tuilage ni risque de géométrie
+    tronquée aux frontières de tuile (cf. _ways_avec_geometrie_cassee, qui
+    ne concerne que la voie Overpass) — à utiliser quand Overpass échoue
+    (timeout, troncature répétée) sur une zone donnée.
+    """
+    if code_departement not in DEPARTEMENTS_OSMFR:
+        raise ValueError(
+            f"département {code_departement!r} absent de DEPARTEMENTS_OSMFR — "
+            "trouver son slug sur https://download.openstreetmap.fr/extracts/europe/france/ "
+            "et l'ajouter au dict."
+        )
+    region_slug, departement_slug = DEPARTEMENTS_OSMFR[code_departement]
+
+    dossier_cache = pathlib.Path(dossier_cache)
+    dossier_cache.mkdir(parents=True, exist_ok=True)
+    chemin_local = dossier_cache / f"{departement_slug}-latest.osm.pbf"
+    if chemin_local.exists():
+        return chemin_local
+
+    url = f"https://download.openstreetmap.fr/extracts/europe/france/{region_slug}/{departement_slug}-latest.osm.pbf"
+    session = session or session_avec_retries()
+    print(f"téléchargement de l'extrait OSM France {departement_slug} ({url}) ...")
+    with session.get(url, stream=True, timeout=300) as reponse:
+        reponse.raise_for_status()
+        with open(chemin_local, "wb") as f:
+            for bloc in reponse.iter_content(chunk_size=1024 * 1024):
+                f.write(bloc)
+    print(f"✓ téléchargé : {chemin_local} ({chemin_local.stat().st_size / 1e6:.0f} Mo)")
+    return chemin_local
+
+
+def osm_pbf_creator_depuis_osmfr(decoupage_agglo_path, codes_departement, output_pbf_path=None, dossier_cache=None):
+    """Construit agglo.osm.pbf comme osm_pbf_creator, mais à partir
+    d'extraits département pré-construits download.openstreetmap.fr
+    (téléchargement direct, cf. _telecharger_departement_osmfr) plutôt que
+    d'interroger l'API Overpass tuile par tuile : alternative à utiliser
+    quand Overpass échoue de façon répétée sur une zone (timeout,
+    troncature — cf. RuntimeError d'osm_pbf_creator) ou simplement plus
+    rapide/robuste pour un département déjà mis en cache localement lors
+    d'un run précédent.
+
+    codes_departement : liste de codes INSEE département (cf.
+    DEPARTEMENTS_OSMFR) couvrant l'emprise de decoupage_agglo_path — un
+    seul en général, plusieurs si la zone est à cheval sur deux
+    départements (ex: Lannion/Guingamp, tous deux dans les Côtes-d'Armor
+    (22) — un seul code suffit ici). Fusionnés via `osmium merge` si
+    plusieurs.
+
+    dossier_cache : dossier où garder les extraits département déjà
+    téléchargés (par défaut : à côté de decoupage_agglo_path, comme
+    output_pbf_path) — réutilisé tel quel par un run ultérieur sur un
+    département déjà vu, jamais retéléchargé.
+
+    Renvoie le chemin du .osm.pbf produit (comme osm_pbf_creator), découpé
+    précisément sur le contour réel de decoupage_agglo_path — pas
+    seulement celui du/des département(s) source.
+    """
+    output_dir = pathlib.Path(decoupage_agglo_path).parent
+    if output_pbf_path is None:
+        output_pbf_path = output_dir / "agglo.osm.pbf"
+    if dossier_cache is None:
+        dossier_cache = output_dir
+    BOUNDARY_GEOJSON = output_dir / "agglo_boundary.geojson"
+
+    if shutil.which("osmium") is None:
+        raise SystemExit(
+            "osmium-tool is required but not found. Install it with: brew install osmium-tool"
+        )
+
+    agglo = gpd.read_file(decoupage_agglo_path)
+    agglo = agglo.set_crs("EPSG:4326") if agglo.crs is None else agglo
+    agglo.geometry = agglo.geometry.buffer(0)
+    boundary = gpd.GeoDataFrame(geometry=[agglo.union_all()], crs=agglo.crs)
+    boundary.to_file(BOUNDARY_GEOJSON, driver="GeoJSON")
+    print(f"wrote {BOUNDARY_GEOJSON}, bounds: {boundary.total_bounds}")
+
+    with session_avec_retries(methods=("GET",), total=8, backoff_factor=2) as session:
+        fichiers_departements = [
+            _telecharger_departement_osmfr(code, dossier_cache, session=session)
+            for code in codes_departement
+        ]
+
+    if len(fichiers_departements) > 1:
+        fusion_path = output_dir / "agglo_fusion.osm.pbf"
+        subprocess.run(
+            ["osmium", "merge", *[str(f) for f in fichiers_departements], "-o", fusion_path, "--overwrite"],
+            check=True,
+        )
+        print(f"wrote {fusion_path} (fusion de {len(fichiers_departements)} département(s))")
+    else:
+        fusion_path = fichiers_departements[0]
+
+    subprocess.run(
+        ["osmium", "extract", "-p", BOUNDARY_GEOJSON, "-o", output_pbf_path, "--overwrite", fusion_path],
+        check=True,
+    )
+    print(f"wrote {output_pbf_path}")
+
+    if len(fichiers_departements) > 1:
+        pathlib.Path(fusion_path).unlink()
+
+    return output_pbf_path
 
 
 def build_grid_agglo(path, output_path=None):

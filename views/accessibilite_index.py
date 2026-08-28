@@ -414,6 +414,49 @@ def _carte_temps_acces_pole_domaine(
     return carte
 
 
+def _afficher_carte_avec_cache_hf(chemin_local, nom_hf, cache_valide, fonction_calcul, message_spinner, message_vide, label_bouton, key_bouton):
+    """Affiche (st.components.v1.html) + bouton de téléchargement pour une
+    carte HTML déjà calculée en cache (local ou HF, cf. recuperer_depuis_hf)
+    si possible, sinon calcule via fonction_calcul() (folium Map/DualMap ou
+    None), sauvegarde dans chemin_local et pousse vers HF (nom_hf) pour que
+    les prochains chargements — y compris d'autres visiteurs du Space — en
+    profitent aussi.
+
+    cache_valide : le cache HTML n'a de sens QUE pour la vue non filtrée par
+    décile (carreaux_filtre_ids=None, cf. accessibilite_index_page) — un
+    résultat filtré par décile écraserait sinon le même chemin_local que la
+    vue complète, avec risque de servir un sous-ensemble périmé au visiteur
+    suivant. cache_valide=False désactive donc aussi bien la lecture que
+    l'écriture du cache, pas seulement l'écriture (idem pour un fond_carte
+    autre que celui par défaut : la légende/l'échelle en dépend aussi).
+
+    Retourne True si un résultat a été affiché (cache ou calcul), False si
+    fonction_calcul() a renvoyé None (aucun carreau après filtre).
+    """
+    if cache_valide and recuperer_depuis_hf(nom_hf, chemin_local):
+        with open(chemin_local, encoding="utf-8") as f:
+            html = f.read()
+        st.components.v1.html(html, height=520, scrolling=False)
+        with open(chemin_local, "rb") as f:
+            st.download_button(label_bouton, data=f, file_name=os.path.basename(chemin_local), mime="text/html", key=key_bouton)
+        return True
+
+    with st.spinner(message_spinner):
+        carte = fonction_calcul()
+    if carte is None:
+        st.info(message_vide)
+        return False
+
+    st.components.v1.html(carte.get_root().render(), height=520, scrolling=False)
+    os.makedirs(os.path.dirname(chemin_local), exist_ok=True)
+    carte.save(chemin_local)
+    if cache_valide:
+        envoyer_vers_hf(chemin_local, nom_hf)
+    with open(chemin_local, "rb") as f:
+        st.download_button(label_bouton, data=f, file_name=os.path.basename(chemin_local), mime="text/html", key=key_bouton)
+    return True
+
+
 def _carte_poles_accessibles_domaine(population_grid_agglo, land_use_data, ttm, domaine, fond_carte, carreaux_filtre_ids=None, cutoffs=(30, 45)):
     """Carte HTML interactive (DualMap cutoffs[0] min / cutoffs[1] min) du
     nombre de pôles d'équipements accessibles pour un domaine BPE donné,
@@ -756,56 +799,47 @@ def accessibilite_index_page():
                 f"Pôles majeurs d'équipements accessible depuis chaque carreau à {cutoff_min} min et {cutoff_max} min "
                 "(cf onglet pondérations équipements pour comprendre l'analyse des équipements)."
             )
-            with st.spinner(f"Calcul des pôles accessibles {domaine}..."):
-                carte_poles = _carte_poles_accessibles_domaine(
+            # Même nom/emplacement que la section 9.2 du notebook
+            # (chemin_base_9_2, index_accessibility_notebook_def.ipynb) : le
+            # cache profite aussi bien des exports du notebook que de ceux
+            # déjà générés par l'appli, sans dupliquer les fichiers en sortie.
+            html_path_poles = os.path.join(OUTPUT_DIR, nom_reseau_str, f"accessibilite_pop_cumule_{domaine}_{nom_reseau_str}.html")
+            # cache_valide : seulement la vue non filtrée (carreaux_filtre_ids
+            # None) avec le fond de carte par défaut — cf. docstring de
+            # _afficher_carte_avec_cache_hf.
+            cache_valide = carreaux_filtre_ids is None and fond_carte == "CartoDB Positron"
+            _afficher_carte_avec_cache_hf(
+                html_path_poles,
+                f"output/{nom_reseau_str}/{os.path.basename(html_path_poles)}",
+                cache_valide,
+                lambda: _carte_poles_accessibles_domaine(
                     population_grid_agglo, land_use_data, ttm, domaine, fond_carte,
                     carreaux_filtre_ids=carreaux_filtre_ids,
                     cutoffs=(cutoff_min, cutoff_max),
-                )
-            if carte_poles is None:
-                st.info("Aucun carreau dans les déciles sélectionnés.")
-            else:
-                print(f"[carte_poles {domaine}] render()...", flush=True)
-                st.components.v1.html(carte_poles.get_root().render(), height=520, scrolling=False)
-                print(f"[carte_poles {domaine}] render() terminé, save()...", flush=True)
-
-                html_path_poles = os.path.join(OUTPUT_DIR, f"accessibilite_poles_{domaine}_{nom_reseau_str}.html")
-                os.makedirs(OUTPUT_DIR, exist_ok=True)
-                carte_poles.save(html_path_poles)
-                print(f"[carte_poles {domaine}] save() terminé", flush=True)
-                with open(html_path_poles, "rb") as f:
-                    st.download_button(
-                        f"💾 Télécharger la carte pôles accessibles {domaine} (HTML)",
-                        data=f,
-                        file_name=os.path.basename(html_path_poles),
-                        mime="text/html",
-                        key=f"download_poles_{domaine}",
-                    )
+                ),
+                f"Calcul des pôles accessibles {domaine}...",
+                "Aucun carreau dans les déciles sélectionnés.",
+                f"💾 Télécharger la carte pôles accessibles {domaine} (HTML)",
+                f"download_poles_{domaine}",
+            )
 
             st.markdown("#### Temps d'accès au pôle d'équipements le plus proche")
-            with st.spinner(f"Calcul du temps d'accès {domaine}..."):
-                carte_temps = _carte_temps_acces_pole_domaine(
+            # Même nom/emplacement que la section 9.1 du notebook
+            # (chemin_base_9_1) — cf. commentaire équivalent sur html_path_poles.
+            html_path_temps = os.path.join(OUTPUT_DIR, nom_reseau_str, f"accessibilite_pop_temps_{domaine}_{nom_reseau_str}.html")
+            _afficher_carte_avec_cache_hf(
+                html_path_temps,
+                f"output/{nom_reseau_str}/{os.path.basename(html_path_temps)}",
+                cache_valide,
+                lambda: _carte_temps_acces_pole_domaine(
                     population_grid_agglo, land_use_data, BPE_agglo, ttm, domaine, fond_carte,
                     carreaux_filtre_ids=carreaux_filtre_ids,
-                )
-            if carte_temps is None:
-                st.info("Aucun carreau dans les déciles sélectionnés.")
-            else:
-                print(f"[carte_temps {domaine}] render()...", flush=True)
-                st.components.v1.html(carte_temps.get_root().render(), height=520, scrolling=False)
-                print(f"[carte_temps {domaine}] render() terminé, save()...", flush=True)
-
-                html_path_temps = os.path.join(OUTPUT_DIR, f"accessibilite_temps_{domaine}_{nom_reseau_str}.html")
-                carte_temps.save(html_path_temps)
-                print(f"[carte_temps {domaine}] save() terminé", flush=True)
-                with open(html_path_temps, "rb") as f:
-                    st.download_button(
-                        f"💾 Télécharger la carte temps d'accès {domaine} (HTML)",
-                        data=f,
-                        file_name=os.path.basename(html_path_temps),
-                        mime="text/html",
-                        key=f"download_temps_{domaine}",
-                    )
+                ),
+                f"Calcul du temps d'accès {domaine}...",
+                "Aucun carreau dans les déciles sélectionnés.",
+                f"💾 Télécharger la carte temps d'accès {domaine} (HTML)",
+                f"download_temps_{domaine}",
+            )
 
             if st.session_state.analyse_detaillee:
                 st.markdown("#### % moyen de pôles atteignables par décile de niveau de vie")
