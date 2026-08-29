@@ -2,6 +2,11 @@
 .venv/
 env/
 
+# Secrets locaux (ex: CARTO_API_KEY) pour un kernel Jupyter/IDE qui n'hérite
+# pas de l'environnement du shell — cf. src.cartographie._lire_cle_env_locale.
+# Jamais committé.
+.env
+
 # Données (GTFS, carroyage INSEE, BPE...) et résultats générés — volumineux,
 # certains fichiers dépassent la limite de 100 Mo de GitHub. Non versionnés,
 # cf. README.md.

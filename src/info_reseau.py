@@ -38,6 +38,26 @@ def nom_reseau(feed):
     return " / ".join(noms)
 
 
+# Force date_JOB (jour ouvré de référence) pour des réseaux dont le calcul
+# automatique (dernier mardi/jeudi fiable, ci-dessous) tombe sur une date où
+# une partie du GTFS fusionné n'a plus de service publié — même logique
+# d'exception par réseau que RESOLUTIONS_GRILLE_SPECIALES
+# (src/pipeline_donnees.py), clé = nom_reseau_str (cf. nom_reseau_str
+# ci-dessous). Vérifié/appliqué en toute fin de dates_service() : n'affecte
+# aucun appelant (app.py, notebooks, scripts) sans changer leur signature.
+# - Lannion/Guingamp : TILT (Lannion) ne publie du service que jusqu'au
+#   31/08/2026 (calendar_dates.txt), alors que les autres agences du GTFS
+#   fusionné (TIBUS, AXEOBUS...) vont jusqu'à fin 2026 — le calcul normal
+#   choisit donc une date où TILT n'a plus aucun arrêt actif (observé sur
+#   l'appli : arrêts TILT absents). Forcé au dernier jeudi fiable avant
+#   cette limite (27/08/2026 — les mar/jeu d'août tombent tous en vacances
+#   scolaires académie Rennes, donc hors du filtre "hors vacances" ordinaire,
+#   comme le ferait le calcul normal si la plage fiable s'arrêtait fin août).
+DATE_JOB_FORCEE = {
+    "BreizhGo en Côtes d'Armor - Guingamp-Paimpol Mobilité - TILT (Lannion) - TER BreizhGo - Liaison maritime Bréhat": "20260827",
+}
+
+
 def dates_service (feed, academie=None):
 
     dates_service = feed.get_dates() # attention cela dépasse la plage temporelle fiable
@@ -85,6 +105,8 @@ def dates_service (feed, academie=None):
         date_JOB = max(dates__mar_jeu)
     else:
         date_JOB = max(dates_service)
+
+    date_JOB = DATE_JOB_FORCEE.get(nom_reseau_str(feed), date_JOB)
 
     return dates_service, date_debut, date_fin, date_JOB
 

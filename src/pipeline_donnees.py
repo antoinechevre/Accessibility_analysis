@@ -81,7 +81,17 @@ DOMAINES_BPE = {
 #   épargne le .jar). Passage à 400m (fusionner_grille_resolution(...,
 #   resolution=400), cf. index_accessibility_notebook_TCL2.ipynb) : ~23 000
 #   carreaux, ttm nettement plus petit.
-RESOLUTIONS_GRILLE_SPECIALES = {"Aix_Marseille": 800, "TCL": 400}
+# - Lannion/Guingamp (400m) : zone rurale de ~150x75km (Lannion-Trégor +
+#   Guingamp-Paimpol, cf. src/extraire_gtfs_epci.py), 20 605 carreaux actifs
+#   à 200m -> ttm de 848 Mo compressé, assez pour faire planter le Space en
+#   mémoire au chargement malgré une population bien plus modeste que
+#   Lyon/IDFM — l'étendue géographique (donc le nombre de paires
+#   origine/destination sous 120 min) compte plus que la densité ici.
+RESOLUTIONS_GRILLE_SPECIALES = {
+    "Aix_Marseille": 800,
+    "TCL": 400,
+    "BreizhGo en Côtes d'Armor - Guingamp-Paimpol Mobilité - TILT (Lannion) - TER BreizhGo - Liaison maritime Bréhat": 400,
+}
 
 # Réseaux dont même la grille 200m fusionnée à 800m/1600m/400m (cf.
 # RESOLUTIONS_GRILLE_SPECIALES) reste trop volumineuse (ttm en O(n²)) :

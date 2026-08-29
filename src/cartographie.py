@@ -11,12 +11,36 @@ import mimetypes
 from src.i18n import t
 from src.insee_carreaux import ajouter_couche_carreaux_insee
 
+def _lire_cle_env_locale(nom_var, nom_fichier=".env"):
+    """Repli local pour une clé API optionnelle (ex: CARTO_API_KEY) absente
+    de la variable d'environnement : sur un déploiement (Space HF...), la
+    variable est définie en secret côté plateforme, mais un noyau Jupyter
+    lancé localement (notebook/IDE) n'hérite pas forcément de l'environnement
+    du shell qui l'a — d'où ce filet, un simple fichier NOM_VAR=valeur par
+    ligne (comme un .env classique) à la racine du dépôt, JAMAIS committé
+    (cf. .gitignore). Retourne None si le fichier ou la clé n'existe pas —
+    l'appelant retombe alors sur son comportement sans clé (jamais bloquant)."""
+    chemin = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), nom_fichier)
+    if not os.path.exists(chemin):
+        return None
+    with open(chemin, encoding="utf-8") as f:
+        for ligne in f:
+            ligne = ligne.strip()
+            if ligne.startswith(f"{nom_var}="):
+                return ligne.split("=", 1)[1].strip()
+    return None
+
+
 # CARTO a coupé l'accès anonyme à ses fonds de carte (Positron / Dark
 # Matter) : sans clé API, les tuiles sont servies filigranées "API KEY
-# REQUIRED" (cf. https://carto.com/basemaps/apikey/). CARTO_API_KEY (var
-# d'env, définie en secret côté déploiement) réactive le rendu normal ;
-# sans elle, fond_carte_kwargs retombe sur OpenStreetMap.
-CARTO_API_KEY = os.environ.get("CARTO_API_KEY")
+# REQUIRED" (cf. https://carto.com/basemaps/apikey/) ; le repli sans clé
+# (OpenStreetMap, via fond_carte_kwargs/source_contextily_cartodb) peut lui
+# aussi se faire bloquer (403 "Access blocked... not following the tile
+# usage policy") en usage soutenu (plusieurs cartes par domaine BPE) — d'où
+# l'intérêt d'avoir la clé disponible même en local. CARTO_API_KEY (var
+# d'env, définie en secret côté déploiement, ou fichier .env local via
+# _lire_cle_env_locale) réactive le rendu CARTO normal dans les deux cas.
+CARTO_API_KEY = os.environ.get("CARTO_API_KEY") or _lire_cle_env_locale("CARTO_API_KEY")
 
 _CARTODB_VARIANTS = {"CartoDB positron": "light_all", "CartoDB dark_matter": "dark_all"}
 _CARTODB_ATTR = (
