@@ -116,9 +116,24 @@ def _invalider_caches_derives(nom_reseau, dry_run):
     api = HfApi()
     for gabarit in CHEMINS_CACHE_HF_A_INVALIDER:
         chemin_hf = gabarit % nom_reseau
+
+        # Copie LOCALE d'abord : recuperer_depuis_hf() est un no-op si le
+        # fichier local existe déjà (cf. src/hf_cache.py), donc une
+        # invalidation HF seule ne suffit pas — un ttm local encore dans la
+        # fenêtre de fraîcheur de 10 jours (cf. cellule "Retourne différentes
+        # dates" du notebook principal, ttm_cache_recent) serait rechargé tel
+        # quel au prochain run sans jamais voir que le GTFS a changé. Rarement
+        # peuplé en CI (runner éphémère) mais pertinent pour une exécution
+        # locale de ce script.
+        chemin_local = os.path.join(BASE_DIR, "data", chemin_hf)
         if dry_run:
+            if os.path.exists(chemin_local):
+                print(f"    [dry-run] supprimerait le cache local {chemin_local}")
             print(f"    [dry-run] supprimerait {chemin_hf} du dataset HF")
             continue
+        if os.path.exists(chemin_local):
+            os.remove(chemin_local)
+            print(f"    ✓ cache local supprimé : {chemin_local}")
         try:
             api.delete_file(
                 path_in_repo=chemin_hf,
@@ -126,11 +141,11 @@ def _invalider_caches_derives(nom_reseau, dry_run):
                 repo_type="dataset",
                 token=os.environ.get("HF_TOKEN"),
             )
-            print(f"    ✓ cache invalidé : {chemin_hf}")
+            print(f"    ✓ cache HF invalidé : {chemin_hf}")
         except Exception as e:
             # Le fichier n'existe simplement peut-être pas (réseau jamais
             # traité) — pas une erreur en soi, juste rien à invalider.
-            print(f"    (rien à invalider pour {chemin_hf} : {type(e).__name__})")
+            print(f"    (rien à invalider sur HF pour {chemin_hf} : {type(e).__name__})")
 
 
 def _ajouter_au_journal(chemin_journal, lignes):
