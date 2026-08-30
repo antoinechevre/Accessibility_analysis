@@ -55,7 +55,7 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           python scripts/rafraichir_gtfs.py \
-            --exclude IDFM-gtfs.zip Lyon_GTFS_TCL.zip \
+            --exclude IDFM-gtfs.zip Lyon_gtfs.ZIP \
             --journal data/journal_maj_gtfs.csv \
             --json-resultat resultat.json
 
