@@ -936,6 +936,7 @@ def build_grid_agglo_1km(decoupage_geojson_path, output_path=None):
     population_grid_agglo["centroid_y"] = centroids.y
 
     output_path = output_path or f"{DATA_DIR}/population_grid_agglo_1km.gpkg"
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
     population_grid_agglo.to_file(output_path, driver="GPKG")
 
     print(f"carreaux 1km dans l'agglo: {len(population_grid_agglo)}")

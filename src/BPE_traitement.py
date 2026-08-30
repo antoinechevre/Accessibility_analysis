@@ -59,7 +59,15 @@ def filtre_BPE (DECOUPAGE_COM_PATH_CSV,population_grid_agglo):
     # BPE25.parquet (INSEE) est un parquet tabulaire classique (colonnes LONGITUDE/
     # LATITUDE, pas de géométrie WKB/métadonnées GeoParquet) : gpd.read_parquet()
     # échoue avec "Missing geo metadata". pd.read_parquet() est la bonne fonction ici.
-    BPE_agglo = pd.read_parquet(BPE_PATH) #étape intermédiaire charge l'ensemble de la BDD
+    #
+    # columns=[...] : le parquet contient 95 colonnes (~2,9M lignes, toute la
+    # France) mais seules DEPCOM/TYPEQU/LAMBERT_X/LAMBERT_Y sont utilisées dans
+    # tout le pipeline en aval (GAMME/domaine/poids_gamme viennent d'une jointure
+    # avec BPE_gammes_equipements_2025.xlsx, pas du parquet). Ne charger que ces
+    # 4 colonnes évite de matérialiser les 95 colonnes nationales en mémoire avant
+    # le filtre par commune — nécessaire pour IDFM (~12M habitants), qui a fait
+    # dépasser 27 Go de RAM et tuer le kernel (OOM) en chargeant tout.
+    BPE_agglo = pd.read_parquet(BPE_PATH, columns=["DEPCOM", "TYPEQU", "LAMBERT_X", "LAMBERT_Y"])
 
     # decoupage_agglo.csv est plus simple que le .geojson ici : il suffit d'une jointure
     # attributaire sur le code commune INSEE (pas besoin de jointure spatiale avec
