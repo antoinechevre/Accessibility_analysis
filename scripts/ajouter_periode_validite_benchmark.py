@@ -11,7 +11,7 @@ entier et itère ses jours de service — quelques secondes à ~1 min par
 réseau selon sa taille.
 
 Usage :
-    .venv/bin/python scripts/ajouter_periode_validite_benchmark.py [--dry-run]
+    env/bin/python scripts/ajouter_periode_validite_benchmark.py [--dry-run]
 """
 
 import argparse

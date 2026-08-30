@@ -13,7 +13,7 @@ seulement page_url/ressource_url/ressource_maj/titre dans gtfs_sources.json,
 pour que rafraichir_gtfs.py puisse ensuite en vérifier la fraîcheur.
 
 Usage :
-    .venv/bin/python scripts/indexer_gtfs_locaux.py [--dry-run] [--include FICHIER ...]
+    env/bin/python scripts/indexer_gtfs_locaux.py [--dry-run] [--include FICHIER ...]
 """
 
 import argparse

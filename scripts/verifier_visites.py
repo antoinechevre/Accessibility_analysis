@@ -14,7 +14,7 @@ scripts/construire_mail_visites.py) — jamais plus d'un mail par jour, même
 si l'app a été visitée plusieurs fois.
 
 Usage :
-    .venv/bin/python scripts/verifier_visites.py [--dry-run] [--json-resultat CHEMIN.json]
+    env/bin/python scripts/verifier_visites.py [--dry-run] [--json-resultat CHEMIN.json]
 """
 
 import argparse

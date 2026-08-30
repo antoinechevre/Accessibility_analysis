@@ -12,7 +12,7 @@ seule une agrégation géométrique (union des communes, reprojection en
 Lambert-93 pour une surface en mètres) est faite ici.
 
 Usage :
-    .venv/bin/python scripts/ajouter_surface_benchmark.py [--dry-run]
+    env/bin/python scripts/ajouter_surface_benchmark.py [--dry-run]
 """
 
 import argparse

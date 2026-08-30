@@ -12,11 +12,11 @@ import) : notebook exécuté dans un noyau Jupyter frais par réseau, jamais
 modifié sur disque, GTFS copié dans un temp file avant chargement.
 
 Usage :
-    .venv/bin/python scripts/run_GTFS_complet.py [--dry-run] [--limit N]
+    env/bin/python scripts/run_GTFS_complet.py [--dry-run] [--limit N]
 
 Un run complet peut prendre plusieurs heures (r5py, Overpass...) pour les
 ~65 réseaux concernés : à lancer en arrière-plan, ex.
-    nohup .venv/bin/python scripts/run_GTFS_complet.py > output/batch_logs/run_complet.log 2>&1 &
+    nohup env/bin/python scripts/run_GTFS_complet.py > output/batch_logs/run_complet.log 2>&1 &
 """
 
 import argparse

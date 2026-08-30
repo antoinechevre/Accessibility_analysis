@@ -5,9 +5,9 @@ Accessibilité de l'app, cf. src/nuage_points_benchmark.py pour le détail
 des axes/filtres disponibles.
 
 Usage :
-    .venv/bin/python scripts/generer_nuage_points_benchmark.py
-    .venv/bin/python scripts/generer_nuage_points_benchmark.py --fichier chemin.csv --sortie chemin.html
-    .venv/bin/python scripts/generer_nuage_points_benchmark.py --reseau-actuel TCL
+    env/bin/python scripts/generer_nuage_points_benchmark.py
+    env/bin/python scripts/generer_nuage_points_benchmark.py --fichier chemin.csv --sortie chemin.html
+    env/bin/python scripts/generer_nuage_points_benchmark.py --reseau-actuel TCL
 """
 
 import argparse

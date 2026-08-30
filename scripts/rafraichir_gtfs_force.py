@@ -12,7 +12,7 @@ caches dérivés — cf. ce fichier pour le détail (options --include/--exclude
 --journal/--json-resultat, toutes transmises telles quelles).
 
 Usage :
-    .venv/bin/python scripts/rafraichir_gtfs_force.py [--dry-run] [--include FICHIER ...]
+    env/bin/python scripts/rafraichir_gtfs_force.py [--dry-run] [--include FICHIER ...]
 """
 
 import sys

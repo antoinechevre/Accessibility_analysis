@@ -37,7 +37,7 @@ coûteux à retraiter en CI, cf. commentaire du workflow — --journal et
 --json-resultat pour le journal git et le mail de notification).
 
 Usage :
-    .venv/bin/python scripts/rafraichir_gtfs.py [--dry-run] [--include FICHIER ...]
+    env/bin/python scripts/rafraichir_gtfs.py [--dry-run] [--include FICHIER ...]
         [--exclude FICHIER ...] [--journal CHEMIN.csv] [--json-resultat CHEMIN.json]
 """
 

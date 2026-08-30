@@ -18,8 +18,8 @@ contours de ses communes, même logique que build_decoupage_agglo dans
 src/build_data_agglo.py pour une agglo).
 
 Usage :
-    .venv/bin/python -m src.extraire_gtfs_departement
-    .venv/bin/python -m src.extraire_gtfs_departement --departement 51 --gtfs REGION_GRANDEST.gtfs.zip
+    env/bin/python -m src.extraire_gtfs_departement
+    env/bin/python -m src.extraire_gtfs_departement --departement 51 --gtfs REGION_GRANDEST.gtfs.zip
 """
 
 import argparse

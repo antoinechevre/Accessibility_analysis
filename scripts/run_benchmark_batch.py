@@ -23,12 +23,12 @@ src.utils._retirer_table_vide_du_zip), ce qui modifierait sinon silencieusement
 les fichiers source de data/GTFS.
 
 Usage :
-    .venv/bin/python scripts/run_benchmark_batch.py [--dry-run] [--limit N]
+    env/bin/python scripts/run_benchmark_batch.py [--dry-run] [--limit N]
                                                       [--include FICHIER ...]
 
 Un run complet peut prendre plusieurs heures (r5py, Overpass...) pour les
 GTFS pas encore mis en cache : à lancer en arrière-plan, ex.
-    nohup .venv/bin/python scripts/run_benchmark_batch.py > output/batch_logs/run.log 2>&1 &
+    nohup env/bin/python scripts/run_benchmark_batch.py > output/batch_logs/run.log 2>&1 &
 """
 
 import argparse

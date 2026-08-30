@@ -14,8 +14,8 @@ Retrouver le code d'un EPCI (intercommunalité) par son nom :
     curl -s "https://geo.api.gouv.fr/epcis?nom=NOM&fields=nom,code,population"
 
 Usage :
-    .venv/bin/python -m src.extraire_gtfs_epci
-    .venv/bin/python -m src.extraire_gtfs_epci --epci 200065928 200067981 \\
+    env/bin/python -m src.extraire_gtfs_epci
+    env/bin/python -m src.extraire_gtfs_epci --epci 200065928 200067981 \\
         --gtfs Bretagne_KORRIGOBRET.gtfs.zip --sortie data/GTFS_agrege/Lannion_Guingamp_gtfs.zip
 """
 
@@ -121,19 +121,19 @@ def extraire_gtfs_epci(chemin_zip_entree, codes_epci, chemin_zip_sortie):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--gtfs", default=GTFS_ENTREE_DEFAUT, help="Nom du fichier dans data/GTFS_agrégé/")
+    parser.add_argument("--gtfs", default=GTFS_ENTREE_DEFAUT, help="Nom du fichier dans data/GTFS_Régionaux/")
     parser.add_argument(
         "--epci", nargs="+", default=EPCI_DEFAUT,
         help="Code(s) EPCI à extraire (cf. https://geo.api.gouv.fr/epcis?nom=... pour les retrouver)",
     )
     parser.add_argument(
         "--sortie", default=None,
-        help=f"Chemin complet du GTFS extrait (défaut : data/GTFS_agrégé/{NOM_SORTIE_DEFAUT} — cf. "
+        help=f"Chemin complet du GTFS extrait (défaut : data/GTFS_agrege/{NOM_SORTIE_DEFAUT} — cf. "
         "app.py, sélecteur \"GTFS modifié pour étude\", distinct du catalogue principal data/GTFS/)",
     )
     args = parser.parse_args()
 
-    chemin_entree = os.path.join(BASE_DIR, "data", "GTFS_agrégé", args.gtfs)
-    chemin_sortie = args.sortie or os.path.join(BASE_DIR, "data", "GTFS_agrégé", NOM_SORTIE_DEFAUT)
+    chemin_entree = os.path.join(BASE_DIR, "data", "GTFS_Régionaux", args.gtfs)
+    chemin_sortie = args.sortie or os.path.join(BASE_DIR, "data", "GTFS_agrege", NOM_SORTIE_DEFAUT)
 
     extraire_gtfs_epci(chemin_entree, args.epci, chemin_sortie)

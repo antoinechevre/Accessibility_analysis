@@ -14,8 +14,8 @@ n'est jamais modifié en place (copié dans un temp file avant chargement, car
 charger_gtfs() peut réécrire un zip en place).
 
 Usage :
-    .venv/bin/python -m src.extraire_gtfs_agence
-    .venv/bin/python -m src.extraire_gtfs_agence --agency-id "IDFM:1042" --sortie data/GTFS_agrégé/AutreReseau.zip
+    env/bin/python -m src.extraire_gtfs_agence
+    env/bin/python -m src.extraire_gtfs_agence --agency-id "IDFM:1042" --sortie data/GTFS_agrege/AutreReseau.zip
 
 Pour retrouver l'agency_id d'un autre réseau dans un GTFS agrégé :
     python -c "
@@ -98,12 +98,12 @@ if __name__ == "__main__":
     parser.add_argument("--agency-id", default=AGENCY_ID_DEFAUT, help="agency_id à extraire (cf. agency.txt du GTFS source)")
     parser.add_argument(
         "--sortie", default=None,
-        help=f"Chemin complet du GTFS extrait (défaut : data/GTFS_agrégé/{NOM_SORTIE_DEFAUT} — cf. "
+        help=f"Chemin complet du GTFS extrait (défaut : data/GTFS_agrege/{NOM_SORTIE_DEFAUT} — cf. "
         "app.py, sélecteur \"GTFS modifié pour étude\", distinct du catalogue principal data/GTFS/)",
     )
     args = parser.parse_args()
 
     chemin_entree = os.path.join(BASE_DIR, "data", "GTFS", args.gtfs)
-    chemin_sortie = args.sortie or os.path.join(BASE_DIR, "data", "GTFS_agrégé", NOM_SORTIE_DEFAUT)
+    chemin_sortie = args.sortie or os.path.join(BASE_DIR, "data", "GTFS_agrege", NOM_SORTIE_DEFAUT)
 
     extraire_gtfs_agence(chemin_entree, args.agency_id, chemin_sortie)
