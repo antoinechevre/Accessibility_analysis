@@ -45,7 +45,7 @@ from scripts.run_benchmark_batch import (
 # pour le détail des raisons). Volontairement PAS les mêmes exclusions que
 # run_benchmark_batch.py (51_REGION_GRANDEST, réseaux hors métropole...) :
 # ce script traite tout ce que le pipeline standard sait gérer.
-EXCLUS = {"IDFM-gtfs.zip", "Lyon_GTFS_TCL.zip"}
+EXCLUS = {"IDFM-gtfs.zip", "Lyon_gtfs.ZIP"}
 
 
 def main():

@@ -60,7 +60,7 @@ LOG_DIR = os.path.join(BASE_DIR, "output", "batch_logs")
 
 # Réseaux volontairement exclus du batch, même s'ils ne sont pas encore dans
 # le benchmark :
-# - Lyon_GTFS_TCL.zip : lancé à part (notebook TCL dédié, résolution 400m).
+# - Lyon_gtfs.ZIP : lancé à part (notebook TCL dédié, résolution 400m).
 # - IDFM-gtfs.zip : exclu du fichier de benchmark lui-même (cellule
 #   "#sauvegarde index", RESEAUX_EXCLUS_BENCHMARK — échelle de population
 #   incomparable aux autres réseaux) ; exclu ici aussi pour ne pas dépenser
@@ -77,7 +77,7 @@ LOG_DIR = os.path.join(BASE_DIR, "output", "batch_logs")
 #   déjà hors de portée de ce batch ; gardé quand même dans EXCLUS en filet
 #   de sécurité si jamais redéposé dans data/GTFS/ par erreur.
 EXCLUS = {
-    "Lyon_GTFS_TCL.zip",
+    "Lyon_gtfs.ZIP",
     "IDFM-gtfs.zip",
     "51_REGION_GRANDEST.gtfs.zip",
     "Chicago_google_transit.zip",
