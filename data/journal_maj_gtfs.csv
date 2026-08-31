@@ -165,3 +165,66 @@ date,nom_fichier,reseau,statut,ancienne_maj,nouvelle_maj
 2026-08-24,Valence_gtfs-citea-20260517-20260628.zip,Valence Romans Mobilités,mis_a_jour,,20260625
 2026-08-24,Valenciennes_google-transit.zip,Transvilles,mis_a_jour,,20261217
 2026-08-24,Vannes_GTFS.zip,Kicéo,mis_a_jour,,20270701
+2026-08-31,Albi_libea-reseau-urbain.zip,libéA Mobilités,mis_a_jour,,20261217
+2026-08-31,Ales_gtfs-is-20260704.zip,ALES'Y(SMTBA),mis_a_jour,,20261015
+2026-08-31,Amiens_gtfs-fusion-20260721-1000.zip,Keolis Amiens,mis_a_jour,,20270112
+2026-08-31,Angers_gtfs.zip,IRIGO,mis_a_jour,,20261015
+2026-08-31,Annecy_GTFS.zip,SIBRA,mis_a_jour,,20261015
+2026-08-31,Avignon_gtfs_20260716_979_OPENDATA.zip,TECELYS SPL,mis_a_jour,,20261015
+2026-08-31,BOURGES-GTFS.zip,Agglobus (Bourges),mis_a_jour,,20261217
+2026-08-31,Bayonne_txiktxak.zip,TXIK TXAK,mis_a_jour,,20270624
+2026-08-31,Besancon-gtfs-ginko_r5py.zip,Ginko,mis_a_jour,,20261015
+2026-08-31,Bordeaux.gtfs.zip,TBM,mis_a_jour,,20261126
+2026-08-31,Brest_medias.zip,Bibus - TAD Bibus,mis_a_jour,,20261015
+2026-08-31,Calais_GTFS.zip,sitac,mis_a_jour,,20261217
+2026-08-31,Castres_08012026.zip,Transports publics Libellus,mis_a_jour,,20261217
+2026-08-31,Chambery_GTFS.zip,Synchro Bus,mis_a_jour,,20261015
+2026-08-31,Chateauroux_gtfs-202601050.zip,HORIZON (CHATEAUROUX),mis_a_jour,,20260702
+2026-08-31,Cholet_gtfs.zip,Choletbus,mis_a_jour,,20270701
+2026-08-31,Châlon_GTFS.zip,Châlons-en-Champagne,mis_a_jour,,20261015
+2026-08-31,Clermont auvergne_GTFS.zip,T2C,mis_a_jour,,20261217
+2026-08-31,Colmar_GTFS.zip,TRACE,mis_a_jour,,20261126
+2026-08-31,Cotentin_GTFS.zip,Cap Cotentin,mis_a_jour,,20260702
+2026-08-31,Dijon_gtfs-diviamobilites-current.zip,KEOLIS DIJON,mis_a_jour,,20261015
+2026-08-31,Douai_GTFS.zip,EVEOLE - TAD EVEOLE,mis_a_jour,,20261217
+2026-08-31,Dunkerque_gtfs-20260624-110758-dkbus.zip,DKBUS,mis_a_jour,,20261217
+2026-08-31,Gap_GTFS.zip,L'Agglo en bus,mis_a_jour,,20261217
+2026-08-31,Grenoble_SEM-GTFS.zip,M Réso - Métropole Grenobloise,mis_a_jour,,20261231
+2026-08-31,Guéret_GTFS.zip,Agglo’Bus (Grand Guéret),mis_a_jour,,20270831
+2026-08-31,Ilevia_GTFS.zip,ILEVIA,mis_a_jour,,20261217
+2026-08-31,Laval_pan.zip,TUL,mis_a_jour,,20261231
+2026-08-31,Limoges_metropole-aggregated-gtfs.zip,STCLM (Limoges Métropole),mis_a_jour,,20261015
+2026-08-31,Lorient_medias.zip,IZILO,mis_a_jour,,20261015
+2026-08-31,Lyon_GTFS.zip,TCL - Rhonexpress,mis_a_jour,,20261015
+2026-08-31,Marseille_mamp-rtm.gtfs.zip,Marseille,mis_a_jour,,20261015
+2026-08-31,Metz_LEMET-gtfs.zip,LE MET',mis_a_jour,,20260929
+2026-08-31,Montauban_gtfs-ete-26.zip,SEMTM,mis_a_jour,,20260827
+2026-08-31,Montelimar_GTFS.zip,REGION Auvergne Rhone Alpes - MONTELIBUS,mis_a_jour,,20261015
+2026-08-31,Montelimar_gtfs-2026-06-10.zip,REGION Auvergne Rhone Alpes - MONTELIBUS,mis_a_jour,,20261015
+2026-08-31,Montpellier_TAM_MMM_GTFS.zip,TAM,mis_a_jour,,20261015
+2026-08-31,Mulhouse_SITRAM.GTFS.zip,SOLEA,mis_a_jour,,20270624
+2026-08-31,Nancy_LESUB.GTFS.zip,SUB Nancy,mis_a_jour,,20261015
+2026-08-31,Nantes_GTFS.zip,Covoit'ici,mis_a_jour,,20300228
+2026-08-31,Nantes_Naolib_gtfs_lumidata_id.zip,Naolib,mis_a_jour,,20261126
+2026-08-31,Nice_GTFS.zip,Lignes d'Azur,mis_a_jour,,20261217
+2026-08-31,Nice_gtfs.zip,Lignes d'Azur,mis_a_jour,,20261217
+2026-08-31,Nimes_gtfs-production.zip,TANGO,mis_a_jour,,20261217
+2026-08-31,Niort-aggregated-gtfs.zip,Tanlib (Niort),mis_a_jour,,20260827
+2026-08-31,Orleans_gtfs.zip,TAO (Orléans),mis_a_jour,,20261217
+2026-08-31,Orléans_GTFS.zip,Résatao Orl,mis_a_jour,,20260514
+2026-08-31,Pau_GTFS.zip,IDELIS (Pau),mis_a_jour,,20270101
+2026-08-31,Perigueux-aggregated-gtfs.zip,Périmouv (Grand Perigueux),mis_a_jour,,20261217
+2026-08-31,Perpignan.gtfs.zip,Sankéo,mis_a_jour,,20260910
+2026-08-31,Poitiers_gtfs.zip,VITALIS (Grand Poitiers) - FLEX'E-BUS (Grand Poitiers),mis_a_jour,,20261105
+2026-08-31,Reims.GTFS.zip,Transdev Reims,mis_a_jour,,20261015
+2026-08-31,Rennes_GTFS_STAR_BUS_METRO_EN_COURS.zip,STAR,mis_a_jour,,20261001
+2026-08-31,Saumur_gtfs_imported-id_saumur.zip,saumuragglobus,mis_a_jour,,20260702
+2026-08-31,Strasbourg_google_transit.zip,CTS,mis_a_jour,,20270225
+2026-08-31,TAO.zip,TAO (Orléans),mis_a_jour,,20261217
+2026-08-31,Toulon_gtfs-complet.zip,Réseau Mistral - Téléphérique Faron,mis_a_jour,,20261015
+2026-08-31,Toulouse_tisseo_gtfs_v2_r5py.zip,Tisséo,mis_a_jour,,20260924
+2026-08-31,Tours_filbleu_gtfs14.zip,Fil Bleu (Tours),mis_a_jour,,20261217
+2026-08-31,Valence_gtfs-citea-20260517-20260628.zip,Valence Romans Mobilités,mis_a_jour,,20260625
+2026-08-31,Valenciennes_google-transit.zip,Transvilles,mis_a_jour,,20261217
+2026-08-31,Vannes_GTFS.zip,Kicéo,mis_a_jour,,20270701
+2026-08-31,ilevia.zip,ILEVIA,mis_a_jour,,20261217
