@@ -482,17 +482,27 @@ with st.sidebar.expander("🔍 Rechercher un GTFS (transport.data.gouv.fr)"):
                             )
                         elif nb_agences is not None:
                             try:
-                                chemin_cible = os.path.join(GTFS_DATA_DIR, nom_fichier_cible)
+                                # nom_fichier_standard (Ville_GTFS.zip), pas
+                                # nom_fichier_cible : un téléchargement (premier
+                                # ajout ou mise à jour) doit toujours suivre la
+                                # taxonomie du catalogue, même si le dataset était
+                                # déjà connu sous un ancien nom non conforme —
+                                # sinon une mise à jour perpétuerait indéfiniment
+                                # ce nom hérité. nom_fichier_cible reste utilisé
+                                # juste au-dessus pour le statut "déjà à jour"/
+                                # "Sélectionner" (réutilise le fichier existant
+                                # sans re-télécharger, ne crée rien de nouveau).
+                                chemin_cible = os.path.join(GTFS_DATA_DIR, nom_fichier_standard)
                                 os.makedirs(GTFS_DATA_DIR, exist_ok=True)
                                 with open(chemin_cible, "wb") as f:
                                     f.write(contenu_gtfs)
-                                envoyer_vers_hf(chemin_cible, f"GTFS/{nom_fichier_cible}")
-                                enregistrer_provenance(nom_fichier_cible, resultat)
+                                envoyer_vers_hf(chemin_cible, f"GTFS/{nom_fichier_standard}")
+                                enregistrer_provenance(nom_fichier_standard, resultat)
                             except requests.RequestException as e:
                                 st.error(f"Échec du téléchargement : {e}")
                             else:
-                                st.session_state["_gtfs_a_selectionner"] = nom_fichier_cible
-                                st.success(f"✓ {nom_fichier_cible} ajouté au catalogue et sélectionné.")
+                                st.session_state["_gtfs_a_selectionner"] = nom_fichier_standard
+                                st.success(f"✓ {nom_fichier_standard} ajouté au catalogue et sélectionné.")
                                 st.rerun()
                 st.divider()
 
