@@ -450,6 +450,13 @@ with st.sidebar.expander("🔍 Rechercher un GTFS (transport.data.gouv.fr)"):
 
             for resultat in resultats_recherche:
                 statut, nom_fichier_existant = statut_resultat(resultat, provenance_gtfs)
+                # statut_resultat ne vérifie que la provenance (gtfs_sources.json),
+                # jamais si le fichier existe réellement (disque ou HF) : une
+                # entrée orpheline (fichier supprimé sans nettoyer sa provenance,
+                # ex. lors d'une purge de doublons) ferait sinon dire "déjà à
+                # jour" à tort, sans jamais proposer de le (re)télécharger.
+                if nom_fichier_existant is not None and nom_fichier_existant not in gtfs_locaux:
+                    statut, nom_fichier_existant = "nouveau", None
                 nom_fichier_cible = nom_fichier_existant or nom_fichier_standard
                 st.markdown(f"**{resultat['title']}**")
                 st.caption(f"{resultat['covered_area_noms']} — màj {(resultat['ressource_maj'] or '?')[:10]}")
