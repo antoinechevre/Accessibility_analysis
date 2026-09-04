@@ -642,6 +642,7 @@ def osm_pbf_creator(
 # région, ancien découpage pré-2016 ; fichier = <departement_slug>-latest.osm.pbf).
 DEPARTEMENTS_OSMFR = {
     "22": ("bretagne", "cotes_d_armor"),
+    "44": ("pays_de_la_loire", "loire_atlantique"),
 }
 
 
@@ -681,6 +682,22 @@ def _telecharger_departement_osmfr(code_departement, dossier_cache, session=None
                 f.write(bloc)
     print(f"✓ téléchargé : {chemin_local} ({chemin_local.stat().st_size / 1e6:.0f} Mo)")
     return chemin_local
+
+
+def departements_depuis_geojson(chemin_geojson):
+    """Codes départements (2 chiffres, 3 pour les DOM) déduits des
+    code_insee des communes d'un decoupage_agglo_*.geojson (properties
+    "code_insee", cf. decoupage_agglo_geojson) — pour choisir un repli
+    osm_pbf_creator_depuis_osmfr si Overpass échoue (cf. DEPARTEMENTS_OSMFR
+    ci-dessus), aussi bien depuis l'app (views/accessibilite_index.py) que
+    depuis les notebooks."""
+    with open(chemin_geojson, encoding="utf-8") as f:
+        data = json.load(f)
+    codes = set()
+    for feature in data.get("features", []):
+        code_insee = feature.get("properties", {}).get("code_insee", "")
+        codes.add(code_insee[:3] if code_insee.startswith(("97", "98")) else code_insee[:2])
+    return sorted(codes)
 
 
 def osm_pbf_creator_depuis_osmfr(decoupage_agglo_path, codes_departement, output_pbf_path=None, dossier_cache=None):

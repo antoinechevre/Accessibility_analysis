@@ -18,6 +18,7 @@ from folium.plugins import DualMap
 from src.BPE_traitement import land_use_data_domaine
 from src.build_data_agglo import (
     DEPARTEMENTS_OSMFR,
+    departements_depuis_geojson,
     osm_pbf_creator,
     osm_pbf_creator_depuis_osmfr,
     surface_km2_decoupage,
@@ -205,23 +206,6 @@ def _construire_reseau_transport(osm_pbf_path, gtfs_r5py_path):
         return r5py.TransportNetwork(osm_pbf=osm_pbf_path, gtfs=[gtfs_r5py_path])
 
 
-def _departements_depuis_geojson(chemin_geojson):
-    """Codes départements (2 chiffres, 3 pour les DOM) déduits des
-    code_insee des communes d'un decoupage_agglo_*.geojson (properties
-    "code_insee", cf. src.build_data_agglo.decoupage_agglo_geojson) — pour
-    choisir un repli osm_pbf_creator_depuis_osmfr si Overpass échoue (cf.
-    _recuperer_ou_extraire_osm_pbf)."""
-    import json
-
-    with open(chemin_geojson, encoding="utf-8") as f:
-        data = json.load(f)
-    codes = set()
-    for feature in data.get("features", []):
-        code_insee = feature.get("properties", {}).get("code_insee", "")
-        codes.add(code_insee[:3] if code_insee.startswith(("97", "98")) else code_insee[:2])
-    return sorted(codes)
-
-
 def _recuperer_ou_extraire_osm_pbf(chemins, nom_reseau_str, forcer_extraction=False):
     """Écrit l'extrait OSM du réseau dans chemins["osm_pbf"] : depuis le
     cache Hugging Face si disponible, sinon en l'extrayant via Overpass (puis
@@ -252,7 +236,7 @@ def _recuperer_ou_extraire_osm_pbf(chemins, nom_reseau_str, forcer_extraction=Fa
             # troncature répétée...) et que tous les départements couverts
             # par la zone sont dans DEPARTEMENTS_OSMFR — observé sur
             # Lannion/Guingamp (zone rurale ~150x75km, "Connection timed out").
-            codes_departement = _departements_depuis_geojson(chemins["decoupage_geojson"])
+            codes_departement = departements_depuis_geojson(chemins["decoupage_geojson"])
             if not codes_departement or any(c not in DEPARTEMENTS_OSMFR for c in codes_departement):
                 raise
             _log(f"⚠ Overpass a échoué ({type(e).__name__}: {e}) — repli sur l'extrait OSM France (département{'s' if len(codes_departement) > 1 else ''} {', '.join(codes_departement)})")
