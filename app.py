@@ -17,7 +17,6 @@ from src.info_reseau import dates_service, nom_fichier_valide, nom_reseau_str, r
 from src.hf_cache import enregistrer_visite, envoyer_vers_hf, lister_fichiers_hf, recuperer_depuis_hf
 from src.merge_gtfs import fusionner_gtfs
 from src.transport_data_gouv import (
-    associer_gtfs_a_pan,
     charger_provenance,
     enregistrer_provenance,
     enregistrer_zone,
@@ -386,7 +385,7 @@ if gtfs_a_ajouter_auto:
         st.session_state["gtfs_locaux_choisis"] = [*selection_actuelle, gtfs_a_ajouter_auto]
 
 gtfs_locaux_choisis = st.sidebar.multiselect(
-    "...ou choisir un/des GTFS déjà présent(s) — plusieurs = réseaux fusionnés",
+    "...ou choisir un GTFS déjà présent (tous mis à jour régulièrement)",
     options=gtfs_locaux,
     key="gtfs_locaux_choisis",
 )
@@ -768,26 +767,16 @@ def charger_donnees_gtfs():
             except Exception:
                 pass
 
-        # Association automatique au jeu de données transport.data.gouv.fr
-        # (cf. src.transport_data_gouv.associer_gtfs_a_pan), pour qu'un
-        # nouvel upload profite du contrôle de fraîcheur hebdomadaire
-        # (scripts/rafraichir_gtfs.py) sans devoir passer par la recherche
-        # en barre latérale à la main. Best-effort, jamais bloquant — et
-        # jamais sur le seul nom de fichier (cf. la comparaison agency.txt
-        # dans associer_gtfs_a_pan) : une précédente version, basée sur le
-        # nom de réseau dérivé des agences, avait associé à tort un GTFS à
-        # un opérateur sans rapport (recherche par un nom d'agence qui, par
-        # coïncidence, ne matchait qu'un seul jeu de données PAN erroné).
-        if not fusion and uploaded_files and nom_gtfs not in gtfs_locaux:
-            try:
-                if not charger_provenance().get(nom_gtfs, {}).get("page_url"):
-                    with open(GTFS_PATH, "rb") as f:
-                        contenu_local = f.read()
-                    resultat, _ = associer_gtfs_a_pan(nom_gtfs, contenu_local, _datasets_transport_gouv())
-                    if resultat is not None:
-                        enregistrer_provenance(nom_gtfs, resultat)
-            except Exception:
-                pass
+        # Pas d'association automatique à un jeu de données transport.data.gouv.fr
+        # pour un simple upload (contrairement au téléchargement via la
+        # recherche en barre latérale, cf. plus haut) : ça alimenterait
+        # data/gtfs_sources.json avec un page_url, et scripts/rafraichir_gtfs.py
+        # (rafraîchissement hebdomadaire) téléchargerait alors ce GTFS dans
+        # data/GTFS/ — le catalogue principal — malgré le choix explicite
+        # ci-dessus de cantonner les uploads à GTFS_import_autre/ sans
+        # validation. Un upload spontané ne doit jamais atterrir dans le
+        # catalogue (donc dans un run de scripts/run_benchmark_batch.py)
+        # sans passer par la recherche.
 
         return True
 
