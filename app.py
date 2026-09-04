@@ -728,16 +728,16 @@ def charger_donnees_gtfs():
 
         # GTFS uploadé (pas choisi dans le catalogue existant) et jamais vu,
         # SEUL (pas une fusion — le zip fusionné n'a pas vocation à réapparaître
-        # tel quel dans le catalogue) : renvoyé vers le dataset HF pour que les
-        # prochains déploiements/visiteurs le retrouvent dans "...ou choisir un
-        # GTFS déjà présent" sans avoir à le réuploader — même principe que les
-        # caches dérivés (extrait OSM, matrice des temps de trajet, découpage
-        # communal, cf. src/hf_cache.py et src/pipeline_donnees.py). Best-effort,
-        # comme les autres appels à envoyer_vers_hf : n'empêche jamais le run
-        # en cours.
+        # tel quel dans le catalogue) : sauvegardé sur le dataset HF, mais sous
+        # GTFS_import_autre/ — PAS GTFS/ (le catalogue principal, proposé aux
+        # autres visiteurs dans "...ou choisir un GTFS déjà présent") : un
+        # upload spontané n'a pas vocation à s'y retrouver mélangé sans
+        # validation. Simple filet de sécurité (récupération manuelle
+        # possible si besoin), donc silencieux — pas de confirmation affichée
+        # à l'utilisateur. Best-effort comme les autres appels à
+        # envoyer_vers_hf : n'empêche jamais le run en cours.
         if not fusion and uploaded_files and nom_gtfs not in gtfs_locaux:
-            if envoyer_vers_hf(GTFS_PATH, f"GTFS/{nom_gtfs}"):
-                st.toast(f"✓ {nom_gtfs} envoyé vers Hugging Face (réutilisable aux prochains déploiements)")
+            envoyer_vers_hf(GTFS_PATH, f"GTFS_import_autre/{nom_gtfs}")
 
         # Académie/zone dans l'index gtfs_sources.json (cf. plus haut) : comme
         # pour l'envoi HF ci-dessus, pas de sens pour une fusion (le nom
