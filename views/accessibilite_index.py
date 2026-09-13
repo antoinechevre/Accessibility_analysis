@@ -314,7 +314,13 @@ def _construire_pipeline(zip_path, nom_reseau_str, date_JOB):
                     _recuperer_ou_extraire_osm_pbf(chemins, nom_reseau_str, forcer_extraction=True)
                     transport_network = _construire_reseau_transport(osm_pbf_path, gtfs_r5py)
 
-                departure_datetime = datetime.datetime.strptime(date_JOB, "%Y%m%d").replace(hour=14, minute=0, second=0)
+                # Pointe du matin (8h-9h) plutôt qu'un instant isolé à 14h :
+                # departure_time_window fait échantillonner par r5py un
+                # départ chaque minute dans cette fenêtre et renvoie le temps
+                # de trajet médian par paire origine/destination (cf.
+                # calculer_ttm_par_lots, src/utilitaires_matrix.py) — plus
+                # représentatif de la desserte réelle qu'un seul horaire.
+                departure_datetime = datetime.datetime.strptime(date_JOB, "%Y%m%d").replace(hour=8, minute=0, second=0)
 
                 # Par lots d'origines plutôt qu'un seul appel origins=destinations=tous
                 # les carreaux : borne le pic mémoire (JVM + résultat Python) à la
@@ -326,6 +332,7 @@ def _construire_pipeline(zip_path, nom_reseau_str, date_JOB):
                     transport_network,
                     points,
                     departure=departure_datetime,
+                    departure_time_window=datetime.timedelta(hours=1),
                     transport_modes=[r5py.TransportMode.WALK, r5py.TransportMode.TRANSIT],
                     max_time_walking=datetime.timedelta(minutes=30),
                     max_time=datetime.timedelta(minutes=120),

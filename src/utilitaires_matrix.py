@@ -1,3 +1,4 @@
+import datetime
 import math
 
 import numpy as np
@@ -45,6 +46,7 @@ def calculer_ttm_par_lots(
     max_time_walking,
     max_time,
     ttm_path,
+    departure_time_window=datetime.timedelta(minutes=10),
     taille_lot=1500,
     on_step=None,
 ):
@@ -54,6 +56,15 @@ def calculer_ttm_par_lots(
     plutôt qu'à la matrice complète. Nécessaire pour les grosses agglomérations
     (ex: Lyon/TCL, dont le calcul en un seul bloc dépasse 32 Go de RAM même
     avec 16 Go dédiés à la JVM — cf. views/accessibilite_index.py).
+
+    departure_time_window : r5py échantillonne plusieurs départs dans
+    [departure, departure + departure_time_window) et renvoie le temps de
+    trajet médian par paire origine/destination — pas un simple calcul au
+    seul instant `departure`, sensible aux aléas d'un horaire précis (cf.
+    r5py.RegionalTask). Défaut 10 min = celui de r5py ; passer une fenêtre
+    plus large (ex: 1h pour couvrir toute la pointe du matin 8h-9h) lisse
+    mieux les variations horaires au prix d'un calcul plus long (r5py
+    échantillonne un départ par minute dans la fenêtre).
 
     Écrit directement sur disque au fur et à mesure (pyarrow.parquet.ParquetWriter,
     un row group par lot) : un lot jamais ajouté au précédent en mémoire Python,
@@ -86,6 +97,7 @@ def calculer_ttm_par_lots(
                 destinations=points,
                 transport_modes=transport_modes,
                 departure=departure,
+                departure_time_window=departure_time_window,
                 max_time_walking=max_time_walking,
                 max_time=max_time,
             )
