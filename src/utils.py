@@ -229,13 +229,47 @@ TABLES_OPTIONNELLES_VIDABLES_R5PY = [
 ]
 
 
+def _lignes_csv_du_zip(z, nom_fichier):
+    """Lignes (dict) et intitulés de colonnes de nom_fichier dans le
+    ZipFile z ouvert, via csv.DictReader (utf-8)."""
+    with z.open(nom_fichier) as f:
+        lecteur = csv.DictReader(io.TextIOWrapper(f, "utf-8"))
+        return list(lecteur), lecteur.fieldnames
+
+
+def _ecrire_csv(fieldnames, lignes):
+    """Sérialise lignes (dicts) en bytes CSV (utf-8), pour zout.writestr."""
+    buffer = io.StringIO()
+    ecrivain = csv.DictWriter(buffer, fieldnames=fieldnames)
+    ecrivain.writeheader()
+    ecrivain.writerows(lignes)
+    return buffer.getvalue().encode("utf-8")
+
+
 def preparer_gtfs_pour_r5py(zip_path, output_path=None):
     """
-    Retire du GTFS les tables de TABLES_OPTIONNELLES_VIDABLES_R5PY présentes
-    mais vides (cf. commentaire ci-dessus).
+    Prépare le GTFS pour le lecteur r5py (Conveyal/OneBusAway), plus strict
+    que gtfs_kit (utilisé par le reste du pipeline, cf. charger_gtfs) sur
+    deux points observés sur des exports réels :
 
-    Si aucune de ces tables n'est présente-mais-vide, le zip d'origine est
-    renvoyé tel quel (aucune copie créée).
+    1. Tables de TABLES_OPTIONNELLES_VIDABLES_R5PY présentes mais vides
+       (cf. commentaire ci-dessus) : rejetées avec une EmptyTableError au
+       lieu d'être traitées comme absentes.
+    2. Intégrité référentielle stricte (ReferentialIntegrityError) :
+       - trips.txt dont le route_id ne correspond à aucune ligne de
+         routes.txt (observé sur Metz, GTFS de sept. 2026) ;
+       - stop_times.txt dont le trip_id ne correspond à aucune ligne de
+         trips.txt, même en dehors du cas précédent (observé sur
+         Valenciennes, même export) — GTFS par ailleurs valide selon la
+         spec (des références rompues n'y sont pas interdites), gtfs_kit
+         les ignore silencieusement, mais r5py refuse de charger le GTFS
+         entier tant qu'elles sont présentes.
+       Les lignes concernées sont retirées (trips orphelins, puis leurs
+       stop_times associés en cascade, plus tout stop_times déjà orphelin
+       indépendamment).
+
+    Si rien de tout ça ne s'applique, le zip d'origine est renvoyé tel quel
+    (aucune copie créée).
 
     zip_path: chemin vers le GTFS à préparer.
     output_path: chemin du GTFS nettoyé (par défaut : "<zip_path stem>_r5py.zip").
@@ -253,7 +287,37 @@ def preparer_gtfs_pour_r5py(zip_path, output_path=None):
             if nb_lignes <= 0:
                 a_retirer.append(nom)
 
-        if not a_retirer:
+        a_reecrire = {}  # nom -> bytes CSV filtré
+
+        if "trips.txt" in noms_presents and "routes.txt" in noms_presents:
+            lignes_routes, _ = _lignes_csv_du_zip(z, "routes.txt")
+            route_ids_valides = {r["route_id"] for r in lignes_routes}
+
+            lignes_trips, champs_trips = _lignes_csv_du_zip(z, "trips.txt")
+            trips_valides = [t for t in lignes_trips if t["route_id"] in route_ids_valides]
+            nb_orphelins = len(lignes_trips) - len(trips_valides)
+            if nb_orphelins > 0:
+                print(
+                    f"{nb_orphelins} trip(s) dans {zip_path.name} référencent un route_id "
+                    "absent de routes.txt : retrait avant chargement r5py"
+                )
+                a_reecrire["trips.txt"] = _ecrire_csv(champs_trips, trips_valides)
+                trip_ids_valides = {t["trip_id"] for t in trips_valides}
+            else:
+                trip_ids_valides = {t["trip_id"] for t in lignes_trips}
+
+            if "stop_times.txt" in noms_presents:
+                lignes_st, champs_st = _lignes_csv_du_zip(z, "stop_times.txt")
+                st_valides = [s for s in lignes_st if s["trip_id"] in trip_ids_valides]
+                nb_st_orphelins = len(lignes_st) - len(st_valides)
+                if nb_st_orphelins > 0:
+                    print(
+                        f"{nb_st_orphelins} ligne(s) stop_times dans {zip_path.name} référencent un "
+                        "trip_id absent de trips.txt : retrait avant chargement r5py"
+                    )
+                    a_reecrire["stop_times.txt"] = _ecrire_csv(champs_st, st_valides)
+
+        if not a_retirer and not a_reecrire:
             return zip_path
 
         for nom in a_retirer:
@@ -264,7 +328,10 @@ def preparer_gtfs_pour_r5py(zip_path, output_path=None):
             for item in z.infolist():
                 if item.filename in a_retirer:
                     continue
-                zout.writestr(item, z.read(item.filename))
+                if item.filename in a_reecrire:
+                    zout.writestr(item, a_reecrire[item.filename])
+                else:
+                    zout.writestr(item, z.read(item.filename))
     print(f"✓ GTFS nettoyé écrit dans {output_path}")
     return output_path
 
