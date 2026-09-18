@@ -102,8 +102,13 @@ def _cutoffs_poles_accessibles():
     """(min, max) en minutes pour _carte_poles_accessibles_domaine — (30, 45)
     par défaut, ou l'entrée de CUTOFFS_NON_STANDARD si le GTFS actuellement
     chargé (st.session_state.last_uploaded_name, éventuellement une fusion
-    "fichier1+fichier2") en fait partie."""
-    noms_charges = st.session_state.get("last_uploaded_name", "").split("+")
+    "fichier1+fichier2") en fait partie.
+
+    `or ""` plutôt que .get(..., "") seul : la clé vaut explicitement None
+    tant qu'aucun GTFS n'a été chargé (cf. app.py, initialisation de
+    st.session_state.last_uploaded_name), donc présente mais None — .get()
+    ne renvoie son défaut que si la clé est absente, pas si sa valeur l'est."""
+    noms_charges = (st.session_state.get("last_uploaded_name") or "").split("+")
     for nom, cutoffs in CUTOFFS_NON_STANDARD.items():
         if nom in noms_charges:
             return cutoffs
